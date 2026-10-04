@@ -1,0 +1,49 @@
+# test-fidelity-long-run configuration. SKELETON — the driver that consumes it is not built yet
+# (DESIGN.md §11). Values here record the decisions already made, so they are not re-litigated.
+
+model: claude-opus-4-8
+agent_timeout: 3600
+
+# The 60 plain-English change requests, their `type` and `mutates` — reused, not copied, so a
+# repair to the checkpoint metadata (REFERENCE_CHAIN.md §5) lands in one place.
+erosion_harness: ~/ui-long-degradation-test
+checkpoints_file: ${erosion_harness}/checkpoints.yaml
+
+# THE FIXED APPLICATION (DESIGN.md §2). A fixture, never modified by a run. Pinned by branch
+# because "whichever chain was checked out last" would silently change what every score means.
+# The harness refuses to start until tools/reference_chain.py grades this chain 0 repair sites.
+reference_chain:
+  repo: ~/officehq-tanstack-officefloor
+  branch: evolve/202610020135/just-solve/chain2
+  commit_for_checkpoint: reset     # `cpNN reset` is the state the erosion harness graded
+  require_clean: true              # fail closed rather than score against a dirty fixture
+
+# Where the agent's OWN accumulated suite lives in the worktree. Its git history is what
+# DESIGN.md §8 measures for test-suite churn, so it is a tracked directory, not a scratch area.
+generated_suite:
+  dest_subpath: e2e/specs
+  support_subpath: e2e/support      # seed + audit helpers: READ-ONLY to the agent, the same
+                                    #   two assertion channels the reference specs use
+  run_cmd: bin/e2e
+
+oracles:
+  soundness:
+    repeats: 2                      # identical runs; any test that flips is flaky (DESIGN.md §5)
+  relevance:
+    enabled: true                   # run this round's new/updated tests at cp(N-1) — must FAIL
+    scope: changed_only             # grading the whole suite here would fail on priors by design
+  depth:
+    catalogue: sabotage/
+    require_calibrated: true        # refuse an uncalibrated set rather than report a soft number
+  maintenance:
+    enabled: true
+    track_deletions: true           # a deleted prior is the cheap way out; count it separately
+
+# BLINDNESS (DESIGN.md §7). Reuses the erosion harness's Landlock confinement, which fails closed
+# if any listed path is reachable from the agent turn. The inversion vs the erosion harness:
+# application source is READABLE here — it is the input, not a leak.
+blind:
+  deny:
+    - ${erosion_harness}/acceptance/specs    # the experimenter's reference suite
+    - ${erosion_harness}/checkpoints.yaml    # future requests + sequence hints
+    - sabotage/                              # the depth oracle's patches
