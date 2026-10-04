@@ -1,6 +1,7 @@
 # Written by tools/reference.py import — DO NOT EDIT BY HAND.
 # The application is imported read-only; the source repo is never modified.
-source_repo: /home/daniel/officehq-tanstack-officefloor
+source_repo: officehq-tanstack-officefloor
+source_origin: git@github.com:officefloor/officehq-tanstack-officefloor.git
 source_branch: evolve/202610020135/just-solve/chain2
 base_commit: fe447200189dbd96d7912b6b8034c69f65441e6b
 excluded_paths: [evolve-results, e2e/specs]

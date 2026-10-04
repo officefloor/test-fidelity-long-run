@@ -524,6 +524,7 @@ def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, agent, lan
         code_view=args.code_view, no_code_change=no_code,
         request=cp["request"], prompt=prompt, contract=contract,
         reference={"repo": (cfg.get("reference") or {}).get("repo"),
+                   "origin": (cfg.get("reference") or {}).get("origin"),
                    "branch": (cfg.get("reference") or {}).get("branch"),
                    "repairs_applied": repairs},
         suite={"files": {k: v for k, v in suite_now.items()}, "total_tests": total_tests,
@@ -602,8 +603,9 @@ def main() -> int:
     print(BAR)
     print(f"test-fidelity-long-run   mode={args.mode}  code_view={args.code_view}  "
           f"run_id={args.run_id}")
-    print(f"  reference : {(cfg.get('reference') or {}).get('repo')} "
-          f"{(cfg.get('reference') or {}).get('branch')}")
+    ref = cfg.get("reference") or {}
+    print(f"  reference : {ref.get('repo')} {ref.get('branch')}")
+    print(f"              {ref.get('origin') or '(no origin recorded)'}")
     print(f"  checkpoints: cp{todo[0]:02d}..cp{todo[-1]:02d} ({len(todo)})")
     print(f"  results   : results/{args.run_id}/")
     if args.mode == "replay":
@@ -617,6 +619,7 @@ def main() -> int:
     capture.write_json(os.path.join(out_dir, "run.json"), capture.run_manifest(
         run_id=args.run_id, mode=args.mode, code_view=args.code_view, cfg=cfg,
         reference={"repo": (cfg.get("reference") or {}).get("repo"),
+                   "origin": (cfg.get("reference") or {}).get("origin"),
                    "branch": (cfg.get("reference") or {}).get("branch")},
         checkpoints=todo, started=now()))
 

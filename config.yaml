@@ -34,7 +34,12 @@ checkpoints_file: ${erosion_harness}/checkpoints.yaml
 # otherwise change what every score here meant. reference/manifest.yaml holds the provenance.
 reference:
   dir: reference
-  repo: ~/officehq-tanstack-officefloor          # provenance only; the import already happened
+  # Provenance, recorded into every checkpoint's capture. By NAME and ORIGIN, not by local path:
+  # a path says nothing to anyone else and nothing to this machine a year from now, whereas the
+  # origin is how the chain this fixture came from is found again. reference/manifest.yaml holds
+  # the same pair plus the per-checkpoint commits.
+  repo: officehq-tanstack-officefloor
+  origin: git@github.com:officefloor/officehq-tanstack-officefloor.git
   branch: evolve/202610020135/just-solve/chain2
   # Checkpoints whose patch is empty: the chain already satisfied the request. GRADED like any
   # other — they test whether the agent recognises a request its suite already covers, or writes

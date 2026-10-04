@@ -85,6 +85,13 @@ def base_commit(repo: str, branch: str) -> str:
     return sh(["git", "-C", repo, "rev-parse", f"{first}^"]).strip()
 
 
+def source_origin(repo: str) -> str | None:
+    """The `origin` remote of the source repo — how the chain is found again from anywhere."""
+    r = subprocess.run(["git", "-C", repo, "remote", "get-url", "origin"],
+                       capture_output=True, text=True)
+    return r.stdout.strip() or None if r.returncode == 0 else None
+
+
 def digest(path: str) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as fh:
@@ -127,9 +134,15 @@ def cmd_import(args) -> int:
             os.remove(victim)
 
     # one patch per checkpoint, diffed against the previous checkpoint's commit
+    # Provenance by REPO NAME and ORIGIN URL, not by the local path it happened to be cloned
+    # to. A path like /home/<someone>/officehq-tanstack-officefloor says nothing to anyone else
+    # and nothing to this machine a year from now; the origin is how the chain this fixture came
+    # from is actually found again. Same reasoning as the erosion harness recording each stack's
+    # `origin` alongside its chain branches.
     lines = [f"# Written by tools/reference.py import — DO NOT EDIT BY HAND.",
              f"# The application is imported read-only; the source repo is never modified.",
-             f"source_repo: {args.repo}",
+             f"source_repo: {os.path.basename(os.path.realpath(repo))}",
+             f"source_origin: {source_origin(repo) or 'NONE'}",
              f"source_branch: {args.branch}",
              f"base_commit: {base}",
              f"excluded_paths: [{', '.join(EXCLUDE)}]",

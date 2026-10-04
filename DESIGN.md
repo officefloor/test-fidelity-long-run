@@ -30,8 +30,14 @@ So the application is imported **once, read-only**, into this repo, as plain tex
 reference/base/            the application before cp01
 reference/cp01.patch       what cp01 changed: its own code AND its overrides of prior files
 reference/cp02.patch       ...
-reference/manifest.yaml    source repo, branch, commit per checkpoint, patch digests
+reference/manifest.yaml    source repo NAME + ORIGIN URL, branch, commit per checkpoint,
+                           patch digests
 ```
+
+Provenance is recorded by repo name and origin URL, never by the local path the stack happened to
+be cloned to: a path says nothing to anyone else, and nothing to this machine a year from now,
+whereas the origin is how the chain a fixture came from is actually found again. The same pair
+goes into every checkpoint's capture.
 
 This mirrors the erosion harness's structure with the halves swapped. There, a checkpoint shipped
 its own spec plus updated copies of the prior specs it broke; here a checkpoint ships its own code
@@ -360,13 +366,23 @@ per-checkpoint commits from §4 are what they read. No new measurement code.
 
 ## §9 Reused from the erosion harness
 
-Imported, not forked, so a fix lands once: `correctness.py` (build/serve/Playwright, test ids,
+This repo has its own venv and its own pinned dependencies (`./setup.sh`, `requirements.txt`) —
+PyYAML for the manifests and contracts, and lizard for §8. It borrowed the erosion harness's venv
+at first, which worked and was wrong: a run's meaning would shift whenever that harness's
+dependencies moved, and a fresh clone had no way to know it needed someone else's venv at all.
+
+What is still borrowed is CODE, imported by path rather than vendored so a fix lands once. Those
+modules are pure stdlib, so they run cleanly under this venv — `setup.sh` checks that import
+specifically, because it is the thing that actually breaks: `correctness.py` (build/serve/Playwright, test ids,
 pass parsing), `agent.py` (the agent turn, cost/token capture), `landlock.py` (§7), `capture.py`
 (the committed per-checkpoint record), `metrics.py` (§8 only), and `checkpoints.yaml` (the 60
 requests with their `type` and `mutates`).
 
 Genuinely new, and small: the grader, the mutation catalogue and its calibration, the contract
 extractor, and a driver that can move the application *backwards* for mutation zero.
+
+The erosion harness's location is configurable (`erosion_harness`, or `EROSION_HARNESS` for
+`setup.sh`), so it does not have to sit at `~/ui-long-degradation-test`.
 
 ## §10 A caveat inherited from the source data
 

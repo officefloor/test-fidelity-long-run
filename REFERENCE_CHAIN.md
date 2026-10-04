@@ -6,8 +6,7 @@ checkpoint N** (DESIGN.md §2). This is what the existing erosion runs can and c
 Reproduce with:
 
 ```sh
-~/ui-long-degradation-test/.venv/bin/python tools/reference_chain.py \
-    --harness ~/ui-long-degradation-test --stacks ~
+.venv/bin/python tools/reference_chain.py --stacks ~
 ```
 
 ## 1. The agent never failed to implement a request

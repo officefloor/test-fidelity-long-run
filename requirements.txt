@@ -1,0 +1,14 @@
+# test-fidelity-long-run — Python dependencies.
+#
+# PINNED to exact versions on purpose. This repo is a measuring instrument: a run's verdict
+# should depend on the application and the tests, not on which PyYAML happened to be current
+# that week. Bump deliberately, and re-run replay mode afterwards to confirm nothing moved.
+#
+# Deliberately NOT here: numpy and matplotlib. The erosion harness needs them to draw its
+# graphs; this harness's output is per-checkpoint JSON plus a markdown summary, and a dependency
+# installed "in case" is one more thing that can break a run.
+
+PyYAML==6.0.3     # config.yaml, the reference/contract/repair/mutation manifests
+lizard==1.23.0    # DESIGN.md §8 test-suite churn, via the erosion harness's harness.metrics.
+                  #   Not imported by the driver yet — listed because metrics.py imports it at
+                  #   module level, so §8 would otherwise fail at the import, after a run.

@@ -71,10 +71,11 @@ which chain is the fixture and what must be repaired first.
 ## Running
 
 ```sh
-V=~/ui-long-degradation-test/.venv/bin/python   # PyYAML lives there; no venv of our own yet
+./setup.sh                 # creates .venv, installs deps, checks every prerequisite
+V=.venv/bin/python
 
 # which evolved chain is closest to all-green, and where each needs repair
-$V tools/reference_chain.py --harness ~/ui-long-degradation-test --stacks ~
+$V tools/reference_chain.py --stacks ~
 
 # import the chosen chain into this repo, ONCE, read-only. The stack repos are records of
 # completed runs: nothing here ever writes to them.
@@ -86,7 +87,7 @@ $V tools/reference.py materialise --checkpoint 8 --out work/cp08
 
 # the interface contract handed to the agent with each request
 $V tools/contract.py build
-$V tools/contract.py check --harness ~/ui-long-degradation-test   # calibrate the extractor
+$V tools/contract.py check             # calibrate the extractor against the reference specs
 $V tools/contract.py show --checkpoint 8
 
 # replay mode's test source: the erosion harness's authored suite at a checkpoint
@@ -155,6 +156,19 @@ Per checkpoint the console shows the request, the full interface contract being 
 spec files and individual tests were added / revised / dropped, whether application code was
 touched, the gate result with each failing test and its failure text, and then each mutation with
 whether it was killed and which test caught it.
+
+## Setup
+
+```sh
+./setup.sh      # creates .venv, installs pinned deps, then checks every prerequisite
+```
+
+Its own venv with pinned dependencies — PyYAML and lizard, and deliberately not numpy/matplotlib
+(this harness emits JSON and markdown, not graphs). What `setup.sh` cannot install, it checks:
+the erosion harness (whose `correctness`/`agent`/`landlock` modules are the gate runner and the
+confinement, imported by path so a fix lands once), the JDK/Maven/Node toolchain the application
+builds with, Landlock, the imported fixture, and the agent token. Set `EROSION_HARNESS` if that
+harness does not live at `~/ui-long-degradation-test`.
 
 ## Status
 

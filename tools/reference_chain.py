@@ -14,8 +14,8 @@ breakage then propagates down the chain.
 Own-test failures are reported separately: a step whose OWN test fails means the application
 does not implement that step's change request at all, which no amount of spec repair fixes.
 
-    tools/reference_chain.py --harness ~/ui-long-degradation-test --stacks ~
-    tools/reference_chain.py --harness ~/ui-long-degradation-test --stacks ~ --json
+    .venv/bin/python tools/reference_chain.py --stacks ~
+    .venv/bin/python tools/reference_chain.py --stacks ~ --json
 """
 from __future__ import annotations
 
@@ -40,8 +40,8 @@ def load_checkpoints(harness: str) -> dict[int, dict]:
     try:
         import yaml
     except ImportError:
-        sys.exit("needs PyYAML — run with the erosion harness venv:\n"
-                 "  ~/ui-long-degradation-test/.venv/bin/python tools/reference_chain.py ...")
+        sys.exit("needs PyYAML — run with this repo's venv (./setup.sh creates it):\n"
+                 "  .venv/bin/python tools/reference_chain.py ...")
     path = os.path.join(harness, "checkpoints.yaml")
     with open(path) as fh:
         cps = yaml.safe_load(fh)["checkpoints"]
