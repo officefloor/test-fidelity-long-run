@@ -1,0 +1,22 @@
+# Mutation set for cp48_discount_everywhere (mutative: revises cp17, cp31, cp33).
+#
+# "Make sure that discount shows up everywhere I check what is owed. That means the invoice, the
+#  statement and the home screen."
+#
+# The request names THREE surfaces, and the whole risk is doing two of them. Each mutation
+# reverts one surface to the pre-discount figure, leaving the others correct — the exact shape of
+# a partially-applied cross-cutting change, and the thing a suite checking one screen cannot see.
+checkpoint: 48
+calibrated: false
+
+mutations:
+  - id: "001-home-screen-ignores-the-discount"
+    clause: "and the home screen"
+    file: src/main/java/net/officefloor/hq/app/DashboardGetLogic.java
+    breaks: |
+      The outstanding total on the home screen goes back to the undiscounted amount,
+      while the invoice and the statement are right. Precisely the regression this checkpoint exists
+      to prevent, and invisible unless the dashboard is checked after a discount.
+    find: "                .map(i -> InvoiceMoney.netTotal(i.getAmount(), i.getDiscountPct()))"
+    replace: "                .map(i -> i.getAmount())"
+

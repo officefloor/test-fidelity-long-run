@@ -30,7 +30,8 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 import reference as refmod                       # noqa: E402  tools/reference.py
 import suite as suitemod                         # noqa: E402  tools/suite.py
-from fidelity import capture, changes, erosion, sandbox as sb, spec, turn  # noqa: E402
+from fidelity import (capture, changes, erosion, mutations as mut, sandbox as sb,
+                      spec, turn)  # noqa: E402
 
 BAR = "=" * 78
 SUB = "-" * 78
@@ -117,33 +118,18 @@ def replay_suite(harness: str, n: int) -> dict[str, list[str]]:
 
 
 def load_mutations(n: int) -> list[dict]:
-    """mutations/cpNN/manifest.yaml, if there is one. Absent is normal: the catalogue is authored
-    per checkpoint, and mutation zero needs no authoring at all."""
-    import yaml
-    path = os.path.join(ROOT, "mutations", f"cp{n:02d}", "manifest.yaml")
-    if not os.path.isfile(path):
-        return []
-    with open(path) as fh:
-        man = yaml.safe_load(fh) or {}
-    if not man.get("calibrated", False):
-        # Reported, not raised: an uncalibrated set is exactly what replay mode is for.
-        for m in man.get("mutations") or []:
-            m["_uncalibrated"] = True
-    out = []
-    for m in man.get("mutations") or []:
-        if m.get("applies_from") and n < int(m["applies_from"]):
-            continue
-        out.append(m)
-    return out
+    """The mutation set for checkpoint n (fidelity.mutations). Absent is normal: the catalogue is
+    authored per checkpoint, and mutation zero needs no authoring at all."""
+    return mut.applicable(n)
 
 
 def apply_mutation(tree: str, n: int, mutation: dict) -> tuple[bool, str]:
-    patch = os.path.join(ROOT, "mutations", f"cp{n:02d}", mutation["patch"])
-    if not os.path.isfile(patch):
-        return False, f"patch missing: {patch}"
-    p = subprocess.run(["git", "-C", tree, "apply", "--whitespace=nowarn", patch],
-                       capture_output=True, text=True)
-    return p.returncode == 0, (p.stderr or p.stdout or "").strip()
+    """Exact-match substitution, so it either lands on its one site or refuses (DESIGN.md §6)."""
+    try:
+        mut.apply(tree, mutation)
+        return True, ""
+    except RuntimeError as e:
+        return False, str(e)
 
 
 def revert_tree(tree: str) -> None:
@@ -481,9 +467,10 @@ def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, agent, lan
             block = capture.mutation_block(m["id"], "authored",
                                            (m.get("breaks") or "").strip(), mo,
                                            baseline_failed, expect_kill=True)
+            block["file"] = m.get("file")
             block["applied"] = True
             block["clause"] = m.get("clause")
-            block["uncalibrated"] = bool(m.get("_uncalibrated"))
+            block["uncalibrated"] = not m.get("_calibrated")
             muts.append(block)
             print(f"    {m['id']:<42} {'KILLED' if block['killed'] else 'SURVIVED':<9}"
                   + (f" {len(block['new_failures'])} new failure(s)" if block["killed"]
@@ -496,6 +483,14 @@ def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, agent, lan
     # 6. verdict
     authored = [m for m in muts if m["kind"] == "authored" and m.get("applied")]
     killed = [m for m in authored if m.get("killed")]
+    if args.calibrate and args.mode == "replay" and not args.no_mutations:
+        # Only replay may calibrate: in agent mode the suite IS the thing under test, so what it
+        # kills says nothing about whether a mutation is any good.
+        declared = load_mutations(n)
+        if declared and len(authored) == len(declared):
+            if mut.mark_calibrated(n, len(killed) == len(authored)):
+                print(f"    calibrated: cp{n:02d} set marked "
+                      f"{'calibrated' if len(killed) == len(authored) else 'NOT calibrated'}")
     zero = next((m for m in muts if m["kind"] == "zero"), None)
     grew = total_tests - prior_count
     verdict = {
@@ -558,6 +553,10 @@ def main() -> int:
                     help="stop before building: show the specification, the installed suite and "
                          "what moved, but run no tests. Costs seconds, and is how to check the "
                          "prompt and the contract before paying for a full run.")
+    ap.add_argument("--calibrate", action="store_true",
+                    help="replay only: write `calibrated` back into each mutation manifest "
+                         "according to whether the known-good suite killed every mutation in it. "
+                         "This is what makes the catalogue usable for grading (DESIGN.md §6).")
     ap.add_argument("--no-mutations", action="store_true",
                     help="green phase only — roughly halves the wall clock")
     ap.add_argument("--keep-work", action="store_true",
@@ -610,6 +609,8 @@ def main() -> int:
     print(f"  results   : results/{args.run_id}/")
     if args.mode == "replay":
         print("  replay mode: tests come from the erosion harness; NOTHING is committed")
+        if args.calibrate:
+            print("  --calibrate: mutation manifests will be marked from this run's kill results")
     else:
         print(f"  agent     : {args.model or cfg.get('model')}  code_view={args.code_view}")
         print(f"  suite repo: runs/{args.run_id}/suite  (branch agent/{args.run_id})")

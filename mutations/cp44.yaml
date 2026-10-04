@@ -1,0 +1,28 @@
+# Mutation set for cp44_client_unique_email (mutative: revises cp01).
+#
+# "Do not let me add two clients with the same email."
+#
+# One rule, enforced server-side and surfaced in the form. The interesting half is the surfacing:
+# a rejection the user is never told about looks like the button is broken.
+checkpoint: 44
+calibrated: false
+
+mutations:
+  - id: "001-duplicate-emails-are-allowed"
+    clause: "Do not let me add two clients with the same email"
+    file: src/main/java/net/officefloor/hq/app/ClientsPostLogic.java
+    breaks: |
+      The uniqueness check is gone, so a second client with the same email is created.
+      Killed by a row count after submitting the duplicate — the rule's whole point.
+    find: "        if (repository.existsByEmail(normalised)) {"
+    replace: "        if (false) {"
+
+  - id: "002-rejection-is-silent"
+    clause: "Do not let me add"
+    file: src/main/frontend/features/clients/ClientForm.tsx
+    breaks: |
+      The duplicate is correctly refused and the user is never told why — the form just
+      does nothing. The data stays right, so only an assertion on the error catches it.
+    find: "      {emailError && ("
+    replace: "      {false && ("
+

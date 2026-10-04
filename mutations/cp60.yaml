@@ -1,0 +1,33 @@
+# Mutation set for cp60_multi_currency (mutative: revises cp08, cp17, cp33, cp40, cp48, cp55).
+#
+# "Different clients pay me in different currencies. Let me set each client\'s currency. Show
+#  their money in that currency everywhere I see it, including on their statement. On the home
+#  screen keep the totals separate for each currency. Show each client\'s figure in their own
+#  currency in the top clients list too. Do not add different currencies together."
+#
+# The longest request in the run and the one touching the most surfaces. Both mutations keep
+# every figure present and plausible and silently fall back to dollars — which is exactly how a
+# currency bug reaches production.
+checkpoint: 60
+calibrated: false
+
+mutations:
+  - id: "001-amounts-ignore-the-client-currency"
+    clause: "Show their money in that currency everywhere I see it"
+    file: src/main/frontend/features/invoices/InvoiceList.tsx
+    breaks: |
+      The currency argument is dropped, so every amount renders in the default dollars
+      whatever the client's currency. The number is right and the symbol is wrong — invisible to any
+      test whose client happens to be in USD.
+    find: "            <td data-testid=\"invoice-amount\">{formatMoney(invoice.amount, invoice.currency)}</td>"
+    replace: "            <td data-testid=\"invoice-amount\">{formatMoney(invoice.amount)}</td>"
+
+  - id: "002-the-currency-panel-always-says-usd"
+    clause: "Let me set each client's currency"
+    file: src/main/frontend/features/clients/ClientCurrency.tsx
+    breaks: |
+      The panel always reports USD whatever was saved. Saving works and the rest of the
+      app honours the new currency, so only an assertion on this panel after a change catches it.
+    find: "        <dd data-testid=\"client-currency\">{client.currency}</dd>"
+    replace: "        <dd data-testid=\"client-currency\">{'USD'}</dd>"
+

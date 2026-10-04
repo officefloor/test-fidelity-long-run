@@ -1,0 +1,31 @@
+# Mutation set for cp47_invoice_discount.
+#
+# "Let me take a percentage off an invoice as a discount. Show the subtotal, the discount and the
+#  final total."
+#
+# Three figures that must agree with each other. Each mutation keeps all three present and
+# plausible and breaks one relationship — which is why "subtotal minus discount equals total" has
+# to be asserted rather than eyeballed.
+checkpoint: 47
+calibrated: false
+
+mutations:
+  - id: "001-discount-is-calculated-but-not-deducted"
+    clause: "the final total"
+    file: src/main/java/net/officefloor/hq/app/InvoiceSummaryGetLogic.java
+    breaks: |
+      The discount is worked out and shown correctly, and the final total ignores it. All
+      three figures render; only the arithmetic between them is wrong.
+    find: "        BigDecimal total = subtotal.subtract(discount);"
+    replace: "        BigDecimal total = subtotal;"
+
+  - id: "002-discount-is-the-percentage-not-the-money"
+    clause: "Show the subtotal, the discount"
+    file: src/main/java/net/officefloor/hq/app/InvoiceSummaryGetLogic.java
+    breaks: |
+      The discount is reported as the percentage (10) rather than the money it comes to
+      ($20.00), and the total is then wrong by the difference. A small plausible number in a money
+      field.
+    find: "        BigDecimal discount = subtotal.multiply(discountPct)"
+    replace: "        BigDecimal discount = discountPct.multiply(BigDecimal.ONE)"
+

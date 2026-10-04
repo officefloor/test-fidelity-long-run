@@ -1,0 +1,38 @@
+# Mutation set for cp14_all_invoices.
+#
+# "Give me one place that lists all my invoices from every project. Show which project each one
+#  is for. Show what stage it is at."
+#
+# "from every project" is the whole point of the page, and it is the clause a single-project
+# fixture cannot test.
+checkpoint: 14
+calibrated: false
+
+mutations:
+  - id: "001-only-the-first-invoice-is-listed"
+    clause: "lists all my invoices from every project"
+    file: src/main/frontend/features/invoices/AllInvoiceList.tsx
+    breaks: |
+      One row instead of all of them. The page exists and looks right; it is just not the
+      one place that lists everything.
+    find: "        {invoices.map((invoice) => ("
+    replace: "        {invoices.slice(0, 1).map((invoice) => ("
+
+  - id: "002-project-column-shows-an-id"
+    clause: "Show which project each one is for"
+    file: src/main/frontend/features/invoices/AllInvoiceList.tsx
+    breaks: |
+      The project column renders the id rather than the name. Populated, plausible, and
+      useless to the person reading it.
+    find: "            <td data-testid=\"invoice-project\">{invoice.projectName}</td>"
+    replace: "            <td data-testid=\"invoice-project\">{invoice.projectId}</td>"
+
+  - id: "003-stage-is-blank"
+    clause: "Show what stage it is at"
+    file: src/main/frontend/features/invoices/AllInvoiceList.tsx
+    breaks: |
+      The stage cell renders empty. The anchor is still there, so a test that only checks
+      the cell exists passes.
+    find: "            <td data-testid=\"invoice-status\">{invoice.status}</td>"
+    replace: "            <td data-testid=\"invoice-status\">{''}</td>"
+

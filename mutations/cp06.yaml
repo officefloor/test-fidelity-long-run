@@ -1,0 +1,29 @@
+# Mutation set for cp06_client_search.
+#
+# "My client list is getting long. Give me a box to search for a client by name."
+#
+# One clause, two ways to get it wrong: the box does nothing, or it only matches an exact case.
+# The reference spec types 'glob' against a client named 'Globex', so case-folding is genuinely
+# load-bearing here rather than incidental.
+checkpoint: 6
+calibrated: false
+
+mutations:
+  - id: "001-search-is-ignored"
+    clause: "a box to search for a client"
+    file: src/main/frontend/features/clients/ClientList.tsx
+    breaks: |
+      Typing filters nothing — the full list stays. The box is present and accepts text, so this
+      survives any test that only checks the input exists.
+    find: "    ? clients.filter((client) => client.name.toLowerCase().includes(needle))"
+    replace: "    ? clients"
+
+  - id: "002-search-is-case-sensitive"
+    clause: "search for a client by name"
+    file: src/main/frontend/features/clients/ClientList.tsx
+    breaks: |
+      Matching no longer folds case, so 'glob' finds nothing and 'Glob' does. Search still
+      "works" for anyone who types the name exactly as stored, which is how this kind of defect
+      survives review.
+    find: "    ? clients.filter((client) => client.name.toLowerCase().includes(needle))"
+    replace: "    ? clients.filter((client) => client.name.includes(needle))"

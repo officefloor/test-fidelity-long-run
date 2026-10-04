@@ -1,0 +1,40 @@
+# Mutation set for cp29_client_archive (mutative: revises cp01, cp06).
+#
+# "Let me tuck away clients I no longer work with. They should drop off my list and my search. I
+#  do not want to lose them. Note it when I do."
+#
+# Like cp25, the request names TWO surfaces — the list AND the search — so 001 and 003 are
+# separate: the search runs off the already-filtered list, and pointing it back at the raw one
+# hides archived clients from the list while still finding them by name.
+checkpoint: 29
+calibrated: false
+
+mutations:
+  - id: "001-archived-clients-still-show-on-the-list"
+    clause: "They should drop off my list"
+    file: src/main/frontend/features/clients/ClientList.tsx
+    breaks: |
+      Archiving records itself and changes nothing the user sees. The button works; the
+      client stays.
+    find: "  const active = clients.filter((client) => !client.archived);"
+    replace: "  const active = clients;"
+
+  - id: "002-archiving-is-not-recorded"
+    clause: "Note it when I do"
+    file: src/main/java/net/officefloor/hq/app/ClientsArchiveLogic.java
+    breaks: |
+      The client is archived and nothing is written to the audit file. Invisible through
+      the UI.
+    find: "        audit.record(\"CLIENT_ARCHIVED id=\" + id);"
+    replace: "        // mutation: no audit record is written"
+
+  - id: "003-search-still-finds-archived-clients"
+    clause: "and my search"
+    file: src/main/frontend/features/clients/ClientList.tsx
+    breaks: |
+      The list correctly hides archived clients, and searching by name finds them again.
+      Exactly the half-done job the second clause rules out, and invisible unless a test searches for
+      an archived client by name.
+    find: "    ? active.filter((client) => client.name.toLowerCase().includes(needle))"
+    replace: "    ? clients.filter((client) => client.name.toLowerCase().includes(needle))"
+

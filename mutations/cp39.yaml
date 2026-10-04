@@ -1,0 +1,29 @@
+# Mutation set for cp39_invoice_pagination.
+#
+# "The invoice list is huge now. Show it a page at a time with next and previous."
+#
+# Paging has two halves — a window of the right size, and a window that MOVES. 002 is the one a
+# suite misses: the first page is perfect and every page after it is the first page again.
+checkpoint: 39
+calibrated: false
+
+mutations:
+  - id: "001-every-invoice-is-shown-at-once"
+    clause: "Show it a page at a time"
+    file: src/main/frontend/features/invoices/AllInvoiceList.tsx
+    breaks: |
+      No paging at all: the whole list renders. The pager still shows page 1, so only a
+      row count catches it.
+    find: "  const pageRows = shown.slice(start, start + INVOICE_PAGE_SIZE);"
+    replace: "  const pageRows = shown;"
+
+  - id: "002-every-page-shows-the-first-page"
+    clause: "with next and previous"
+    file: src/main/frontend/features/invoices/AllInvoiceList.tsx
+    breaks: |
+      The window never moves. The page label advances, next and previous respond, and
+      the rows are the same ten every time. Killed only by asserting WHAT is on page two, not just
+      that the label changed.
+    find: "  const pageRows = shown.slice(start, start + INVOICE_PAGE_SIZE);"
+    replace: "  const pageRows = shown.slice(0, INVOICE_PAGE_SIZE);"
+

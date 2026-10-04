@@ -1,0 +1,31 @@
+# Mutation set for cp26_project_tags.
+#
+# "Let me put labels on projects so I can group them."
+#
+# Noted while authoring: cp26\'s spec does not read the audit channel, so dropping the
+# PROJECT_TAGGED / PROJECT_UNTAGGED records would survive it. Those records exist and are
+# asserted nowhere — a reference-suite hole worth fixing, and left out here to keep the set
+# calibratable.
+checkpoint: 26
+calibrated: false
+
+mutations:
+  - id: "001-tag-shows-its-id-instead-of-its-name"
+    clause: "put labels on projects"
+    file: src/main/frontend/features/projects/ProjectTags.tsx
+    breaks: |
+      A label renders as a number. The tag is assigned, the chip is there, and it is
+      unreadable — survived by any test that only checks a chip appeared.
+    find: "            <span data-testid={`project-tag-${tag.id}`}>{tag.name}</span>"
+    replace: "            <span data-testid={`project-tag-${tag.id}`}>{tag.id}</span>"
+
+  - id: "002-every-tag-looks-assigned"
+    clause: "so I can group them"
+    file: src/main/frontend/features/projects/ProjectTags.tsx
+    breaks: |
+      The project shows every tag in the system as though it carried all of them, so
+      grouping means nothing. Killed by asserting that an UNassigned tag is absent — the negative
+      case a suite most often skips.
+    find: "        {assigned.map((tag) => ("
+    replace: "        {allTags.map((tag) => ("
+

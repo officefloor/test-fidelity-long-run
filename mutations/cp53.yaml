@@ -1,0 +1,26 @@
+# Mutation set for cp53_job_code (mutative: revises cp03, cp34).
+#
+# "Give each job a short reference code, set when creating the job. Keep it unique so no two jobs
+#  share one."
+checkpoint: 53
+calibrated: false
+
+mutations:
+  - id: "001-the-code-is-not-saved"
+    clause: "a short reference code, set when creating the job"
+    file: src/main/java/net/officefloor/hq/app/ProjectsPostLogic.java
+    breaks: |
+      The code is typed, validated and thrown away, so the job saves without one. The
+      job IS created, so a test that only checks it appears passes.
+    find: "        project.setCode(normalisedCode);"
+    replace: "        // mutation: the entered code is discarded"
+
+  - id: "002-the-code-column-shows-the-job-name"
+    clause: "Give each job a short reference code"
+    file: src/main/frontend/features/projects/code.slot.tsx
+    breaks: |
+      The code column renders the job's name. Populated and plausible; only an assertion
+      on the code's value catches it.
+    find: "  return <span data-testid=\"project-code\">{project.code ?? ''}</span>;"
+    replace: "  return <span data-testid=\"project-code\">{project.name}</span>;"
+

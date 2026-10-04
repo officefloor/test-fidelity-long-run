@@ -1,0 +1,25 @@
+# Mutation set for cp15_invoice_status_filter.
+#
+# "Let me narrow that list to one stage. For example only the ones I have sent."
+checkpoint: 15
+calibrated: false
+
+mutations:
+  - id: "001-filter-is-ignored"
+    clause: "narrow that list to one stage"
+    file: src/main/frontend/features/invoices/AllInvoiceList.tsx
+    breaks: |
+      Choosing a stage changes nothing — the full list stays. The control is present and
+      responsive, so only an assertion on what is left catches it.
+    find: "  const shown = status ? invoices.filter((invoice) => invoice.status === status) : invoices;"
+    replace: "  const shown = status ? invoices : invoices;"
+
+  - id: "002-filter-keeps-the-wrong-stage"
+    clause: "only the ones I have sent"
+    file: src/main/frontend/features/invoices/AllInvoiceList.tsx
+    breaks: |
+      The filter is inverted: choosing SENT shows everything EXCEPT sent. The count even
+      changes, so a test that only asserts "fewer rows than before" passes.
+    find: "  const shown = status ? invoices.filter((invoice) => invoice.status === status) : invoices;"
+    replace: "  const shown = status ? invoices.filter((invoice) => invoice.status !== status) : invoices;"
+

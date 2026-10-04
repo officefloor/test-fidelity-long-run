@@ -1,0 +1,27 @@
+# Mutation set for cp09_currency_format (mutative: revises cp04 and cp08).
+#
+# "Show money properly everywhere. Use a dollar sign and cents, like $100.00."
+#
+# The request is entirely about presentation, so both mutations keep the VALUE correct and get the
+# format wrong — which is the only way to test that the suite pins what was actually asked.
+checkpoint: 9
+calibrated: false
+
+mutations:
+  - id: "001-money-has-no-currency-symbol"
+    clause: "Use a dollar sign"
+    file: src/main/frontend/ui/money.ts
+    breaks: |
+      Amounts render as 100.00 — correct to the cent, no symbol. Survives any assertion that
+      checks the number and not the formatting.
+    find: "  return moneyFormat.format(Number(amount));"
+    replace: "  return Number(amount).toFixed(2);"
+
+  - id: "002-money-loses-its-cents"
+    clause: "and cents, like $100.00"
+    file: src/main/frontend/ui/money.ts
+    breaks: |
+      Amounts render as $100 — symbol present, cents gone. The other half of the same clause, and
+      a suite can easily pin one and not the other.
+    find: "  return moneyFormat.format(Number(amount));"
+    replace: "  return '$' + Number(amount).toFixed(0);"

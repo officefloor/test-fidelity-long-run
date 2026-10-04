@@ -1,0 +1,50 @@
+# Mutation set for cp25_project_archive (mutative: revises cp03, cp07, cp24).
+#
+# "Do not really delete a project. Just tuck it away so it drops off my lists. Keep it off the
+#  main project list and off the list on the client\'s page. I do not want to lose anything.
+#  Note it when I do."
+#
+# Four clauses, four mutations — and this request names TWO lists explicitly, which is why 001
+# and 002 are separate: hiding on one page and not the other is the obvious half-done job.
+checkpoint: 25
+calibrated: false
+
+mutations:
+  - id: "001-archived-projects-still-show-on-the-main-list"
+    clause: "Keep it off the main project list"
+    file: src/main/frontend/features/projects/ProjectList.tsx
+    breaks: |
+      Archiving succeeds, records itself, and changes nothing the user sees on the
+      project list. The button works; the project simply does not go away.
+    find: "  const shown = showArchived ? projects : projects.filter((project) => !project.archived);"
+    replace: "  const shown = showArchived ? projects : projects;"
+
+  - id: "002-archived-projects-still-show-on-the-client-page"
+    clause: "and off the list on the client's page"
+    file: src/main/frontend/features/clients/ClientProjects.tsx
+    breaks: |
+      Hidden from the main list but still listed on the client's page. Exactly the
+      half-done job the request's second clause exists to rule out, and only a test that checks the
+      OTHER page catches it.
+    find: "    (project) => project.clientId === clientId && !project.archived,"
+    replace: "    (project) => project.clientId === clientId,"
+
+  - id: "003-archiving-is-not-recorded"
+    clause: "Note it when I do"
+    file: src/main/java/net/officefloor/hq/app/ProjectsArchiveLogic.java
+    breaks: |
+      The project is archived and nothing is written to the audit file. Invisible
+      through the UI.
+    find: "        audit.record(\"PROJECT_ARCHIVED id=\" + id);"
+    replace: "        // mutation: no audit record is written"
+
+  - id: "004-archived-projects-cannot-be-revealed-again"
+    clause: "I do not want to lose anything"
+    file: src/main/frontend/features/projects/ProjectList.tsx
+    breaks: |
+      The reveal toggle does nothing, so an archived project is gone for good as far as
+      the user can tell. "Tucked away" has become "deleted" — which is the one thing the request
+      forbids — and the archive action itself still looks perfect.
+    find: "  const shown = showArchived ? projects : projects.filter((project) => !project.archived);"
+    replace: "  const shown = false ? projects : projects.filter((project) => !project.archived);"
+

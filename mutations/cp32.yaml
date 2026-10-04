@@ -1,0 +1,38 @@
+# Mutation set for cp32_invoice_status_derived (mutative: revises cp05, cp13, cp31).
+#
+# "Work out for me whether an invoice is paid, part paid or still owing. Base it on the payments
+#  I have recorded. I do not want to flip it to paid by hand anymore."
+#
+# Three states separated by one boundary, so both mutations sit ON that boundary: a part payment
+# reading as PAID, and a full payment reading as PARTIAL. Each looks right from one side.
+checkpoint: 32
+calibrated: false
+
+mutations:
+  - id: "001-any-payment-marks-the-invoice-paid"
+    clause: "whether an invoice is paid, part paid or still owing"
+    file: src/main/java/net/officefloor/hq/app/InvoiceStatus.java
+    breaks: |
+      Any payment at all, however small, marks the invoice PAID — the PARTIAL state
+      effectively disappears. A suite that only records a FULL payment sees the correct answer.
+    find: "        if (amount != null && paidAmount.compareTo(amount) >= 0) {"
+    replace: "        if (paidAmount.signum() > 0) {"
+
+  - id: "002-a-full-payment-still-reads-part-paid"
+    clause: "whether an invoice is paid"
+    file: src/main/java/net/officefloor/hq/app/InvoiceStatus.java
+    breaks: |
+      The boundary is off by one: paying exactly the invoice amount leaves it PARTIAL.
+      The other side of 001, and invisible to a suite that overpays or only part-pays.
+    find: "        if (amount != null && paidAmount.compareTo(amount) >= 0) {"
+    replace: "        if (amount != null && paidAmount.compareTo(amount) > 0) {"
+
+  - id: "003-payment-is-not-recorded"
+    clause: "Base it on the payments I have recorded"
+    file: src/main/java/net/officefloor/hq/app/PaymentsPostLogic.java
+    breaks: |
+      The payment is stored and drives the status correctly, and nothing is written to
+      the audit file. Only the audit channel can see this.
+    find: "        audit.record(\"PAYMENT_RECORDED id=\" + invoiceId + \" amount=\" + amountText);"
+    replace: "        // mutation: no audit record is written"
+

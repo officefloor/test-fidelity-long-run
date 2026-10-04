@@ -1,0 +1,21 @@
+# Mutation set for cp22_line_items_edit.
+#
+# "Let me change or remove those charge lines on an invoice. Update the total when I do."
+#
+# One mutation, deliberately. "Update the total when I do" is the whole risk in this request —
+# the removal itself is visible in the row count, so a suite can hardly miss it, whereas a stale
+# total after a removal looks entirely normal.
+checkpoint: 22
+calibrated: false
+
+mutations:
+  - id: "001-removing-a-line-leaves-the-total-stale"
+    clause: "Update the total when I do"
+    file: src/main/java/net/officefloor/hq/app/LineItemsRemoveLogic.java
+    breaks: |
+      The line goes and the invoice keeps its old total. The row disappears exactly as
+      expected, so only an assertion on the total AFTER the removal catches it — which is precisely
+      the clause that was added.
+    find: "        invoice.setAmount(total);"
+    replace: "        // mutation: the invoice total is left stale"
+

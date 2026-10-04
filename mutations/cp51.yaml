@@ -1,0 +1,27 @@
+# Mutation set for cp51_client_sort.
+#
+# "Let me sort my clients by name. Or by how much they owe me."
+checkpoint: 51
+calibrated: false
+
+mutations:
+  - id: "001-sort-by-owed-is-smallest-first"
+    clause: "Or by how much they owe me"
+    file: src/main/frontend/features/clients/ClientList.tsx
+    breaks: |
+      The owed sort runs ascending, so the client who owes least comes first. The list IS
+      sorted and does change when the control is used — only an assertion on which client is first
+      catches the direction.
+    find: "      ? (owed.get(b.id) ?? 0) - (owed.get(a.id) ?? 0)"
+    replace: "      ? (owed.get(a.id) ?? 0) - (owed.get(b.id) ?? 0)"
+
+  - id: "002-sort-by-owed-falls-back-to-the-name"
+    clause: "sort my clients by name. Or by how much they owe me"
+    file: src/main/frontend/features/clients/ClientList.tsx
+    breaks: |
+      Choosing "by how much they owe me" silently sorts by name instead, so the second of
+      the two orderings does not exist. The control responds and the list is ordered, just not by what
+      was asked.
+    find: "      ? (owed.get(b.id) ?? 0) - (owed.get(a.id) ?? 0)"
+    replace: "      ? a.name.localeCompare(b.name)"
+

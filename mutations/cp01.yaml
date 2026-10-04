@@ -1,0 +1,48 @@
+# Mutation set for cp01_clients.
+#
+# "I want to keep track of my clients. Let me add a client with their name and email.
+#  Show me all my clients in one list."
+#
+# Four clauses, four mutations: the list shows ALL of them, a created client keeps BOTH fields,
+# each field reads back as itself, and an empty list says so.
+checkpoint: 1
+calibrated: false        # set by replay mode once the reference suite kills every one
+
+mutations:
+  - id: "001-list-shows-only-the-first-client"
+    clause: "Show me all my clients in one list"
+    file: src/main/frontend/features/clients/ClientList.tsx
+    breaks: |
+      Only the first client is rendered. Killed by any test that seeds more than one client and
+      asserts how many rows appear; survived by one that seeds a single client, or that only
+      checks the table is visible.
+    find: "        {clients.map((client) => ("
+    replace: "        {clients.slice(0, 1).map((client) => ("
+
+  - id: "002-created-client-loses-its-email"
+    clause: "add a client with their name and email"
+    file: src/main/frontend/features/clients/ClientForm.tsx
+    breaks: |
+      The form posts the name but blanks the email. The client is still created, so a test that
+      only counts rows after submitting passes; catching this needs an assertion on the email it
+      typed. (Observable only at cp01: from cp02 the DB CHECK rejects a blank email outright.)
+    find: "          { name, email },"
+    replace: "          { name, email: '' },"
+
+  - id: "003-email-column-shows-the-name"
+    clause: "with their name and email"
+    file: src/main/frontend/features/clients/ClientList.tsx
+    breaks: |
+      The email cell renders the client's name. The read path rather than the write path, and
+      invisible to any test that asserts only that the cell exists.
+    find: '            <td data-testid="client-email">{client.email}</td>'
+    replace: '            <td data-testid="client-email">{client.name}</td>'
+
+  - id: "004-no-empty-state"
+    clause: "Show me all my clients in one list"
+    file: src/main/frontend/features/clients/ClientList.tsx
+    breaks: |
+      With no clients the list renders nothing instead of saying so. The empty case is the one
+      most easily left untested, and it is the first thing a user of a new install sees.
+    find: '    return <p data-testid="clients-empty">No clients yet.</p>;'
+    replace: "    return null;"

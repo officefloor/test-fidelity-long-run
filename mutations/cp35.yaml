@@ -1,0 +1,24 @@
+# Mutation set for cp35_project_status_filter.
+#
+# "Let me filter projects by active, on hold or finished."
+checkpoint: 35
+calibrated: false
+
+mutations:
+  - id: "001-status-filter-is-ignored"
+    clause: "filter projects by active, on hold or finished"
+    file: src/main/frontend/features/projects/ProjectList.tsx
+    breaks: |
+      Choosing a status narrows nothing. The select responds and the list is unchanged.
+    find: "    .filter((project) => statusFilter === '' || project.status === statusFilter);"
+    replace: "    .filter((project) => true);"
+
+  - id: "002-status-filter-is-inverted"
+    clause: "filter projects by active, on hold or finished"
+    file: src/main/frontend/features/projects/ProjectList.tsx
+    breaks: |
+      The filter keeps the projects NOT at the chosen status. The list changes by a
+      plausible amount, so a test that only asserts "fewer rows" passes.
+    find: "    .filter((project) => statusFilter === '' || project.status === statusFilter);"
+    replace: "    .filter((project) => statusFilter === '' || project.status !== statusFilter);"
+

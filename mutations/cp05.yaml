@@ -1,0 +1,38 @@
+# Mutation set for cp05_invoice_pay_audit.
+#
+# "Let me mark an invoice as paid. Keep a record every time I do so I can check back later."
+#
+# The second clause is the one worth measuring. "Keep a record" is invisible in the UI, so a
+# suite that only drives the screen will pass 002 and 003 — and the pipeline would then accept a
+# change that silently stopped auditing payments.
+checkpoint: 5
+calibrated: false
+
+mutations:
+  - id: "001-paying-does-not-change-the-status"
+    clause: "mark an invoice as paid"
+    file: src/main/java/net/officefloor/hq/app/InvoicesPayLogic.java
+    breaks: |
+      The pay endpoint still succeeds and still writes its audit record, but the invoice's status
+      is never flipped. The button works, nothing errors, and the row keeps saying UNPAID.
+    find: '        invoice.setStatus("PAID");'
+    replace: "        // mutation: the status is left exactly as it was"
+
+  - id: "002-payment-is-not-recorded"
+    clause: "Keep a record every time I do"
+    file: src/main/java/net/officefloor/hq/app/InvoicesPayLogic.java
+    breaks: |
+      The invoice is marked paid and NOTHING is written to the audit file. Completely invisible
+      through the UI — the status flips, the screen looks right. Only a test that reads the audit
+      channel can kill this, which is exactly what makes it worth having in the set.
+    find: '        audit.record("INVOICE_PAID id=" + saved.getId() + " amount=" + amount);'
+    replace: "        // mutation: no audit record is written"
+
+  - id: "003-audit-record-omits-the-amount"
+    clause: "so I can check back later"
+    file: src/main/java/net/officefloor/hq/app/InvoicesPayLogic.java
+    breaks: |
+      A record is written, but without the amount — so the kept history cannot answer what was
+      paid. Survives any assertion that merely checks a record exists for the invoice.
+    find: '        audit.record("INVOICE_PAID id=" + saved.getId() + " amount=" + amount);'
+    replace: '        audit.record("INVOICE_PAID id=" + saved.getId());'

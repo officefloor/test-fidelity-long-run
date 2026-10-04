@@ -1,0 +1,32 @@
+# Mutation set for cp11_invoice_dates.
+#
+# "Put two dates on each invoice. One for when it went out. One for when it is due. Show them
+#  both."
+#
+# Two fields of the same shape are the easiest thing in the world to wire up crossed, and a test
+# that asserts "a date is shown" cannot tell which it got.
+#
+# NOTE on format: multi-line find/replace use DOUBLE-QUOTED scalars with explicit \n, never a
+# `|` literal block. YAML strips a block's common leading indentation, so a `|` block silently
+# loses the source's indentation and the find then matches nothing.
+checkpoint: 11
+calibrated: false
+
+mutations:
+  - id: "001-the-two-dates-are-swapped"
+    clause: "One for when it went out. One for when it is due."
+    file: src/main/frontend/features/invoices/InvoiceList.tsx
+    breaks: |
+      Issued shows the due date and due shows the issued date. Both cells hold real, plausible
+      dates — only an assertion on which date is which catches it.
+    find: "            <td data-testid=\"invoice-issued\">{invoice.issuedDate}</td>\n            <td data-testid=\"invoice-due\">{invoice.dueDate}</td>"
+    replace: "            <td data-testid=\"invoice-issued\">{invoice.dueDate}</td>\n            <td data-testid=\"invoice-due\">{invoice.issuedDate}</td>"
+
+  - id: "002-due-date-repeats-the-issue-date"
+    clause: "One for when it is due"
+    file: src/main/frontend/features/invoices/InvoiceList.tsx
+    breaks: |
+      Only the due cell is wrong, so a suite that asserts the issued date and not the due date
+      passes. Narrower than 001 on purpose.
+    find: "            <td data-testid=\"invoice-due\">{invoice.dueDate}</td>"
+    replace: "            <td data-testid=\"invoice-due\">{invoice.issuedDate}</td>"

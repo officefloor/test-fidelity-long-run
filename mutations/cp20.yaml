@@ -1,0 +1,37 @@
+# Mutation set for cp20_project_tasks.
+#
+# "Let me keep a task list on each project. Let me tick things off as I finish them."
+#
+# The toggle has three separable parts: the flag flips, the screen reflects it, and the change is
+# recorded. The audit record is invisible to the UI.
+checkpoint: 20
+calibrated: false
+
+mutations:
+  - id: "001-ticking-off-does-not-stick"
+    clause: "Let me tick things off"
+    file: src/main/java/net/officefloor/hq/app/TasksToggleLogic.java
+    breaks: |
+      The toggle endpoint succeeds and still records the change, but the task's state
+      never moves. Clicking does nothing visible.
+    find: "        task.setDone(!task.isDone());"
+    replace: "        // mutation: the done flag is left as it was"
+
+  - id: "002-task-status-reads-inverted"
+    clause: "tick things off as I finish them"
+    file: src/main/frontend/features/projects/ProjectTasks.tsx
+    breaks: |
+      The flag flips correctly and the label is backwards. A test that asserts the status
+      CHANGES after a click, without asserting to what, passes.
+    find: "            <td data-testid=\"task-status\">{task.done ? 'DONE' : 'OPEN'}</td>"
+    replace: "            <td data-testid=\"task-status\">{task.done ? 'OPEN' : 'DONE'}</td>"
+
+  - id: "003-toggle-is-not-recorded"
+    clause: "Let me tick things off as I finish them"
+    file: src/main/java/net/officefloor/hq/app/TasksToggleLogic.java
+    breaks: |
+      The task toggles and nothing is written to the audit file. Only reachable through
+      the audit channel.
+    find: "        audit.record(\"TASK_TOGGLED id=\" + saved.getId() + \" done=\" + saved.isDone());"
+    replace: "        // mutation: no audit record is written"
+

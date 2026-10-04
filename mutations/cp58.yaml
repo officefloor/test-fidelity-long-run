@@ -1,0 +1,25 @@
+# Mutation set for cp58_client_restore.
+#
+# "Let me bring back a client I tucked away earlier. I might start working with them again."
+checkpoint: 58
+calibrated: false
+
+mutations:
+  - id: "001-restoring-does-not-bring-the-client-back"
+    clause: "bring back a client I tucked away earlier"
+    file: src/main/java/net/officefloor/hq/app/ClientsRestoreLogic.java
+    breaks: |
+      The restore endpoint succeeds and records itself, and the client stays archived.
+      The button works and nothing comes back.
+    find: "        client.setArchived(false);"
+    replace: "        // mutation: the client stays archived"
+
+  - id: "002-restoring-is-not-recorded"
+    clause: "bring back a client"
+    file: src/main/java/net/officefloor/hq/app/ClientsRestoreLogic.java
+    breaks: |
+      The client is restored and nothing is written to the audit file, so the archive
+      history has a gap. Only the audit channel can see it.
+    find: "        audit.record(\"CLIENT_RESTORED id=\" + id);"
+    replace: "        // mutation: no audit record is written"
+

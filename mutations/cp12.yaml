@@ -1,0 +1,29 @@
+# Mutation set for cp12_invoice_sort_due.
+#
+# "Let me sort a project's invoices by their due date."
+#
+# One clause, broken at each end of the wire: the server ignores the order, or the button never
+# asks for it. A suite can pass with either half working.
+checkpoint: 12
+calibrated: false
+
+mutations:
+  - id: "001-server-ignores-the-due-date-sort"
+    clause: "sort a project's invoices by their due date"
+    file: src/main/java/net/officefloor/hq/app/InvoicesGetLogic.java
+    breaks: |
+      The sort parameter arrives and is discarded — rows always come back in id order. The
+      button still highlights, the page still re-renders, and the order is simply unchanged.
+    find: "        List<Invoice> rows = \"due\".equals(sort)"
+    replace: "        List<Invoice> rows = false"
+
+  - id: "002-sort-button-asks-for-nothing"
+    clause: "Let me sort"
+    file: src/main/frontend/features/invoices/sortByDue.slot.tsx
+    breaks: |
+      The control renders and is clickable but sets no sort. The other end of the same
+      clause: killed by the same assertion, but a different thing to fix, and a suite that stubs or
+      skips the click would miss it.
+    find: "    <button type=\"button\" data-testid=\"invoice-sort-due\" onClick={() => setSort('due')}>"
+    replace: "    <button type=\"button\" data-testid=\"invoice-sort-due\" onClick={() => undefined}>"
+

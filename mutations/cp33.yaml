@@ -1,0 +1,30 @@
+# Mutation set for cp33_client_statement.
+#
+# "Give me a statement for a client. Put all their invoices in one place. Show the total they
+#  still owe me."
+#
+# "their" and "still owe" are the two clauses, and 002 is the one worth having: summing the
+# invoice amounts instead of what is outstanding gives a number that is plausible, stable, and
+# wrong.
+checkpoint: 33
+calibrated: false
+
+mutations:
+  - id: "001-statement-lists-every-invoice"
+    clause: "Put all their invoices in one place"
+    file: src/main/java/net/officefloor/hq/app/ClientStatementGetLogic.java
+    breaks: |
+      The statement lists every invoice in the system, not just this client's. Correct
+      on a single-client fixture, which is how it survives.
+    find: "                .filter(i -> projectIds.contains(i.getProjectId()))"
+    replace: "                .filter(i -> true)"
+
+  - id: "002-total-is-the-invoiced-amount-not-what-is-owed"
+    clause: "Show the total they still owe me"
+    file: src/main/java/net/officefloor/hq/app/ClientStatementGetLogic.java
+    breaks: |
+      The total sums what was invoiced rather than what is still owed, so any payment
+      already made is ignored. Identical to the right answer until something has been paid.
+    find: "        BigDecimal outstanding = rows.stream().map(StatementInvoiceView::getDue)"
+    replace: "        BigDecimal outstanding = rows.stream().map(StatementInvoiceView::getAmount)"
+

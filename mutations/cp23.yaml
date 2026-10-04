@@ -1,0 +1,27 @@
+# Mutation set for cp23_task_filter.
+#
+# "Let me see just the open tasks on a project. Or just the finished ones."
+#
+# Two states in one request, and a suite that checks one usually trusts the other.
+checkpoint: 23
+calibrated: false
+
+mutations:
+  - id: "001-open-filter-shows-everything"
+    clause: "see just the open tasks"
+    file: src/main/frontend/features/projects/ProjectTasks.tsx
+    breaks: |
+      Choosing OPEN narrows nothing. The control responds and the page re-renders, so
+      only a count or an assertion that a done task is ABSENT catches it.
+    find: "      ? tasks.filter((task) => !task.done)"
+    replace: "      ? tasks"
+
+  - id: "002-done-filter-shows-the-open-ones"
+    clause: "Or just the finished ones"
+    file: src/main/frontend/features/projects/ProjectTasks.tsx
+    breaks: |
+      The DONE filter is inverted and returns the open tasks instead. The list does
+      change when the filter changes, which is all a loose test checks.
+    find: "        ? tasks.filter((task) => task.done)"
+    replace: "        ? tasks.filter((task) => !task.done)"
+

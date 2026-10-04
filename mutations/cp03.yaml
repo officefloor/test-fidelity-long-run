@@ -1,0 +1,39 @@
+# Mutation set for cp03_projects.
+#
+# "I want to track the projects I do for clients. Let me add a project and pick which client it
+#  is for. Show each project with the client's name."
+#
+# Noted while authoring: the reference spec never asserts how MANY project rows appear, so a
+# mutation that shows only the first project would survive it. That is a hole in the reference
+# suite rather than a bad mutation, and it is left out here so the set stays calibratable —
+# worth fixing in the erosion harness's cp03 spec.
+checkpoint: 3
+calibrated: false
+
+mutations:
+  - id: "001-project-shows-the-wrong-client"
+    clause: "Show each project with the client's name"
+    file: src/main/frontend/features/projects/ProjectList.tsx
+    breaks: |
+      The client column renders the project's own name. The join is the point of the clause, and
+      a test that only checks the cell is present cannot see this.
+    find: '            <td data-testid="project-client">{project.clientName}</td>'
+    replace: '            <td data-testid="project-client">{project.name}</td>'
+
+  - id: "002-project-name-column-shows-the-client"
+    clause: "Show each project"
+    file: src/main/frontend/features/projects/ProjectList.tsx
+    breaks: |
+      The mirror of 001: the name column renders the client. Each column has to read back as
+      itself, and a suite can easily pin one and not the other.
+    find: '            <td data-testid="project-name">{project.name}</td>'
+    replace: '            <td data-testid="project-name">{project.clientName}</td>'
+
+  - id: "003-client-picker-is-empty"
+    clause: "pick which client it is for"
+    file: src/main/frontend/features/projects/ProjectForm.tsx
+    breaks: |
+      The client select renders no options, so there is nothing to pick. Killed by any test that
+      actually creates a project through the form; survived by one that only seeds data.
+    find: "        {(clients ?? []).map((client) => ("
+    replace: "        {(clients ?? []).slice(0, 0).map((client) => ("

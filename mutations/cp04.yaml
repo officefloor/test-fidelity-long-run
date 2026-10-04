@@ -1,0 +1,38 @@
+# Mutation set for cp04_project_invoices.
+#
+# "When I open a project I want to see its invoices. Show me what they add up to. Let me add a
+#  new invoice for an amount."
+#
+# Three clauses, and the middle one is the interesting mutation: a total that is merely plausible
+# is the classic thing a generated test fails to pin.
+checkpoint: 4
+calibrated: false
+
+mutations:
+  - id: "001-total-counts-only-the-first-invoice"
+    clause: "Show me what they add up to"
+    file: src/main/frontend/features/invoices/InvoiceList.tsx
+    breaks: |
+      The total is the first invoice's amount rather than the sum. Still a plausible-looking
+      figure, and it even agrees with the correct answer whenever a test seeds exactly one
+      invoice — which is why only a test that seeds several and asserts the exact total catches it.
+    find: "  const total = invoices.reduce((sum, invoice) => sum + Number(invoice.amount), 0);"
+    replace: "  const total = Number(invoices[0]?.amount ?? 0);"
+
+  - id: "002-invoice-list-shows-only-the-first"
+    clause: "I want to see its invoices"
+    file: src/main/frontend/features/invoices/InvoiceList.tsx
+    breaks: |
+      Only one invoice row is rendered. Killed by a test that seeds more than one and asserts
+      the second is there.
+    find: "        {invoices.map((invoice) => ("
+    replace: "        {invoices.slice(0, 1).map((invoice) => ("
+
+  - id: "003-amount-loses-its-cents"
+    clause: "add a new invoice for an amount"
+    file: src/main/frontend/features/invoices/InvoiceList.tsx
+    breaks: |
+      Amounts render with no decimal places — 100 rather than 100.00. The value is right and the
+      presentation is wrong, so it survives any assertion loose about format.
+    find: '            <td data-testid="invoice-amount">{Number(invoice.amount).toFixed(2)}</td>'
+    replace: '            <td data-testid="invoice-amount">{Number(invoice.amount).toFixed(0)}</td>'

@@ -1,0 +1,30 @@
+# Mutation set for cp37_project_budget.
+#
+# "Let me set a budget on a project. Show how much I have invoiced against it. Show what is
+#  left."
+#
+# Three figures on one panel, two of them derived. Both mutations keep the panel looking right
+# and get a derived number wrong.
+checkpoint: 37
+calibrated: false
+
+mutations:
+  - id: "001-invoiced-counts-nothing"
+    clause: "Show how much I have invoiced against it"
+    file: src/main/java/net/officefloor/hq/app/ProjectBudgetGetLogic.java
+    breaks: |
+      Invoices are summed as zero, so the invoiced figure is always nothing. Correct on
+      a project with no invoices, which is the easy fixture to write.
+    find: "                .map(Invoice::getAmount)"
+    replace: "                .map(i -> BigDecimal.ZERO)"
+
+  - id: "002-remaining-repeats-the-budget"
+    clause: "Show what is left"
+    file: src/main/frontend/features/projects/ProjectBudget.tsx
+    breaks: |
+      What is left always reads as the full budget, ignoring everything invoiced. A real
+      money figure in the right place answering the wrong question — and identical to the correct
+      answer until something has been invoiced.
+    find: "        <dd data-testid=\"project-remaining\">{formatMoney(data.remaining)}</dd>"
+    replace: "        <dd data-testid=\"project-remaining\">{formatMoney(data.budget)}</dd>"
+

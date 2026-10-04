@@ -1,0 +1,25 @@
+# Mutation set for cp27_project_tag_filter.
+#
+# "Let me filter my projects by label."
+checkpoint: 27
+calibrated: false
+
+mutations:
+  - id: "001-tag-filter-is-ignored"
+    clause: "filter my projects by label"
+    file: src/main/frontend/features/projects/ProjectList.tsx
+    breaks: |
+      Choosing a label narrows nothing. The select responds, the page re-renders, the
+      list is unchanged.
+    find: "    .filter((project) => tagId === undefined || project.tagIds.includes(tagId));"
+    replace: "    .filter((project) => true);"
+
+  - id: "002-tag-filter-is-inverted"
+    clause: "filter my projects by label"
+    file: src/main/frontend/features/projects/ProjectList.tsx
+    breaks: |
+      The filter returns the projects WITHOUT the chosen label. The list does change, and
+      by a plausible amount, so a test that only asserts "fewer rows" passes.
+    find: "    .filter((project) => tagId === undefined || project.tagIds.includes(tagId));"
+    replace: "    .filter((project) => tagId === undefined || !project.tagIds.includes(tagId));"
+

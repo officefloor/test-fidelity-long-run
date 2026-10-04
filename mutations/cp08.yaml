@@ -1,0 +1,37 @@
+# Mutation set for cp08_dashboard.
+#
+# "I want a home screen. Show me how many clients and projects I have. Show me how much money I
+#  am still owed."
+#
+# NOT included: swapping the two counts. The reference fixture seeds two clients and two
+# projects, so a swap is invisible — a mutation no test can distinguish measures nothing.
+checkpoint: 8
+calibrated: false
+
+mutations:
+  - id: "001-outstanding-includes-paid-invoices"
+    clause: "how much money I am still owed"
+    file: src/main/java/net/officefloor/hq/app/DashboardGetLogic.java
+    breaks: |
+      Paid invoices are counted as still owed. The behavioural heart of the clause, and the one a
+      test written by reading the code is most likely to miss: both versions show a plausible
+      figure, so only a fixture with a PAID invoice and an exact assertion catches it.
+    find: '                .filter(i -> "UNPAID".equals(i.getStatus()))'
+    replace: "                // mutation: paid invoices count as outstanding too"
+
+  - id: "002-client-count-off-by-one"
+    clause: "how many clients"
+    file: src/main/java/net/officefloor/hq/app/DashboardGetLogic.java
+    breaks: |
+      One fewer client than exists. Killed by an exact count; survived by a test that only
+      asserts the tile is present or non-zero.
+    find: "        response.send(new DashboardView(clients.count(), projects.count(), outstanding));"
+    replace: "        response.send(new DashboardView(clients.count() - 1, projects.count(), outstanding));"
+
+  - id: "003-outstanding-loses-its-cents"
+    clause: "how much money"
+    file: src/main/frontend/features/dashboard/Dashboard.tsx
+    breaks: |
+      The total renders with no decimals — 300 rather than 300.00. Right value, wrong money.
+    find: '      <dd data-testid="dashboard-outstanding-total">{data.outstandingTotal.toFixed(2)}</dd>'
+    replace: '      <dd data-testid="dashboard-outstanding-total">{data.outstandingTotal.toFixed(0)}</dd>'

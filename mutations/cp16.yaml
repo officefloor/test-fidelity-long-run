@@ -1,0 +1,29 @@
+# Mutation set for cp16_client_contacts.
+#
+# "For each client let me keep their contacts. Store a name, an email and their role. Show them
+#  on the client's page."
+#
+# "on the client's page" means scoped to that client, which is the clause a single-client fixture
+# cannot test.
+checkpoint: 16
+calibrated: false
+
+mutations:
+  - id: "001-contacts-are-not-scoped-to-the-client"
+    clause: "Show them on the client's page"
+    file: src/main/frontend/features/clients/ClientContacts.tsx
+    breaks: |
+      Every contact in the system appears on every client's page. Plausible until a
+      second client has contacts.
+    find: "  const forClient: Contact[] = (contacts ?? []).filter((c) => c.clientId === clientId);"
+    replace: "  const forClient: Contact[] = (contacts ?? []);"
+
+  - id: "002-role-column-shows-the-name"
+    clause: "Store a name, an email and their role"
+    file: src/main/frontend/features/clients/ClientContacts.tsx
+    breaks: |
+      The role column repeats the contact's name. Populated and plausible; only an
+      assertion on the role's value catches it.
+    find: "              <td data-testid=\"contact-role\">{contact.role}</td>"
+    replace: "              <td data-testid=\"contact-role\">{contact.name}</td>"
+

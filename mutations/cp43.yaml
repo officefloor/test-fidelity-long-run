@@ -1,0 +1,28 @@
+# Mutation set for cp43_global_search.
+#
+# "Give me one search box. Have it look across both clients and projects."
+#
+# "both" is the request. Each mutation blinds the search to one of the two, and a suite that
+# checks only the half it thought of passes.
+checkpoint: 43
+calibrated: false
+
+mutations:
+  - id: "001-search-never-matches-a-client"
+    clause: "look across both clients and projects"
+    file: src/main/frontend/features/search/GlobalSearch.tsx
+    breaks: |
+      The clients half of the results is always empty. The box works and projects are
+      found, so the page looks functional.
+    find: "    (c) => !c.archived && needle !== '' && c.name.toLowerCase().includes(needle),"
+    replace: "    (c) => false,"
+
+  - id: "002-search-never-matches-a-project"
+    clause: "look across both clients and projects"
+    file: src/main/frontend/features/search/GlobalSearch.tsx
+    breaks: |
+      The mirror of 001: projects are never found. Separate because covering one half
+      and trusting the other is the common shape of an incomplete suite.
+    find: "    (p) => !p.archived && needle !== '' && p.name.toLowerCase().includes(needle),"
+    replace: "    (p) => false,"
+

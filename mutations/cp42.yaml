@@ -1,0 +1,29 @@
+# Mutation set for cp42_client_primary_contact.
+#
+# "Let me pick a main contact for each client. Show who it is."
+#
+# "a main contact" is singular, and that is the whole subtlety: promoting one has to demote the
+# other, and nothing on screen says so.
+checkpoint: 42
+calibrated: false
+
+mutations:
+  - id: "001-main-contact-shows-their-role"
+    clause: "Show who it is"
+    file: src/main/frontend/features/clients/PrimaryContact.tsx
+    breaks: |
+      The main contact is shown by role rather than by name. Populated, plausible, and
+      not who it is.
+    find: "      <p data-testid=\"client-primary-contact\">{main ? main.name : ''}</p>"
+    replace: "      <p data-testid=\"client-primary-contact\">{main ? main.role : ''}</p>"
+
+  - id: "002-promoting-a-contact-does-not-demote-the-old-one"
+    clause: "pick a main contact"
+    file: src/main/java/net/officefloor/hq/app/ContactsPrimaryLogic.java
+    breaks: |
+      The new contact is marked primary and the old one stays primary too, so the client
+      has two "main" contacts and the page shows whichever comes first. Setting the FIRST main contact
+      works perfectly — only CHANGING it reveals this.
+    find: "                other.setPrimary(false);"
+    replace: "                // mutation: the previous main contact is left as primary"
+

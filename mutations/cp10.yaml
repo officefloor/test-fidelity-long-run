@@ -1,0 +1,28 @@
+# Mutation set for cp10_invoice_amount_positive.
+#
+# "Do not let me add an invoice for nothing. The amount has to be more than zero."
+#
+# Both directions of a boundary: too permissive, and too strict. Over-strict validation is as
+# real a failure as none — it blocks correct work, and a suite that only tries the invalid case
+# never notices.
+checkpoint: 10
+calibrated: false
+
+mutations:
+  - id: "001-zero-is-accepted"
+    clause: "The amount has to be more than zero"
+    file: src/main/frontend/features/invoices/InvoiceForm.tsx
+    breaks: |
+      Zero passes the form's check. The DB CHECK still refuses, so no invoice appears and a test
+      that only asserts "nothing was created" still passes — catching it needs the error asserted.
+    find: "        if (!amount.trim() || Number.isNaN(value) || value <= 0) {"
+    replace: "        if (!amount.trim() || Number.isNaN(value) || value < 0) {"
+
+  - id: "002-every-amount-is-rejected"
+    clause: "Do not let me add an invoice for nothing"
+    file: src/main/frontend/features/invoices/InvoiceForm.tsx
+    breaks: |
+      The boundary flips: valid amounts are rejected too, so no invoice can ever be added.
+      Killed only by a test that exercises the VALID path, which an error-focused suite skips.
+    find: "        if (!amount.trim() || Number.isNaN(value) || value <= 0) {"
+    replace: "        if (!amount.trim() || Number.isNaN(value) || value >= 0) {"

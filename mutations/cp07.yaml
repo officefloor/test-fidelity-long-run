@@ -1,0 +1,28 @@
+# Mutation set for cp07_client_detail_projects.
+#
+# "When I open a client show me the projects I am doing for them."
+#
+# "for them" is the whole request: a page that lists every project is not wrong-looking, it is
+# just not answering the question.
+checkpoint: 7
+calibrated: false
+
+mutations:
+  - id: "001-client-detail-lists-every-project"
+    clause: "the projects I am doing for them"
+    file: src/main/frontend/features/clients/ClientProjects.tsx
+    breaks: |
+      The client page drops the owner filter and lists all projects. Plausible on a single-client
+      fixture, which is why it needs a test that seeds another client's project and asserts it is
+      absent.
+    find: "  const owned = projects.filter((project) => project.clientId === clientId);"
+    replace: "  const owned = projects;"
+
+  - id: "002-only-the-first-project-is-listed"
+    clause: "show me the projects"
+    file: src/main/frontend/features/clients/ClientProjects.tsx
+    breaks: |
+      Only one of the client's projects is rendered. Killed by a count, or by asserting the
+      second project by name.
+    find: "        {owned.map((project) => ("
+    replace: "        {owned.slice(0, 1).map((project) => ("

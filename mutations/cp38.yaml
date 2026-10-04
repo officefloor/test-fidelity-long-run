@@ -1,0 +1,27 @@
+# Mutation set for cp38_dashboard_overdue.
+#
+# "On the home screen tell me how many sent invoices are overdue."
+#
+# Two qualifiers in one short sentence — SENT, and past due — so each gets its own mutation.
+checkpoint: 38
+calibrated: false
+
+mutations:
+  - id: "001-unsent-invoices-count-as-overdue"
+    clause: "how many sent invoices"
+    file: src/main/java/net/officefloor/hq/app/DashboardOverdueGetLogic.java
+    breaks: |
+      Drafts, paid and void invoices all count as overdue if their date has passed. The
+      tile shows a bigger but entirely plausible number.
+    find: "                .filter(i -> \"SENT\".equals(i.getStatus()))"
+    replace: "                .filter(i -> true)"
+
+  - id: "002-overdue-means-not-yet-due"
+    clause: "are overdue"
+    file: src/main/java/net/officefloor/hq/app/DashboardOverdueGetLogic.java
+    breaks: |
+      The date comparison is inverted: the count becomes invoices that are NOT yet due.
+      A non-zero, plausible number from the right set of invoices, meaning the opposite.
+    find: "                .filter(i -> i.getDueDate() != null && i.getDueDate().isBefore(asOf))"
+    replace: "                .filter(i -> i.getDueDate() != null && i.getDueDate().isAfter(asOf))"
+

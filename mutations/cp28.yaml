@@ -1,0 +1,28 @@
+# Mutation set for cp28_project_notes.
+#
+# "Let me write notes on a project. Show the newest one first."
+#
+# The ordering clause is the whole second half of the request, and a list that renders in SOME
+# order always looks fine.
+checkpoint: 28
+calibrated: false
+
+mutations:
+  - id: "001-notes-are-shown-oldest-first"
+    clause: "Show the newest one first"
+    file: src/main/frontend/features/projects/ProjectNotes.tsx
+    breaks: |
+      The order is reversed: oldest at the top. Every note is present and readable, so
+      only an assertion on WHICH note is first catches it.
+    find: "          {notes.map((note) => ("
+    replace: "          {[...notes].reverse().map((note) => ("
+
+  - id: "002-only-one-note-is-shown"
+    clause: "Let me write notes on a project"
+    file: src/main/frontend/features/projects/ProjectNotes.tsx
+    breaks: |
+      Only the first note renders. Killed by asserting the second note exists, which a
+      test focused on "the newest is on top" can easily skip.
+    find: "          {notes.map((note) => ("
+    replace: "          {notes.slice(0, 1).map((note) => ("
+

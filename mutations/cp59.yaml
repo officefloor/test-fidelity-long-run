@@ -1,0 +1,18 @@
+# Mutation set for cp59_statement_printable.
+#
+# "Give me a clean printable summary of a client\'s statement. Show the grand total they owe."
+checkpoint: 59
+calibrated: false
+
+mutations:
+  - id: "001-grand-total-is-recomputed-in-the-browser"
+    clause: "Show the grand total they owe"
+    file: src/main/frontend/features/clients/ClientStatement.tsx
+    breaks: |
+      The grand total sums the per-job subtotals in the browser instead of using the
+      figure the server worked out. Any discrepancy between them — rounding, something excluded
+      server-side — silently changes the headline number, and it agrees with the correct answer on a
+      simple fixture.
+    find: "            {formatMoney(data.outstandingTotal)}"
+    replace: "            {formatMoney(data.projects.reduce((s, p) => s + Number(p.subtotal), 0))}"
+

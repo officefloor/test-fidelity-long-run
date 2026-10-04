@@ -1,0 +1,28 @@
+# Mutation set for cp54_invoice_notes.
+#
+# "Let me add notes to invoices too. Not just jobs."
+#
+# The same notes feature on a second surface. The risk is scope: notes that are not filtered to
+# THIS invoice look perfectly normal until a second invoice has any.
+checkpoint: 54
+calibrated: false
+
+mutations:
+  - id: "001-only-one-note-is-shown"
+    clause: "Let me add notes to invoices too"
+    file: src/main/frontend/features/invoices/InvoiceNotes.tsx
+    breaks: |
+      Only the first note on the invoice renders. Killed by a count after adding a
+      second — the step a suite that checks "my note appeared" skips.
+    find: "          {notes.map((note) => ("
+    replace: "          {notes.slice(0, 1).map((note) => ("
+
+  - id: "002-note-text-is-not-shown"
+    clause: "add notes to invoices"
+    file: src/main/frontend/features/invoices/InvoiceNotes.tsx
+    breaks: |
+      The note rows exist and are empty. The anchor is present and the count is right, so
+      a test that only counts rows passes.
+    find: "              <span data-testid=\"note-text\">{note.text}</span>"
+    replace: "              <span data-testid=\"note-text\">{''}</span>"
+

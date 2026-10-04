@@ -1,0 +1,29 @@
+# Mutation set for cp31_invoice_amount_due.
+#
+# "Show me how much is still left to pay on each invoice after any payments."
+#
+# "after any payments" is the entire request: a figure that simply repeats the invoice amount is
+# the natural wrong answer, and it looks completely reasonable on an unpaid invoice.
+checkpoint: 31
+calibrated: false
+
+mutations:
+  - id: "001-due-ignores-the-payments"
+    clause: "after any payments"
+    file: src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java
+    breaks: |
+      Payments are summed as zero, so the amount due is always the full invoice amount.
+      Identical to the correct answer whenever nothing has been paid — which is why this needs a
+      fixture with a part payment and an exact assertion.
+    find: "                .map(Payment::getAmount)"
+    replace: "                .map(p -> BigDecimal.ZERO)"
+
+  - id: "002-due-is-what-has-been-paid"
+    clause: "how much is still left to pay"
+    file: src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java
+    breaks: |
+      The figure shown is the amount PAID rather than what is left. A real number from
+      the right invoice, on the right row, answering the opposite question.
+    find: "        response.send(new InvoiceDueView(invoiceId, amount, paid, amount.subtract(paid)));"
+    replace: "        response.send(new InvoiceDueView(invoiceId, amount, paid, paid));"
+

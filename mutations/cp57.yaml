@@ -1,0 +1,17 @@
+# Mutation set for cp57_statement_by_job (mutative: revises cp33).
+#
+# "On a client\'s statement group the invoices by job. Show a subtotal for each job."
+checkpoint: 57
+calibrated: false
+
+mutations:
+  - id: "001-every-job-subtotal-shows-the-grand-total"
+    clause: "Show a subtotal for each job"
+    file: src/main/frontend/features/clients/ClientStatement.tsx
+    breaks: |
+      Each job's subtotal renders the client's whole outstanding figure, so every job
+      shows the same number. The grouping is correct and the subtotals are money — which a test
+      asserting only ONE job's subtotal would not notice.
+    find: "            <strong data-testid=\"statement-project-subtotal\">{formatMoney(project.subtotal)}</strong>"
+    replace: "            <strong data-testid=\"statement-project-subtotal\">{formatMoney(data.outstandingTotal)}</strong>"
+

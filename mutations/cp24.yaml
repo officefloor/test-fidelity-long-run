@@ -1,0 +1,28 @@
+# Mutation set for cp24_project_delete_audit.
+#
+# "Let me delete a project I no longer need. Keep a record that I did."
+#
+# The deletion is visible in the row count; the record is not. Both mutations here are on the
+# record, because that is the half a screen-driven suite cannot see.
+checkpoint: 24
+calibrated: false
+
+mutations:
+  - id: "001-deletion-is-not-recorded"
+    clause: "Keep a record that I did"
+    file: src/main/java/net/officefloor/hq/app/ProjectsRemoveLogic.java
+    breaks: |
+      The project is deleted and nothing is written to the audit file. Completely
+      invisible through the UI — only a test that reads the audit channel kills it.
+    find: "        audit.record(\"PROJECT_DELETED id=\" + id);"
+    replace: "        // mutation: no audit record is written"
+
+  - id: "002-audit-names-the-wrong-project"
+    clause: "Keep a record that I did"
+    file: src/main/java/net/officefloor/hq/app/ProjectsRemoveLogic.java
+    breaks: |
+      A record is written, naming a different project. Survives any assertion that
+      merely checks SOME deletion was recorded rather than which.
+    find: "        audit.record(\"PROJECT_DELETED id=\" + id);"
+    replace: "        audit.record(\"PROJECT_DELETED id=\" + (id + 1));"
+

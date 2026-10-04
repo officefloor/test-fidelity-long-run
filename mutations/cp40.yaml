@@ -1,0 +1,24 @@
+# Mutation set for cp40_thousands_separator (mutative: revises cp09, cp21, cp33).
+#
+# "For bigger amounts put commas in. Show it like $1,234.50. Do this everywhere an amount shows,
+#  including on the invoices and on the client statement."
+#
+# cp40 is a NO-CODE checkpoint: the reference chain changed nothing, because cp09\'s shared
+# Intl formatter already groups thousands. That makes it the clearest demonstration of why such
+# checkpoints are still graded (DESIGN.md §2) — the behaviour the request describes exists and
+# can be broken, even though no code was written to add it. Mutation zero inverts here (the
+# previous checkpoint IS this one), but these authored mutations work exactly as everywhere else.
+checkpoint: 40
+calibrated: false
+
+mutations:
+  - id: "001-no-thousands-separator"
+    clause: "For bigger amounts put commas in"
+    file: src/main/frontend/ui/money.ts
+    breaks: |
+      Grouping is switched off, so amounts render as $1234.50. The symbol is right, the
+      cents are right, and the one thing this request asked for is gone. Survives any assertion that
+      checks the amount loosely or only uses small numbers — which is the usual fixture.
+    find: "  currency: 'USD',"
+    replace: "  currency: 'USD',\n  useGrouping: false,"
+

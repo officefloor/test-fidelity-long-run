@@ -1,0 +1,25 @@
+# Mutation set for cp18_contact_email_validation.
+#
+# "Contacts need a good email too. Do not let me save one with a bad email."
+checkpoint: 18
+calibrated: false
+
+mutations:
+  - id: "001-bad-contact-email-is-accepted"
+    clause: "Do not let me save one with a bad email"
+    file: src/main/frontend/features/clients/ClientContacts.tsx
+    breaks: |
+      The form's check is gone. The server still refuses, so no contact appears and a
+      test asserting only "no contact was created" passes — catching this needs the error asserted.
+    find: "          if (!isValidEmail(email)) {"
+    replace: "          if (false) {"
+
+  - id: "002-rejection-is-silent"
+    clause: "Do not let me save one"
+    file: src/main/frontend/features/clients/ClientContacts.tsx
+    breaks: |
+      Validation still blocks the save, but the user is never told why — the form just
+      does nothing.
+    find: "        {emailError && ("
+    replace: "        {false && ("
+

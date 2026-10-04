@@ -1,0 +1,21 @@
+# Mutation set for cp55_dashboard_top_clients.
+#
+# "On the home screen show me my top five clients. Rank them by how much they owe."
+#
+# Noted while authoring: the reference fixture has only three owing clients, so removing the
+# limit of five would be invisible. The ranking is what can be tested, and that is what is
+# mutated — the "top five" cap needs a fixture with six owing clients to have any bite, which is
+# a gap in the cp55 spec rather than a bad mutation.
+checkpoint: 55
+calibrated: false
+
+mutations:
+  - id: "001-top-clients-are-ranked-smallest-first"
+    clause: "Rank them by how much they owe"
+    file: src/main/java/net/officefloor/hq/app/DashboardTopClientsGetLogic.java
+    breaks: |
+      The ranking is ascending, so the client who owes LEAST heads the list. The panel is
+      populated, ordered and complete — only an assertion on who is first catches the direction.
+    find: "                .sorted(Comparator.comparing(TopClientView::getOutstanding).reversed()"
+    replace: "                .sorted(Comparator.comparing(TopClientView::getOutstanding)"
+

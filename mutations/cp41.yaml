@@ -1,0 +1,39 @@
+# Mutation set for cp41_invoice_cancel_audit.
+#
+# "Let me cancel an invoice I sent by mistake. It should stop counting toward what I am owed.
+#  Note it."
+#
+# Three clauses on three different surfaces: the invoice\'s own status, the dashboard total, and
+# the audit file. A suite can cover the first and miss both others.
+checkpoint: 41
+calibrated: false
+
+mutations:
+  - id: "001-cancelling-does-not-void-the-invoice"
+    clause: "Let me cancel an invoice I sent by mistake"
+    file: src/main/java/net/officefloor/hq/app/InvoicesVoidLogic.java
+    breaks: |
+      The endpoint succeeds and records the cancellation, and the invoice stays SENT.
+      The button works; nothing happens.
+    find: "        invoice.setStatus(\"VOID\");"
+    replace: "        // mutation: the status is left as it was"
+
+  - id: "002-cancellation-is-not-recorded"
+    clause: "Note it"
+    file: src/main/java/net/officefloor/hq/app/InvoicesVoidLogic.java
+    breaks: |
+      The invoice is voided and nothing is written to the audit file. Invisible through
+      the UI.
+    find: "        audit.record(\"INVOICE_VOIDED id=\" + saved.getId() + \" amount=\" + amount);"
+    replace: "        // mutation: no audit record is written"
+
+  - id: "003-voided-invoices-still-count-as-owed"
+    clause: "It should stop counting toward what I am owed"
+    file: src/main/java/net/officefloor/hq/app/DashboardGetLogic.java
+    breaks: |
+      The invoice voids correctly and is still counted in the outstanding total, so
+      cancelling a mistake does not undo its effect on what you are owed. On a different screen from
+      the action, which is why it needs a test that checks the dashboard after cancelling.
+    find: "                .filter(i -> \"SENT\".equals(i.getStatus()))"
+    replace: "                .filter(i -> !\"PAID\".equals(i.getStatus()))"
+

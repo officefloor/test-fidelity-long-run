@@ -1,0 +1,40 @@
+# Mutation set for cp13_invoice_lifecycle (mutative: revises cp05).
+#
+# "Invoices should move through stages. First a draft. Then I send it. Then it gets paid. Keep a
+#  record when I send one. Only let me take payment once it has been sent."
+#
+# Four clauses and three of them are separately breakable: the stage advances, the send is
+# recorded, and payment is gated on having been sent. The last is the one worth having — a gate
+# that is not enforced looks identical until someone pays an unsent invoice.
+checkpoint: 13
+calibrated: false
+
+mutations:
+  - id: "001-sending-does-not-advance-the-stage"
+    clause: "Then I send it"
+    file: src/main/java/net/officefloor/hq/app/InvoicesSendLogic.java
+    breaks: |
+      The send endpoint succeeds and still writes its audit record, but the invoice stays
+      DRAFT. Nothing errors; the stage just never moves.
+    find: "        invoice.setStatus(\"SENT\");"
+    replace: "        // mutation: the stage is left as it was"
+
+  - id: "002-sending-is-not-recorded"
+    clause: "Keep a record when I send one"
+    file: src/main/java/net/officefloor/hq/app/InvoicesSendLogic.java
+    breaks: |
+      The stage advances and nothing is written to the audit file. Invisible through the
+      UI — only a test that reads the audit channel can kill it.
+    find: "        audit.record(\"INVOICE_SENT id=\" + saved.getId() + \" amount=\" + amount);"
+    replace: "        // mutation: no audit record is written"
+
+  - id: "003-payment-is-allowed-before-sending"
+    clause: "Only let me take payment once it has been sent"
+    file: src/main/frontend/features/invoices/InvoiceList.tsx
+    breaks: |
+      The pay control appears on a DRAFT invoice, so the gate the request asks for is
+      gone. The happy path — send, then pay — still works perfectly, which is why this needs a test
+      that asserts the control is ABSENT before sending.
+    find: "              {invoice.status === 'SENT' && ("
+    replace: "              {invoice.status !== 'PAID' && ("
+

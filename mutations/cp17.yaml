@@ -1,0 +1,20 @@
+# Mutation set for cp17_outstanding_sent_only (mutative: revises cp08).
+#
+# "The money I am owed should only count invoices I have actually sent. Do not count drafts."
+#
+# A single-clause arithmetic change with no visible anchor of its own — the tile was already
+# there. Exactly the kind of revision a suite carries forward unchanged and stops testing.
+checkpoint: 17
+calibrated: false
+
+mutations:
+  - id: "001-drafts-are-counted-as-owed"
+    clause: "Do not count drafts"
+    file: src/main/java/net/officefloor/hq/app/DashboardGetLogic.java
+    breaks: |
+      Drafts are counted again — precisely the behaviour this checkpoint was asked to
+      remove. The figure stays plausible and the tile still renders, so only a fixture with a DRAFT
+      invoice and an exact total catches it. This is the regression the checkpoint exists to prevent.
+    find: "                .filter(i -> \"SENT\".equals(i.getStatus()))"
+    replace: "                .filter(i -> !\"PAID\".equals(i.getStatus()))"
+

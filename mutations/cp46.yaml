@@ -1,0 +1,28 @@
+# Mutation set for cp46_line_item_qty_unit.
+#
+# "On the charge lines let me say how many and the unit. Show the amount for each line."
+#
+# Note that cp46 finally asserts a line\'s own amount, which cp21 did not — so the
+# quantity-ignoring mutation that would have been unkillable back then is usable here.
+checkpoint: 46
+calibrated: false
+
+mutations:
+  - id: "001-unit-column-shows-the-quantity"
+    clause: "let me say how many and the unit"
+    file: src/main/frontend/features/invoices/LineItemList.tsx
+    breaks: |
+      The unit column repeats the quantity. Both cells are populated, so only an
+      assertion on the unit's value catches it.
+    find: "            <td data-testid=\"lineitem-unit\">{line.unit}</td>"
+    replace: "            <td data-testid=\"lineitem-unit\">{line.qty}</td>"
+
+  - id: "002-line-amount-ignores-the-quantity"
+    clause: "Show the amount for each line"
+    file: src/main/frontend/features/invoices/LineItemList.tsx
+    breaks: |
+      A line's amount is its unit price, ignoring how many. Correct whenever the
+      quantity is 1 — the fixture everyone writes first.
+    find: "              {formatMoney(Number(line.qty) * Number(line.unitPrice))}"
+    replace: "              {formatMoney(Number(line.unitPrice))}"
+

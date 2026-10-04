@@ -1,0 +1,28 @@
+# Mutation set for cp45_client_edit.
+#
+# "Let me fix a client\'s name or email from the list."
+#
+# Two editable fields in one form, so each mutation drops one of them — the classic
+# half-wired-up edit, where saving appears to work and one field silently reverts.
+checkpoint: 45
+calibrated: false
+
+mutations:
+  - id: "001-the-name-edit-is-discarded"
+    clause: "fix a client's name"
+    file: src/main/java/net/officefloor/hq/app/ClientsUpdateLogic.java
+    breaks: |
+      The email is updated and the name is not. The form closes, the row refreshes, and
+      one of the two fields is unchanged — survived by a test that only checks the email.
+    find: "        client.setName(body.getName());"
+    replace: "        // mutation: the edited name is discarded"
+
+  - id: "002-the-email-edit-is-discarded"
+    clause: "or email"
+    file: src/main/java/net/officefloor/hq/app/ClientsUpdateLogic.java
+    breaks: |
+      The mirror of 001. Separate because a suite that pins one field and trusts the
+      other is exactly what this is testing for.
+    find: "        client.setEmail(normalised);"
+    replace: "        // mutation: the edited email is discarded"
+

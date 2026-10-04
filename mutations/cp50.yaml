@@ -1,0 +1,23 @@
+# Mutation set for cp50_combined_filter.
+#
+# "Let me filter by two things at once. For example active projects that have a certain label."
+#
+# cp50 is a NO-CODE checkpoint: the reference chain changed nothing, because cp27\'s label filter
+# and cp35\'s status filter were already chained and therefore already combined. The request is
+# about the COMBINATION, so the mutation drops one of the two — leaving a filter that still works
+# on its own and no longer narrows by both (DESIGN.md §2 on why these are still graded).
+checkpoint: 50
+calibrated: false
+
+mutations:
+  - id: "001-only-one-of-the-two-filters-applies"
+    clause: "filter by two things at once"
+    file: src/main/frontend/features/projects/ProjectList.tsx
+    breaks: |
+      The label filter still narrows and the status filter is ignored, so choosing both
+      gives the label-only result. Each control works in isolation; the combination does not. Killed
+      only by a fixture where the two filters disagree — a project with the right label and the wrong
+      status.
+    find: "    .filter((project) => statusFilter === '' || project.status === statusFilter);"
+    replace: "    .filter((project) => true);"
+

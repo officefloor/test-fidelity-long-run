@@ -1,0 +1,40 @@
+# Mutation set for cp36_client_active_projects_default (mutative: revises cp07).
+#
+# "On a client\'s page show me just their active projects by default. Give me a way to also see
+#  the finished and hidden ones."
+#
+# A default and an escape hatch, plus two separate exclusions folded into one condition — which
+# is why there are three mutations: the default can be too wide, too wide in only one dimension,
+# or the escape hatch can be dead.
+checkpoint: 36
+calibrated: false
+
+mutations:
+  - id: "001-client-page-defaults-to-every-project"
+    clause: "just their active projects by default"
+    file: src/main/frontend/features/clients/ClientProjects.tsx
+    breaks: |
+      The default shows everything, so the request's whole point is gone. The page still
+      lists only this client's projects, which is what a test most likely checks.
+    find: "    return showAll || (project.status === 'ACTIVE' && !project.archived);"
+    replace: "    return true;"
+
+  - id: "002-default-includes-archived-projects"
+    clause: "just their active projects"
+    file: src/main/frontend/features/clients/ClientProjects.tsx
+    breaks: |
+      The status half of the default is honoured and the archived half is not, so an
+      archived-but-active project leaks in. One dimension of two — narrower than 001, and it needs a
+      fixture with an archived project to see.
+    find: "    return showAll || (project.status === 'ACTIVE' && !project.archived);"
+    replace: "    return showAll || (project.status === 'ACTIVE');"
+
+  - id: "003-the-show-all-toggle-reveals-nothing"
+    clause: "Give me a way to also see the finished and hidden ones"
+    file: src/main/frontend/features/clients/ClientProjects.tsx
+    breaks: |
+      The toggle renders and does nothing: the finished and hidden projects can never be
+      seen. The default view is perfect, so only a test that uses the toggle catches it.
+    find: "    return showAll || (project.status === 'ACTIVE' && !project.archived);"
+    replace: "    return false || (project.status === 'ACTIVE' && !project.archived);"
+

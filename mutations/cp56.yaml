@@ -1,0 +1,30 @@
+# Mutation set for cp56_payment_allocation (mutative: revises cp30, cp31, cp32).
+#
+# "Sometimes a client pays one lump sum for several invoices. Let me split that payment across
+#  them. Each invoice\'s balance should come out right."
+#
+# The last clause is the real requirement, and the way to break it is to let the split not add up
+# — every balance then looks plausible and the books do not.
+checkpoint: 56
+calibrated: false
+
+mutations:
+  - id: "001-the-split-need-not-add-up-to-the-payment"
+    clause: "Each invoice's balance should come out right"
+    file: src/main/java/net/officefloor/hq/app/PaymentsSplitLogic.java
+    breaks: |
+      The server stops checking that the allocations sum to the lump sum, so a partial or
+      over-allocated split is accepted and each invoice's balance silently disagrees with what was
+      actually paid. Every individual balance still looks like a real number.
+    find: "        if (allocated.compareTo(lump) != 0) {"
+    replace: "        if (false) {"
+
+  - id: "002-each-share-is-recorded-against-the-wrong-invoice"
+    clause: "split that payment across them"
+    file: src/main/java/net/officefloor/hq/app/PaymentsSplitLogic.java
+    breaks: |
+      The payments are applied correctly and the audit trail names the wrong invoice for
+      each share. Balances and statuses are all right, so only the audit channel can see it.
+    find: "                    \"PAYMENT_RECORDED id=\" + allocation.getInvoiceId() + \" amount=\" + amountText);"
+    replace: "                    \"PAYMENT_RECORDED id=\" + (allocation.getInvoiceId() + 1) + \" amount=\" + amountText);"
+

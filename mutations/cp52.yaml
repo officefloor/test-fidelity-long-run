@@ -1,0 +1,21 @@
+# Mutation set for cp52_project_to_job_rename (mutative, renames the domain word).
+#
+# "I call these jobs, not projects. Please use that word everywhere."
+#
+# A pure wording change with the data-testids deliberately unchanged, which makes it the one
+# checkpoint where the ANCHORS carry no information at all — a suite can only verify this by
+# asserting on the text a user reads. Exactly the kind of request a testid-driven suite silently
+# stops covering.
+checkpoint: 52
+calibrated: false
+
+mutations:
+  - id: "001-the-form-still-says-project"
+    clause: "Please use that word everywhere"
+    file: src/main/frontend/features/projects/ProjectForm.tsx
+    breaks: |
+      The submit control goes back to saying "Add project". Every testid is untouched and
+      every behaviour identical, so only an assertion on the visible WORDING catches it.
+    find: "        Add job"
+    replace: "        Add project"
+

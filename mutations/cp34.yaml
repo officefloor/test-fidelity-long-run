@@ -1,0 +1,25 @@
+# Mutation set for cp34_project_status.
+#
+# "Let me mark a project as active, on hold or finished. Show which it is."
+checkpoint: 34
+calibrated: false
+
+mutations:
+  - id: "001-status-column-shows-the-project-name"
+    clause: "Show which it is"
+    file: src/main/frontend/features/projects/status.slot.tsx
+    breaks: |
+      The status cell renders the project's name. Populated and plausible; only an
+      assertion on the status VALUE catches it.
+    find: "  return <span data-testid=\"project-status\">{project.status}</span>;"
+    replace: "  return <span data-testid=\"project-status\">{project.name}</span>;"
+
+  - id: "002-created-project-ignores-the-chosen-status"
+    clause: "Let me mark a project as active, on hold or finished"
+    file: src/main/java/net/officefloor/hq/app/ProjectsPostLogic.java
+    breaks: |
+      Whatever status is chosen on the form, the project is saved ON_HOLD. The control
+      works, the project is created, and the choice is discarded.
+    find: "        project.setStatus(status);"
+    replace: "        project.setStatus(\"ON_HOLD\");"
+

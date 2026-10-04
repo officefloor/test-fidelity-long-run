@@ -1,0 +1,28 @@
+# Mutation set for cp19_client_badges.
+#
+# "On a client's page show me how many projects and contacts they have."
+#
+# "they" is the clause: both counts are derived by filtering shared lists to this client, and an
+# unfiltered count is the natural mistake.
+checkpoint: 19
+calibrated: false
+
+mutations:
+  - id: "001-project-count-counts-every-project"
+    clause: "how many projects ... they have"
+    file: src/main/frontend/features/clients/ClientCounts.tsx
+    breaks: |
+      The project count is the system-wide total rather than this client's. Correct
+      whenever the fixture has only one client, which is how it survives.
+    find: "  const projectCount = (projects ?? []).filter((p) => p.clientId === clientId).length;"
+    replace: "  const projectCount = (projects ?? []).length;"
+
+  - id: "002-contact-count-counts-every-contact"
+    clause: "how many ... contacts they have"
+    file: src/main/frontend/features/clients/ClientCounts.tsx
+    breaks: |
+      The same mistake on the other count. Separate because a suite that pins one and
+      not the other is the common case.
+    find: "  const contactCount = (contacts ?? []).filter((c) => c.clientId === clientId).length;"
+    replace: "  const contactCount = (contacts ?? []).length;"
+

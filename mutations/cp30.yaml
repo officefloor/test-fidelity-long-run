@@ -1,0 +1,37 @@
+# Mutation set for cp30_invoice_payments.
+#
+# "Let me record what a client has paid on an invoice. Store the amount and the date. Show it on
+#  the invoice."
+#
+# Two stored fields of different kinds, so the crossing mutation (003) is the interesting one:
+# both cells stay populated and plausible.
+checkpoint: 30
+calibrated: false
+
+mutations:
+  - id: "001-only-one-payment-is-shown"
+    clause: "record what a client has paid"
+    file: src/main/frontend/features/invoices/PaymentList.tsx
+    breaks: |
+      Only the first payment renders, so a second payment is invisible. Killed by a
+      count; survived by a test that records one payment and checks it appears.
+    find: "        {payments.map((payment) => ("
+    replace: "        {payments.slice(0, 1).map((payment) => ("
+
+  - id: "002-payment-amount-is-not-money"
+    clause: "Store the amount"
+    file: src/main/frontend/features/invoices/PaymentList.tsx
+    breaks: |
+      The amount renders raw — 40 rather than $40.00. Correct value, not money.
+    find: "            <td data-testid=\"payment-amount\">{formatMoney(payment.amount)}</td>"
+    replace: "            <td data-testid=\"payment-amount\">{payment.amount}</td>"
+
+  - id: "003-payment-date-column-shows-the-amount"
+    clause: "and the date"
+    file: src/main/frontend/features/invoices/PaymentList.tsx
+    breaks: |
+      The date column renders the amount. Both cells are populated, so only an assertion
+      on the date's value catches it.
+    find: "            <td data-testid=\"payment-date\">{payment.date}</td>"
+    replace: "            <td data-testid=\"payment-date\">{payment.amount}</td>"
+

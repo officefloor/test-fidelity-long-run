@@ -1,0 +1,32 @@
+# Mutation set for cp49_sales_tax (mutative: revises cp21, cp47).
+#
+# "Let me add sales tax on top. Work it out after the discount. The amount shown for each invoice
+#  should include the tax."
+#
+# "after the discount" is an ordering constraint on arithmetic, and 001 is the mutation that
+# matters: taxing the subtotal instead of the net figure is the single most natural way to get
+# this wrong, and every figure on the page still looks like money.
+checkpoint: 49
+calibrated: false
+
+mutations:
+  - id: "001-tax-is-worked-out-before-the-discount"
+    clause: "Work it out after the discount"
+    file: src/main/java/net/officefloor/hq/app/InvoiceMoney.java
+    breaks: |
+      Tax is charged on the full subtotal rather than on the subtotal less the discount,
+      so the customer is taxed on money they were never charged. Identical to the correct answer
+      whenever the discount is zero — which is most fixtures.
+    find: "        BigDecimal net = netOfDiscount(subtotal, discountPct);"
+    replace: "        BigDecimal net = subtotal != null ? subtotal : BigDecimal.ZERO;"
+
+  - id: "002-the-invoice-amount-leaves-the-tax-off"
+    clause: "The amount shown for each invoice should include the tax"
+    file: src/main/java/net/officefloor/hq/app/InvoiceMoney.java
+    breaks: |
+      The tax is worked out and displayed correctly, and the final amount omits it. The
+      breakdown is right and does not add up — only an assertion tying the total to the parts catches
+      it.
+    find: "        return netOfDiscount(subtotal, discountPct).add(tax(subtotal, discountPct, taxPct));"
+    replace: "        return netOfDiscount(subtotal, discountPct);"
+

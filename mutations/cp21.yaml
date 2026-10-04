@@ -1,0 +1,31 @@
+# Mutation set for cp21_invoice_line_items (mutative: revises cp04).
+#
+# "I do not want to type one figure for an invoice. Let me list the things I am charging for. For
+#  each one give a description, how many, and the price each. Work out the total for me."
+#
+# Noted while authoring: the reference spec asserts the line DESCRIPTION and the invoice total,
+# but never a line's own qty, unit price or amount — so a mutation that computed a line\'s amount
+# without its quantity would survive it. A hole in the reference suite rather than a bad
+# mutation; left out so the set stays calibratable, and worth fixing in the cp21 spec.
+checkpoint: 21
+calibrated: false
+
+mutations:
+  - id: "001-adding-a-line-leaves-the-invoice-total-stale"
+    clause: "Work out the total for me"
+    file: src/main/java/net/officefloor/hq/app/LineItemsPostLogic.java
+    breaks: |
+      The line is saved and the invoice's own total is never recomputed. The new line
+      appears in the list, so a test that only counts line items passes.
+    find: "        invoice.setAmount(total);"
+    replace: "        // mutation: the invoice total is left stale"
+
+  - id: "002-description-column-shows-the-quantity"
+    clause: "give a description, how many, and the price each"
+    file: src/main/frontend/features/invoices/LineItemList.tsx
+    breaks: |
+      The description column renders the quantity. Populated and plausible; only an
+      assertion on what the description SAYS catches it.
+    find: "            <td data-testid=\"lineitem-description\">{line.description}</td>"
+    replace: "            <td data-testid=\"lineitem-description\">{line.qty}</td>"
+

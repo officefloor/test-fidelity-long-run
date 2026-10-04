@@ -1,0 +1,41 @@
+# Mutation set for cp02_client_email_validation.
+#
+# "Every client needs an email. Do not let me save one without a proper email address."
+#
+# Three mutations: blank is rejected, malformed is rejected, and the user is TOLD. The third is
+# separate on purpose — validation that silently refuses still fails the request.
+#
+# Note what is NOT mutated: the server-side 400 and the Flyway CHECK. Through the UI the form
+# blocks first, so breaking only the server changes nothing a test can observe — and a mutation
+# no test could possibly kill measures the harness, not the suite (DESIGN.md §6).
+checkpoint: 2
+calibrated: true
+
+mutations:
+  - id: "001-blank-email-passes-validation"
+    clause: "Do not let me save one without a proper email address"
+    file: src/main/frontend/features/clients/email.ts
+    breaks: |
+      An empty email is treated as valid, so the form submits it. The server and the DB still
+      refuse, so no row appears — which means a test that only checks "no client was created"
+      still passes. Catching it needs the error to be asserted.
+    find: "  return EMAIL_PATTERN.test(email.trim());"
+    replace: "  return email.trim() === '' || EMAIL_PATTERN.test(email.trim());"
+
+  - id: "002-malformed-email-passes-validation"
+    clause: "a proper email address"
+    file: src/main/frontend/features/clients/email.ts
+    breaks: |
+      Any non-blank text counts as an email, so 'not-an-email' submits. Distinct from 001: a
+      suite can easily cover the blank case and never try a malformed one.
+    find: "const EMAIL_PATTERN = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;"
+    replace: "const EMAIL_PATTERN = /^.+$/;"
+
+  - id: "003-rejection-is-silent"
+    clause: "Do not let me save one"
+    file: src/main/frontend/features/clients/ClientForm.tsx
+    breaks: |
+      Validation still blocks the save, but the error message is never rendered — the form just
+      does nothing. Killed only by a test that asserts the user is told why.
+    find: "      {emailError && ("
+    replace: "      {false && ("
