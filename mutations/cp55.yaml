@@ -2,10 +2,10 @@
 #
 # "On the home screen show me my top five clients. Rank them by how much they owe."
 #
-# Noted while authoring: the reference fixture has only three owing clients, so removing the
-# limit of five would be invisible. The ranking is what can be tested, and that is what is
-# mutated — the "top five" cap needs a fixture with six owing clients to have any bite, which is
-# a gap in the cp55 spec rather than a bad mutation.
+# The reference fixture seeded only three owing clients, so removing the limit of five was
+# invisible — a cap of five cannot be observed with three candidates. That hole is now CLOSED:
+# cp55 seeds six owing clients and asserts the list caps at five (erosion harness 3a8b947), and
+# 002 below is the mutation it unlocked.
 checkpoint: 55
 calibrated: false
 

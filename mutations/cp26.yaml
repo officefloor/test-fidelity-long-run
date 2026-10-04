@@ -2,10 +2,10 @@
 #
 # "Let me put labels on projects so I can group them."
 #
-# Noted while authoring: cp26\'s spec does not read the audit channel, so dropping the
-# PROJECT_TAGGED / PROJECT_UNTAGGED records would survive it. Those records exist and are
-# asserted nowhere — a reference-suite hole worth fixing, and left out here to keep the set
-# calibratable.
+# cp26's spec did not read the audit channel at all, so dropping the PROJECT_TAGGED /
+# PROJECT_UNTAGGED records would have survived it — the records existed and were asserted
+# nowhere. That hole is now CLOSED (erosion harness 3a8b947); 003 and 004 below are the
+# mutations it unlocked, and both are reachable only through the audit file.
 checkpoint: 26
 calibrated: false
 

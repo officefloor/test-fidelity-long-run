@@ -3,10 +3,11 @@
 # "I do not want to type one figure for an invoice. Let me list the things I am charging for. For
 #  each one give a description, how many, and the price each. Work out the total for me."
 #
-# Noted while authoring: the reference spec asserts the line DESCRIPTION and the invoice total,
-# but never a line's own qty, unit price or amount — so a mutation that computed a line\'s amount
-# without its quantity would survive it. A hole in the reference suite rather than a bad
-# mutation; left out so the set stays calibratable, and worth fixing in the cp21 spec.
+# The reference spec asserted the line DESCRIPTION and the invoice total but never a line's own
+# qty, unit price or amount — so a line amount computed WITHOUT its quantity, which is correct
+# whenever the quantity is 1, would have survived it. That hole is now CLOSED (erosion harness
+# 3a8b947) and 003 below is the mutation it unlocked. The sharpest of the four: the defect was
+# genuinely unobservable through the suite that existed.
 checkpoint: 21
 calibrated: false
 
