@@ -65,7 +65,10 @@ That writes `calibrated` back into each manifest from the run's own kill results
 do it: in agent mode the suite is the thing under test, so what it kills says nothing about
 whether a mutation is any good.
 
-cp02 is marked calibrated from a real run (3/3 killed). The rest await the full replay.
+The first full replay (`202610041729`) was green at all 60 checkpoints and killed 120 of the 133.
+The 13 that survived are diagnosed below: nine were reference-suite holes, three were equivalent
+mutants of my own making, and one was a reference spec whose assertion could not fail. All are
+fixed; what follows is the record, because the same mistakes are the ones to look for next time.
 
 ## Reference-suite holes — found, then closed
 
@@ -90,6 +93,44 @@ description and the invoice total. The defect was unobservable through the suite
 
 The spec changes are additions to existing tests, not new tests, so the test ids are unchanged
 and runs stay comparable across the change (erosion harness commit `3a8b947`).
+
+### Round two — the nine the first full replay found
+
+Nine more, all the same shape: the spec asserted the visible half of a clause and not the half the
+request was actually about. Closed the same way, and each manifest header now says so.
+
+| checkpoint | the mutation that survived | the hole |
+| --- | --- | --- |
+| cp13 | `003-payment-is-allowed-before-sending` | the spec **did** assert the pay control was absent — before the invoice list had rendered |
+| cp16 | `001-contacts-are-not-scoped-to-the-client` | one client in the fixture, so a scoped list and an unscoped one look identical |
+| cp19 | `001-project-count-counts-every-project`, `002-contact-count-counts-every-contact` | the same, on both badge counts |
+| cp33 | `001-statement-lists-every-invoice` | the same, on "all their invoices" |
+| cp20 | `003-toggle-is-not-recorded` | the audit channel never read |
+| cp56 | `002-each-share-is-recorded-against-the-wrong-invoice` | the audit channel never read |
+| cp58 | `002-restoring-is-not-recorded` | the audit channel never read |
+| cp21 | `001-adding-a-line-leaves-the-invoice-total-stale` | the total was asserted on the invoice page, which derives it from the rows it is showing rather than reading what the server stored |
+| cp22 | `001-removing-a-line-leaves-the-total-stale` | the same |
+
+cp13 is the one worth remembering: a test that looks like it pins the rule, passes, and pins
+nothing. `toHaveCount(0)` is satisfied the instant the page has not rendered yet, so an absence
+assertion with nothing anchoring it in front can never fail. It was the only unanchored one in the
+suite — the other seventeen are each preceded by a positive assertion that forces the render.
+
+## Equivalent mutants — three found, three replaced
+
+Rule 3 above is easy to state and easy to violate wherever the application enforces something
+twice. These three survived the first full replay looking exactly like coverage holes. None was.
+
+| checkpoint | the mutation | why nothing could kill it |
+| --- | --- | --- |
+| cp44 | `001-duplicate-emails-are-allowed` | deleting the server's `existsByEmail` check leaves Flyway V25's UNIQUE constraint, which refuses the insert anyway — same error, same row count |
+| cp56 | `001-the-split-need-not-add-up-to-the-payment` | the form checks the sum before posting, so breaking the server's check changes nothing a UI test can see — cp02's lesson, missed |
+| cp59 | `001-grand-total-is-recomputed-in-the-browser` | the server builds each subtotal from the same invoice dues it sums into the total, so a browser re-sum agrees by construction |
+
+Each was replaced by the break that **is** reachable for the same clause: the email normalisation
+the DB constraint cannot see, the form's own check, and reading the invoiced figure instead of the
+owed one. A surviving mutation is a hypothesis about the suite — check it is not a statement about
+the application before closing a hole that was never there.
 
 ## Checkpoints with no code of their own
 

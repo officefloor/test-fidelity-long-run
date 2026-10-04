@@ -8,16 +8,23 @@
 # whenever the quantity is 1, would have survived it. That hole is now CLOSED (erosion harness
 # 3a8b947) and 003 below is the mutation it unlocked. The sharpest of the four: the defect was
 # genuinely unobservable through the suite that existed.
+#
+# A second hole of the same shape surfaced in the 202610041729 replay and is now closed as well:
+# the spec asserted the total after adding a line, but on the invoice page, which derives that
+# figure from the rows it is showing rather than reading what the server stored. The assertion
+# moved to the project's invoice list, which reads the stored total.
 checkpoint: 21
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-adding-a-line-leaves-the-invoice-total-stale"
     clause: "Work out the total for me"
     file: src/main/java/net/officefloor/hq/app/LineItemsPostLogic.java
     breaks: |
-      The line is saved and the invoice's own total is never recomputed. The new line
-      appears in the list, so a test that only counts line items passes.
+      The line is saved and the invoice's own stored total is never reworked. The
+      invoice page cannot see this: it derives the figure it shows from the line rows it is
+      holding, so that number is right either way. Only a view that reads the STORED total — the
+      project's invoice list, or all invoices — catches it.
     find: "        invoice.setAmount(total);"
     replace: "        // mutation: the invoice total is left stale"
 

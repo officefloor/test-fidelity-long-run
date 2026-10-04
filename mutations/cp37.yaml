@@ -6,7 +6,7 @@
 # Three figures on one panel, two of them derived. Both mutations keep the panel looking right
 # and get a derived number wrong.
 checkpoint: 37
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-invoiced-counts-nothing"

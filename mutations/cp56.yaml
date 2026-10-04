@@ -5,18 +5,26 @@
 #
 # The last clause is the real requirement, and the way to break it is to let the split not add up
 # — every balance then looks plausible and the books do not.
+#
+# That check exists TWICE, and the 202610041729 replay showed which half is reachable: mutating
+# the server's (PaymentsSplitLogic) changes nothing a test can see, because the form refuses the
+# split before it is ever posted. Same lesson as cp02, where breaking the server's 400 is
+# invisible behind the form's own validation. 001 therefore breaks the form's check: the split is
+# posted, the server refuses it, and the user is told nothing at all.
 checkpoint: 56
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-the-split-need-not-add-up-to-the-payment"
     clause: "Each invoice's balance should come out right"
-    file: src/main/java/net/officefloor/hq/app/PaymentsSplitLogic.java
+    file: src/main/frontend/features/clients/ClientPaymentForm.tsx
     breaks: |
-      The server stops checking that the allocations sum to the lump sum, so a partial or
-      over-allocated split is accepted and each invoice's balance silently disagrees with what was
-      actually paid. Every individual balance still looks like a real number.
-    find: "        if (allocated.compareTo(lump) != 0) {"
+      The form stops checking that the shares add up to the lump sum, so a short or
+      over-allocated split is submitted. The server still refuses it and the form says nothing —
+      the button appears to do nothing and no payment is recorded. Killed only by asserting that
+      the refusal is SHOWN; a suite that checks the balances afterwards sees them unchanged and
+      correct, and passes.
+    find: "        if (allocated !== amountValue) {"
     replace: "        if (false) {"
 
   - id: "002-each-share-is-recorded-against-the-wrong-invoice"

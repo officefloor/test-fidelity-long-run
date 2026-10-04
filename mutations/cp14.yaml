@@ -6,7 +6,7 @@
 # "from every project" is the whole point of the page, and it is the clause a single-project
 # fixture cannot test.
 checkpoint: 14
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-only-the-first-invoice-is-listed"

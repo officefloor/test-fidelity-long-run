@@ -4,7 +4,7 @@
 #
 # Two states in one request, and a suite that checks one usually trusts the other.
 checkpoint: 23
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-open-filter-shows-everything"

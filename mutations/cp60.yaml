@@ -9,7 +9,7 @@
 # every figure present and plausible and silently fall back to dollars — which is exactly how a
 # currency bug reaches production.
 checkpoint: 60
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-amounts-ignore-the-client-currency"

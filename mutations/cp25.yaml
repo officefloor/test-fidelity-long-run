@@ -7,7 +7,7 @@
 # Four clauses, four mutations — and this request names TWO lists explicitly, which is why 001
 # and 002 are separate: hiding on one page and not the other is the obvious half-done job.
 checkpoint: 25
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-archived-projects-still-show-on-the-main-list"

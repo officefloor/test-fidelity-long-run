@@ -4,7 +4,7 @@
 #
 # Two qualifiers in one short sentence — SENT, and past due — so each gets its own mutation.
 checkpoint: 38
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-unsent-invoices-count-as-overdue"

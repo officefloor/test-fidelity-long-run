@@ -195,8 +195,8 @@ harness does not live at `~/ui-long-degradation-test`.
   materialises any checkpoint as its own git repo with one commit per checkpoint. All 60 patches
   apply in order; digests match; cp60 comes out at 83 `.tsx` + 70 `.java`.
 - `repairs/` — the fixture repairs, as range-scoped exact-match substitutions with their rationale
-  and provenance. All three verified across cp25..cp57, with upstream confirmed to fix each by its
-  `until`.
+  and provenance. **Five**, covering all six sites, each verified across its whole range with
+  upstream confirmed to fix it by its `until`.
 - `tools/contract.py` — 60 interface contracts (210 anchors and 14 audit-record formats by cp60),
   **calibrated against all 95 reference spec files**: every testid and audit record they assert
   appears in the contract by its checkpoint.
@@ -207,34 +207,42 @@ harness does not live at `~/ui-long-degradation-test`.
   holds on known-good tests.
 
 - `fidelity/` — **the driver and grader**. Replay mode runs end to end: materialise → install →
-  build → serve → Playwright → grade → mutate one at a time → capture. Verified on cp01 (2/2
-  green in 26s) and cp02.
+  build → serve → Playwright → grade → mutate one at a time → capture. **Run over all 60
+  checkpoints** (`202610041729`, 4h53m): green 60/60, two gate repeats each, zero flaky tests,
+  the suite never shrank, mutation zero correct everywhere and correctly inverted at cp40/cp50.
+
+- `mutations/` — **133 mutations across all 60 checkpoints**, every one applying exactly once.
+  The first full replay killed 120 of them; the 13 survivors were diagnosed and fixed (nine
+  reference-suite holes, three equivalent mutants, one reference assertion that could not fail).
+  `mutations/README.md` carries the diagnosis.
 
 - `fidelity/sandbox.py`, `fidelity/turn.py` — **agent mode**: the confined area, the turn and its
   retry policy, copy-back, the per-checkpoint suite commit and a final capture commit.
   Confinement verified here (Landlock ABI 8): all six withheld paths denied, sandbox reachable.
 
-**Not built**: the mutation catalogue (format and one worked manifest only — mutation zero needs
-no authoring and already runs).
+**Not built**: nothing in the replay path. What remains before agent mode is the re-run that
+marks the last 11 mutation sets calibrated — `grading.mutation.require_calibrated` refuses to
+grade an agent at a checkpoint whose set is not.
 
 **Order of work**: replay mode first — it needs no agent and is the only way to tell a harness bug
-from a fixture defect from a bad test. Then fix the reference chain until replay is green at all 60
-checkpoints. Then author the mutation catalogue, then run agent mode.
+from a fixture defect from a bad test. Done. Then fix the reference chain until replay is green at
+all 60 checkpoints. Done. Then author the mutation catalogue and calibrate it: authored, one
+replay in, fixes applied, awaiting the confirming run. Then agent mode.
 
-**Prerequisite**: the reference chain is not yet all-green. Until it is, a failing generated test
-is ambiguous — the agent or the fixture. The best chain needs **4 repair sites**, not a fresh run,
-and own-test failures are **zero across all 10 chains**, so the application always implements the
-current request.
+**Prerequisite**: the reference chain is all-green — replay `202610041729` was green at every one
+of the 60 checkpoints, so a failing generated test is now unambiguously the agent's. Own-test
+failures were **zero across all 10 chains** before any repair, so the application always
+implements the current request.
 
 Five of the six recurring defects are **failing replacement specs**: a mutative checkpoint shipped
 an updated copy of a prior spec that fails the moment it is installed. The root cause for most of
 them was a seed-contract gap — those specs arrange archived records by passing `archived: true` to
 `/__test__/seed`, which did not write that column until cp36 (projects) and cp58 (clients).
 
-**That gap is now repaired** (`repairs/`), closing two of the chosen chain's four sites. Repairs
-are a declared layer applied on top of the imported chain, never edits to it, so `reference/`
-stays a faithful copy of what the run produced. Remaining: cp49 → cp21 (tax behaviour) and
-cp60 → cp41 (an undeclared mutation). REFERENCE_CHAIN.md has the full diagnosis.
+**That gap is repaired** (`repairs/`), as are the rest: all six sites are green, and a fifth
+defect turned up while fixing them. Repairs are a declared layer applied on top of the imported
+chain, never edits to it, so `reference/` stays a faithful copy of what the run produced.
+REFERENCE_CHAIN.md has the full diagnosis.
 
 **Two checkpoints (cp40, cp50) changed no code** in the reference chain — earlier code already
 satisfied the request. They are **kept and graded**: they test whether the agent recognises a

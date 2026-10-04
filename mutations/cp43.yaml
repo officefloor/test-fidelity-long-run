@@ -5,7 +5,7 @@
 # "both" is the request. Each mutation blinds the search to one of the two, and a suite that
 # checks only the half it thought of passes.
 checkpoint: 43
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-search-never-matches-a-client"

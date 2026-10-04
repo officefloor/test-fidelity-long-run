@@ -7,7 +7,7 @@
 # asserting on the text a user reads. Exactly the kind of request a testid-driven suite silently
 # stops covering.
 checkpoint: 52
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-the-form-still-says-project"

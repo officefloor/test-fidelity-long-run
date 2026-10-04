@@ -5,7 +5,7 @@
 # The same notes feature on a second surface. The risk is scope: notes that are not filtered to
 # THIS invoice look perfectly normal until a second invoice has any.
 checkpoint: 54
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-only-one-note-is-shown"

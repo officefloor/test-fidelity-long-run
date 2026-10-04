@@ -5,7 +5,7 @@
 # "after any payments" is the entire request: a figure that simply repeats the invoice amount is
 # the natural wrong answer, and it looks completely reasonable on an unpaid invoice.
 checkpoint: 31
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-due-ignores-the-payments"

@@ -6,7 +6,7 @@
 # Two stored fields of different kinds, so the crossing mutation (003) is the interesting one:
 # both cells stay populated and plausible.
 checkpoint: 30
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-only-one-payment-is-shown"

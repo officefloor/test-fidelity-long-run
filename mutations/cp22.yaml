@@ -5,17 +5,22 @@
 # One mutation, deliberately. "Update the total when I do" is the whole risk in this request —
 # the removal itself is visible in the row count, so a suite can hardly miss it, whereas a stale
 # total after a removal looks entirely normal.
+#
+# It still looked normal to the reference spec in the 202610041729 replay, which DID assert the
+# total after the removal — on the invoice page, which works it out from the rows in front of it.
+# A stale STORED total is invisible there. The assertion moved to the project's invoice list.
 checkpoint: 22
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-removing-a-line-leaves-the-total-stale"
     clause: "Update the total when I do"
     file: src/main/java/net/officefloor/hq/app/LineItemsRemoveLogic.java
     breaks: |
-      The line goes and the invoice keeps its old total. The row disappears exactly as
-      expected, so only an assertion on the total AFTER the removal catches it — which is precisely
-      the clause that was added.
+      The line goes and the invoice keeps its old stored total. The row disappears
+      exactly as expected AND the invoice page's own total drops, because that page derives it
+      from the rows rather than reading what the server saved — so asserting the total on that
+      page is not enough. Only a view that reads the STORED total catches it.
     find: "        invoice.setAmount(total);"
     replace: "        // mutation: the invoice total is left stale"
 

@@ -4,18 +4,28 @@
 #
 # One rule, enforced server-side and surfaced in the form. The interesting half is the surfacing:
 # a rejection the user is never told about looks like the button is broken.
+#
+# The obvious mutation here — deleting the `existsByEmail` check — is EQUIVALENT and was replaced
+# after the 202610041729 replay: Flyway V25 puts a UNIQUE constraint on the column, so the insert
+# still fails, the form still shows the same error, and no row is added. Nothing observable
+# changes, so no test could ever kill it. With the rule enforced twice, the only part of it a
+# single substitution can actually break is the normalisation that decides whether two addresses
+# ARE the same one (001 below) — the DB constraint cannot see that, because the stored strings
+# genuinely differ.
 checkpoint: 44
-calibrated: false
+calibrated: true
 
 mutations:
-  - id: "001-duplicate-emails-are-allowed"
+  - id: "001-the-email-is-not-normalised-before-the-check"
     clause: "Do not let me add two clients with the same email"
     file: src/main/java/net/officefloor/hq/app/ClientsPostLogic.java
     breaks: |
-      The uniqueness check is gone, so a second client with the same email is created.
-      Killed by a row count after submitting the duplicate — the rule's whole point.
-    find: "        if (repository.existsByEmail(normalised)) {"
-    replace: "        if (false) {"
+      The email is no longer trimmed before the uniqueness check, so the same address
+      with whitespace round it reads as a new one and is saved — two clients with the same email,
+      which is the entire rule. The DB constraint behind the check cannot catch it either: the two
+      stored strings really are different. Killed only by submitting the duplicate with whitespace.
+    find: "        String normalised = email.trim();"
+    replace: "        String normalised = email;"
 
   - id: "002-rejection-is-silent"
     clause: "Do not let me add"

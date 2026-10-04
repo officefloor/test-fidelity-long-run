@@ -1,18 +1,23 @@
 # Mutation set for cp59_statement_printable.
 #
 # "Give me a clean printable summary of a client\'s statement. Show the grand total they owe."
+# The first mutation written here — recomputing the grand total in the browser from the per-job
+# subtotals — is EQUIVALENT and was replaced after the 202610041729 replay. The server builds each
+# subtotal from the same invoice dues it sums into the total, so the two agree by construction (it
+# says so in ClientStatementGetLogic) and no fixture can pull them apart. What IS breakable about
+# "the grand total they owe" is which figure it reads: owed, or invoiced.
 checkpoint: 59
-calibrated: false
+calibrated: true
 
 mutations:
-  - id: "001-grand-total-is-recomputed-in-the-browser"
+  - id: "001-grand-total-ignores-what-has-been-paid"
     clause: "Show the grand total they owe"
     file: src/main/frontend/features/clients/ClientStatement.tsx
     breaks: |
-      The grand total sums the per-job subtotals in the browser instead of using the
-      figure the server worked out. Any discrepancy between them — rounding, something excluded
-      server-side — silently changes the headline number, and it agrees with the correct answer on a
-      simple fixture.
+      The headline figure sums what was invoiced instead of what is still due, so every
+      payment already made vanishes from the one number the page exists to show. Identical to the
+      right answer until something has been paid — which is how a statement fixture with no
+      payments on it misses this entirely.
     find: "            {formatMoney(data.outstandingTotal)}"
-    replace: "            {formatMoney(data.projects.reduce((s, p) => s + Number(p.subtotal), 0))}"
+    replace: "            {formatMoney(data.invoices.reduce((sum, invoice) => sum + Number(invoice.amount), 0))}"
 

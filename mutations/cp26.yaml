@@ -7,7 +7,7 @@
 # nowhere. That hole is now CLOSED (erosion harness 3a8b947); 003 and 004 below are the
 # mutations it unlocked, and both are reachable only through the audit file.
 checkpoint: 26
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-tag-shows-its-id-instead-of-its-name"

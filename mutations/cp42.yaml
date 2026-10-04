@@ -5,7 +5,7 @@
 # "a main contact" is singular, and that is the whole subtlety: promoting one has to demote the
 # other, and nothing on screen says so.
 checkpoint: 42
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-main-contact-shows-their-role"

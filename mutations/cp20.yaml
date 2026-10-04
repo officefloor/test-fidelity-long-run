@@ -4,8 +4,10 @@
 #
 # The toggle has three separable parts: the flag flips, the screen reflects it, and the change is
 # recorded. The audit record is invisible to the UI.
+# 003 survived the 202610041729 replay: the spec never read the audit channel, so the record was
+# unobservable. It asserts TASK_TOGGLED now.
 checkpoint: 20
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-ticking-off-does-not-stick"

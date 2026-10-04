@@ -5,7 +5,7 @@
 # A single-clause arithmetic change with no visible anchor of its own — the tile was already
 # there. Exactly the kind of revision a suite carries forward unchanged and stops testing.
 checkpoint: 17
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-drafts-are-counted-as-owed"

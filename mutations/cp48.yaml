@@ -7,7 +7,7 @@
 # reverts one surface to the pre-discount figure, leaving the others correct — the exact shape of
 # a partially-applied cross-cutting change, and the thing a suite checking one screen cannot see.
 checkpoint: 48
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-home-screen-ignores-the-discount"

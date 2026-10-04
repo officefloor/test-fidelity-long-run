@@ -7,7 +7,7 @@
 # is why there are three mutations: the default can be too wide, too wide in only one dimension,
 # or the escape hatch can be dead.
 checkpoint: 36
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-client-page-defaults-to-every-project"

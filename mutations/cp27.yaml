@@ -2,7 +2,7 @@
 #
 # "Let me filter my projects by label."
 checkpoint: 27
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-tag-filter-is-ignored"

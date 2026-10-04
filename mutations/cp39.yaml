@@ -5,7 +5,7 @@
 # Paging has two halves — a window of the right size, and a window that MOVES. 002 is the one a
 # suite misses: the first page is perfect and every page after it is the first page again.
 checkpoint: 39
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-every-invoice-is-shown-at-once"

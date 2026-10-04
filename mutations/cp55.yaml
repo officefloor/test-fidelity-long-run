@@ -7,7 +7,7 @@
 # cp55 seeds six owing clients and asserts the list caps at five (erosion harness 3a8b947), and
 # 002 below is the mutation it unlocked.
 checkpoint: 55
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-top-clients-are-ranked-smallest-first"

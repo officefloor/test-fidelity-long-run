@@ -5,7 +5,7 @@
 # Two editable fields in one form, so each mutation drops one of them — the classic
 # half-wired-up edit, where saving appears to work and one field silently reverts.
 checkpoint: 45
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-the-name-edit-is-discarded"

@@ -7,7 +7,7 @@
 # matters: taxing the subtotal instead of the net figure is the single most natural way to get
 # this wrong, and every figure on the page still looks like money.
 checkpoint: 49
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-tax-is-worked-out-before-the-discount"

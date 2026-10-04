@@ -5,7 +5,7 @@
 # The deletion is visible in the row count; the record is not. Both mutations here are on the
 # record, because that is the half a screen-driven suite cannot see.
 checkpoint: 24
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-deletion-is-not-recorded"

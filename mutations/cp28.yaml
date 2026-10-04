@@ -5,7 +5,7 @@
 # The ordering clause is the whole second half of the request, and a list that renders in SOME
 # order always looks fine.
 checkpoint: 28
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-notes-are-shown-oldest-first"

@@ -1,8 +1,10 @@
 # Mutation set for cp58_client_restore.
 #
 # "Let me bring back a client I tucked away earlier. I might start working with them again."
+# 002 survived the 202610041729 replay: the spec checked the client came back but never read the
+# audit channel, leaving the gap in the archive history invisible. It asserts CLIENT_RESTORED now.
 checkpoint: 58
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-restoring-does-not-bring-the-client-back"

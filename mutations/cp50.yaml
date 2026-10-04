@@ -7,7 +7,7 @@
 # about the COMBINATION, so the mutation drops one of the two — leaving a filter that still works
 # on its own and no longer narrows by both (DESIGN.md §2 on why these are still graded).
 checkpoint: 50
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-only-one-of-the-two-filters-applies"

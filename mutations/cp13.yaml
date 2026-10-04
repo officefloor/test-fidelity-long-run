@@ -6,8 +6,12 @@
 # Four clauses and three of them are separately breakable: the stage advances, the send is
 # recorded, and payment is gated on having been sent. The last is the one worth having — a gate
 # that is not enforced looks identical until someone pays an unsent invoice.
+# The gate clause (003) was unkillable until the 202610041729 replay: the reference spec DID
+# assert the pay control was absent on a draft, but asserted it before the invoice list had
+# rendered, so `toHaveCount(0)` was satisfied by an empty page and could never fail. Anchored
+# now (erosion harness), and the mutation it was supposed to catch is the one below.
 checkpoint: 13
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-sending-does-not-advance-the-stage"

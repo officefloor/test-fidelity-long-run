@@ -7,7 +7,7 @@
 # separate: the search runs off the already-filtered list, and pointing it back at the raw one
 # hides archived clients from the list while still finding them by name.
 checkpoint: 29
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-archived-clients-still-show-on-the-list"

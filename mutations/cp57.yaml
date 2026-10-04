@@ -2,7 +2,7 @@
 #
 # "On a client\'s statement group the invoices by job. Show a subtotal for each job."
 checkpoint: 57
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-every-job-subtotal-shows-the-grand-total"

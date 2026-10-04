@@ -2,7 +2,7 @@
 #
 # "Let me sort my clients by name. Or by how much they owe me."
 checkpoint: 51
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-sort-by-owed-is-smallest-first"

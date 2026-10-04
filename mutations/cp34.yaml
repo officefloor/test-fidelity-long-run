@@ -2,7 +2,7 @@
 #
 # "Let me mark a project as active, on hold or finished. Show which it is."
 checkpoint: 34
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-status-column-shows-the-project-name"

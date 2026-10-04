@@ -6,7 +6,7 @@
 # Three states separated by one boundary, so both mutations sit ON that boundary: a part payment
 # reading as PAID, and a full payment reading as PARTIAL. Each looks right from one side.
 checkpoint: 32
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-any-payment-marks-the-invoice-paid"

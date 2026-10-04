@@ -6,7 +6,7 @@
 # Three clauses on three different surfaces: the invoice\'s own status, the dashboard total, and
 # the audit file. A suite can cover the first and miss both others.
 checkpoint: 41
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-cancelling-does-not-void-the-invoice"

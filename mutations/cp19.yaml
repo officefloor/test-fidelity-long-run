@@ -4,8 +4,11 @@
 #
 # "they" is the clause: both counts are derived by filtering shared lists to this client, and an
 # unfiltered count is the natural mistake.
+# Both counts survived the 202610041729 replay for one reason: the fixture had a single client,
+# so "how many they have" and "how many there are" were the same number. A second client that
+# owns a project and a contact closes both.
 checkpoint: 19
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-project-count-counts-every-project"

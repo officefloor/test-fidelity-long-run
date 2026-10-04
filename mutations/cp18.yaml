@@ -2,7 +2,7 @@
 #
 # "Contacts need a good email too. Do not let me save one with a bad email."
 checkpoint: 18
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-bad-contact-email-is-accepted"

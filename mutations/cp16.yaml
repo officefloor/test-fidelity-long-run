@@ -5,8 +5,11 @@
 #
 # "on the client's page" means scoped to that client, which is the clause a single-client fixture
 # cannot test.
+# The reference fixture had one client, so an unscoped contact list was indistinguishable from a
+# scoped one and 001 survived the 202610041729 replay. A second client with a contact of its own
+# closes it.
 checkpoint: 16
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-contacts-are-not-scoped-to-the-client"

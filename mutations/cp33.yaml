@@ -6,8 +6,11 @@
 # "their" and "still owe" are the two clauses, and 002 is the one worth having: summing the
 # invoice amounts instead of what is outstanding gives a number that is plausible, stable, and
 # wrong.
+# 001 survived the 202610041729 replay on a single-client fixture — with nobody else holding an
+# invoice, "all their invoices" and "all invoices" are the same list. A second client with an
+# invoice closes it.
 checkpoint: 33
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-statement-lists-every-invoice"

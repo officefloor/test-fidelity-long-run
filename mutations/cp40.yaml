@@ -9,7 +9,7 @@
 # can be broken, even though no code was written to add it. Mutation zero inverts here (the
 # previous checkpoint IS this one), but these authored mutations work exactly as everywhere else.
 checkpoint: 40
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-no-thousands-separator"

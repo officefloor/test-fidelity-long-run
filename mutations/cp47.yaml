@@ -7,7 +7,7 @@
 # plausible and breaks one relationship — which is why "subtotal minus discount equals total" has
 # to be asserted rather than eyeballed.
 checkpoint: 47
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-discount-is-calculated-but-not-deducted"

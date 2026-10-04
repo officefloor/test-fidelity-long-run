@@ -2,7 +2,7 @@
 #
 # "Let me filter projects by active, on hold or finished."
 checkpoint: 35
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-status-filter-is-ignored"

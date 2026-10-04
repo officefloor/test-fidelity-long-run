@@ -5,7 +5,7 @@
 # Note that cp46 finally asserts a line\'s own amount, which cp21 did not — so the
 # quantity-ignoring mutation that would have been unkillable back then is usable here.
 checkpoint: 46
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-unit-column-shows-the-quantity"
