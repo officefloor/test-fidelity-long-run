@@ -318,13 +318,22 @@ aspect of one request's behaviour.
 > and "kill rate" here carry their usual mutation-testing meaning.
 
 ```
-mutations/cp08/manifest.yaml      the set for checkpoint 08
-mutations/cp08/001-<slug>.patch   minimal diff vs the reference app at cp08
+mutations/cp08.yaml     the set for checkpoint 08: find/replace, the clause each breaks, and why
 ```
 
-Authored once by the experimenter and reused by every run — deterministic on purpose. Generating
-defects with an LLM per run would make the instrument non-repeatable, and a measuring instrument
-that moves is not one.
+**128 mutations across all 60 checkpoints**, every one verified to apply exactly once
+(`tools/mutate.py validate`). Authored once by the experimenter and reused by every run —
+deterministic on purpose. Generating defects with an LLM per run would make the instrument
+non-repeatable, and a measuring instrument that moves is not one.
+
+They are exact-match **substitutions**, not patches. The `repairs/` layer started as patches and
+taught the lesson: a unified diff applies against surrounding context, so it can land in the wrong
+place, apply with fuzz, or silently no-op when a neighbouring line moves. A substitution either
+matches once or raises, and the whole catalogue can be checked without building anything.
+
+Where a mutation would have been unkillable by the experimenter's own spec, it was left out and
+the **reference-suite hole** recorded instead (`mutations/README.md` lists all four) — a mutation
+no test could catch measures the harness, not the suite.
 
 Rules for a usable mutation: it applies cleanly; the app **still builds and serves** (a mutation
 that breaks the build is killed by everything and scores the compiler, not the suite); it changes
@@ -333,7 +342,8 @@ derived from a **clause of the English request**, so kill rate reads as "how muc
 asked for does this suite hold".
 
 **Calibration before use — this is replay mode (§4.3).** Run the *experimenter's* known-good
-suite at the checkpoint against every mutation in its set. Each must die. One that survives is
+suite at the checkpoint against every mutation in its set, with `--calibrate` to write the result
+back into each manifest. Each must die. One that survives is
 either a bad mutation or a real hole in the reference suite — both worth knowing, and neither
 usable for grading an agent until resolved. Grading refuses an uncalibrated set.
 
@@ -423,8 +433,14 @@ been revised. Those declarations have to be repaired before the maintenance metr
   Confinement verified on this host (Landlock ABI 8): all six withheld paths denied, the sandbox
   reachable.
 
-**Not built**: the mutation catalogue (§6 — format and one worked manifest only; mutation zero
-needs no authoring and already runs).
+- `mutations/` + `tools/mutate.py` — **the catalogue**: 128 mutations across all 60 checkpoints,
+  each tied to a clause of its request, all verified to apply exactly once. cp02 is calibrated
+  against a real gate run (3/3 killed, each by exactly the test it should be).
+
+**Not built**: nothing structural. What remains is the work the harness exists to do — a full
+replay (which calibrates the catalogue and proves the fixture), the two outstanding fixture
+repairs, and then agent runs. Plus the smaller gaps in §5's metric table: flake detection, suite
+runtime and churn, and the run-level degradation slope.
 
 ### §11.1 What the agent's area actually contains
 
