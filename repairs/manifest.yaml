@@ -24,6 +24,7 @@
 #
 # `until` is EXCLUSIVE: it is the checkpoint where upstream fixes this itself.
 
+# Default file; a repair may name its own `file` instead (004 does).
 file: src/main/java/net/officefloor/hq/app/TestSupportController.java
 
 repairs:
@@ -55,3 +56,74 @@ repairs:
       cp29's updated cp01_clients.spec.ts and cp06_client_search.spec.ts seed an archived client
       and assert it is excluded; cp44 ships another cp01 copy with the same dependency. The
       longest-lived of the three gaps at 29 checkpoints.
+
+  - id: "004-invoice-list-amount-includes-tax"
+    file: src/main/java/net/officefloor/hq/app/InvoicesGetLogic.java
+    seed_field: null                 # not a seed gap — see `kind` below
+    kind: behaviour                  # UNLIKE 001-003: this one changes PRODUCT code
+    from_checkpoint: 49              # cp49_sales_tax
+    until_checkpoint: null           # never fixed upstream — applies to the end of the chain
+    lifted_from: null                # no upstream version to lift; derived from cp49's own spec
+    reason: |
+      cp49 asks for "sales tax on top ... The amount shown for each invoice should include the
+      tax", and its OWN spec asserts invoice-amount = $216.00 on the invoice detail page — the
+      tax-inclusive figure. Its updated cp21 spec asserts the same thing on the project's invoice
+      LIST: $1,200.00 for a 1000 line with 20% tax.
+
+      The detail page satisfies this (it renders the server-computed summary total, which is
+      net-of-discount plus tax), and the LIST does not: InvoicesGetLogic hands back the stored
+      invoice.amount, which is the line-item subtotal. So the list reads $1,000.00 and the
+      replacement cp21 spec fails from the moment cp49 installs it — in 9 of 10 chains.
+
+      The fix routes the list's amount through InvoiceMoney.netTotal, which already exists at
+      cp49 and is exactly what the dashboard, the statement and the amount-due all use. One
+      place, same arithmetic.
+
+      WHY THE SPEC IS NOT THE THING REPAIRED: cp49's own spec and its updated cp21 spec agree
+      that invoice-amount means the tax-inclusive total. Two independent statements of intent
+      against one implementation that did it on one surface and not the other — so the
+      implementation is what is incomplete.
+
+      NOTE this is the only repair that touches product code rather than the profile-guarded
+      test-support endpoint. It is confined to the view the list endpoint returns; the stored
+      amount, InvoiceStatus.derive (which still compares payments against the subtotal) and
+      every other surface are untouched. Checkpoints with no tax are unaffected, since netTotal
+      of a zero tax rate is the subtotal.
+
+  - id: "005-seed-advances-the-clients-identity"
+    seed_field: null
+    kind: seed                       # profile-guarded test-support code, like 001-003
+    from_checkpoint: 1               # see "why from cp01" below
+    until_checkpoint: null           # never fixed upstream
+    lifted_from: null
+    reason: |
+      Seeding a client and then creating one through the UI produces only ONE client. /reset does
+      `TRUNCATE TABLE clients RESTART IDENTITY`, which sets the sequence back to 1; seeding an
+      explicit id does not advance it; so the next row created through the form is assigned an id
+      that is already taken.
+
+      H2 does not raise on that. The insert silently becomes a no-op — the endpoint answers 200
+      with an EMPTY body and no new row appears — which is why this presented as "expected 2
+      rows, received 1" with nothing in any build or server log to explain it. Reproduced
+      directly against a running cp49:
+
+        no seed        -> create succeeds, id 1, 1 row
+        seeded id = 1  -> create returns 200 + empty body, still 1 row   <-- the defect
+        seeded id = 5  -> create succeeds, id 1, 2 rows
+
+      cp44's updated cp01 spec ("creates a client with a unique email") is the first spec to seed
+      a client AND create one, which is why the defect first bites at cp44 — in 8 of 10 chains.
+
+      WHY FROM cp01 rather than cp44: in agent mode the agent writes its own fixtures, and
+      "seed one, create another, expect two" is an entirely reasonable test to write at any
+      checkpoint. A fixture that cannot support it would fail the agent's correct test and score
+      the harness's flaw as the agent's mistake. So it is repaired wherever the clients seed
+      exists.
+
+      The anchor — the `clients` fixture declaration — is byte-identical at all 60 checkpoints,
+      so one variant covers the whole chain. The inserted block runs BEFORE the existing insert
+      loop and uses its own variable, so nothing is redeclared and the loop is untouched.
+
+      NOTE the same latent flaw exists for every other seeded table. It is repaired only for
+      clients because that is the only one any spec currently trips over; a full replay will
+      reveal any others, and each would be the same two-line pattern.

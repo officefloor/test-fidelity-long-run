@@ -197,11 +197,19 @@ def load_repairs() -> dict:
 
 
 def repairs_for(n: int, manifest: dict | None = None) -> list[dict]:
-    """The repairs that apply at checkpoint n. `until_checkpoint` is EXCLUSIVE — it is the
-    checkpoint at which upstream fixes the defect itself."""
+    """The repairs that apply at checkpoint n.
+
+    `until_checkpoint` is EXCLUSIVE — the checkpoint at which upstream fixes the defect itself.
+    A NULL `until_checkpoint` means the defect is never fixed upstream, so the repair runs to the
+    end of the chain; `verify-repairs` then skips its "upstream has fixed it by now" assertion
+    rather than reporting the range as too short."""
     man = manifest if manifest is not None else load_repairs()
-    return [r for r in (man.get("repairs") or [])
-            if r["from_checkpoint"] <= n < r["until_checkpoint"]]
+    out = []
+    for r in (man.get("repairs") or []):
+        until = r.get("until_checkpoint")
+        if r["from_checkpoint"] <= n and (until is None or n < until):
+            out.append(r)
+    return out
 
 
 def _repair_block(repair_id: str, which: str) -> str:
@@ -217,25 +225,30 @@ def apply_repairs(out: str, n: int, manifest: dict | None = None) -> list[str]:
     due = repairs_for(n, man)
     if not due:
         return []
-    target = os.path.join(out, man["file"])
-    with open(target) as fh:
-        src = fh.read()
     applied = []
     for r in due:
+        # Each repair names its own file, falling back to the manifest-level default. Sharing one
+        # file across every repair was wrong the moment a repair outside the seed endpoint
+        # arrived — it applied 004 against TestSupportController and failed everywhere.
+        rel = r.get("file") or man.get("file")
+        target = os.path.join(out, rel)
+        if not os.path.isfile(target):
+            raise RuntimeError(f"repair {r['id']}: {rel} does not exist at cp{n:02d}")
+        with open(target) as fh:
+            src = fh.read()
         find = _repair_block(r["id"], "find")
         replace = _repair_block(r["id"], "replace")
         if find not in src:
             raise RuntimeError(
                 f"repair {r['id']} does not match at cp{n:02d}: its find block is absent from "
-                f"{man['file']}. The block shape changed — narrow the repair's range and add a "
-                f"variant for the new shape (see repairs/manifest.yaml, 001 vs 002).")
+                f"{rel}. The block shape changed — narrow the repair's range and add a variant "
+                f"for the new shape (see repairs/manifest.yaml, 001 vs 002).")
         if src.count(find) != 1:
             raise RuntimeError(f"repair {r['id']} matches {src.count(find)} times at cp{n:02d}; "
                                f"it must identify exactly one site")
-        src = src.replace(find, replace)
+        with open(target, "w") as fh:
+            fh.write(src.replace(find, replace))
         applied.append(r["id"])
-    with open(target, "w") as fh:
-        fh.write(src)
     return applied
 
 
@@ -335,31 +348,42 @@ def cmd_verify_repairs(args) -> int:
     if not man.get("repairs"):
         print("no repairs declared")
         return 0
+    last_cp = load_manifest()["checkpoints"][-1]["n"]
     lo = min(r["from_checkpoint"] for r in man["repairs"])
-    hi = max(r["until_checkpoint"] for r in man["repairs"])
+    # a null `until` runs to the end of the chain
+    hi = max((r.get("until_checkpoint") or last_cp + 1) for r in man["repairs"])
+    hi = min(hi, last_cp + 1)
     tmp = os.path.join(ROOT, "work", "verify-repairs")
     failures: list[str] = []
-    for n in range(lo, hi + 1):
+    for n in range(lo, min(hi, last_cp) + 1):
         due = repairs_for(n, man)
         try:
             materialise(n, tmp)                    # raises if an in-range repair cannot apply
         except RuntimeError as e:
             failures.append(f"cp{n:02d}: {e}")
             continue
-        target = os.path.join(tmp, man["file"])
-        with open(target) as fh:
-            text = fh.read()
         for r in due:
-            # the replacement is in place
+            rel = r.get("file") or man.get("file")
+            with open(os.path.join(tmp, rel)) as fh:
+                text = fh.read()
             if _repair_block(r["id"], "replace") not in text:
                 failures.append(f"cp{n:02d}: {r['id']} applied but its text is absent")
-        if n == hi:
-            # at `until`, upstream should already honour it: the un-repaired form must be gone
-            for r in man["repairs"]:
-                if r["until_checkpoint"] == n and _repair_block(r["id"], "find") in text:
-                    failures.append(
-                        f"cp{n:02d}: {r['id']} ends here but upstream has NOT fixed it — the "
-                        f"range is too short")
+        # at a repair's `until`, upstream should already honour it: the un-repaired form must
+        # be gone. Skipped for a null `until`, where the defect is never fixed upstream.
+        for r in man["repairs"]:
+            # Test `until` FIRST: a repair whose file does not exist yet at this checkpoint
+            # (InvoicesGetLogic at cp01, say) must not be opened at all.
+            if r.get("until_checkpoint") != n:
+                continue
+            path = os.path.join(tmp, r.get("file") or man.get("file"))
+            if not os.path.isfile(path):
+                continue
+            with open(path) as fh:
+                text = fh.read()
+            if _repair_block(r["id"], "find") in text:
+                failures.append(
+                    f"cp{n:02d}: {r['id']} ends here but upstream has NOT fixed it — the "
+                    f"range is too short")
         print(f"  cp{n:02d}  {len(due)} repair(s) applied" + ("" if due else "  (none due)"))
     shutil.rmtree(tmp, ignore_errors=True)
     if failures:
@@ -367,8 +391,11 @@ def cmd_verify_repairs(args) -> int:
         for f in failures:
             print(f"  {f}")
         return 1
+    open_ended = [r["id"] for r in man["repairs"] if r.get("until_checkpoint") is None]
     print(f"\nok: {len(man['repairs'])} repair(s) apply at every checkpoint in range "
-          f"(cp{lo:02d}..cp{hi - 1:02d}), and upstream has fixed each by its `until`")
+          f"(cp{lo:02d}..cp{hi - 1:02d}), and upstream has fixed each by its `until`"
+          + (f"\n    (open-ended, never fixed upstream: {', '.join(open_ended)})"
+             if open_ended else ""))
     return 0
 
 

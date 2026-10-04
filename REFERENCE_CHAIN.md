@@ -142,7 +142,68 @@ through a seed field the contract does not define — an agent shown that spec w
 the seed behaviour — and cp60 → cp41 would still force a choice between failing cp41's stale spec
 and contradicting cp60's own request. The fixtures have to be repaired first, whatever else is done.
 
-## 7. Plan
+## 7. All six sites are repaired — and a fifth defect found doing it
+
+Every repair site is now green against the known-good suite:
+
+| checkpoint | gate |
+| --- | --- |
+| cp25 | 35/35 |
+| cp29 | 39/39 |
+| cp30 | 40/40 |
+| cp44 | 54/54 |
+| cp49 | 59/59 |
+| cp60 | 72/72 |
+
+cp49 and cp60 were the worst two — cp60 failed in 10 of 10 chains and cp49 in 9.
+
+### cp49 → cp21 was the implementation, not the spec
+
+I had guessed the spec was wrong. It was not. cp49's **own** spec asserts `invoice-amount` =
+`$216.00` on the invoice detail page — the tax-inclusive total — and its updated cp21 spec asserts
+the same on the project's invoice list. Two independent statements of intent, and the
+implementation satisfied one surface and not the other: the detail page renders the
+server-computed summary total, while `InvoicesGetLogic` hands the list the stored
+`invoice.amount`, which is the line-item subtotal.
+
+Repair 004 routes the list's amount through `InvoiceMoney.netTotal` — which already exists at
+cp49 and is exactly what the dashboard, the statement and the amount-due all use. It is the only
+repair that touches product code rather than the profile-guarded seed endpoint, and it is confined
+to the view the list endpoint returns.
+
+### cp60 → cp41 was the metadata, as expected
+
+`checkpoints.yaml` now declares `mutates: [8, 17, 33, 40, 41, 48, 55]`, and
+`acceptance/specs/cp60/cp41_invoice_cancel_audit.spec.ts` asserts `dashboard-outstanding-USD`
+instead of the `dashboard-outstanding-total` cp60 removed.
+
+### The fifth defect: the seed never advanced the identity sequence
+
+Repairing cp49 left one failure behind — `cp01_clients.spec.ts::creates a client with a unique
+email`, which seeds one client, creates another and expects two rows. It got one, with nothing in
+any log. Reproduced directly against a running cp49:
+
+```
+no seed        -> create succeeds, id 1, 1 row
+seeded id = 1  -> create returns 200 with an EMPTY body, still 1 row   <-- the defect
+seeded id = 5  -> create succeeds, id 1, 2 rows
+```
+
+`/reset` does `TRUNCATE TABLE clients RESTART IDENTITY`, which sets the sequence back to 1;
+seeding an explicit id does not advance it; so the next row created through the form is assigned
+an id that is already taken. **H2 does not raise** — the insert silently becomes a no-op. That
+silence is why this presented as an off-by-one row count and survived every earlier diagnosis.
+
+Repair 005 advances the sequence past every seeded id, and applies **from cp01** rather than from
+cp44 where it first bites: in agent mode the agent writes its own fixtures, and "seed one, create
+another, expect two" is a reasonable test at any checkpoint. A fixture that cannot support it
+would fail the agent's correct test and score the harness's flaw as the agent's mistake.
+
+The same latent flaw exists for every other seeded table; it is repaired only for clients, because
+that is the only one any spec currently trips over. A full replay will reveal any others, and each
+would be the same two-line pattern.
+
+## 8. Plan
 
 1. ~~**Backport the seed support**~~ — **done**, as `repairs/` (DESIGN.md §2): `projects.archived`
    from cp25 (two variants, since cp34 reshapes the block) and `clients.archived` from cp29, each
