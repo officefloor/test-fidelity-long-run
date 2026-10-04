@@ -30,7 +30,7 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 import reference as refmod                       # noqa: E402  tools/reference.py
 import suite as suitemod                         # noqa: E402  tools/suite.py
-from fidelity import capture, changes, erosion, spec   # noqa: E402
+from fidelity import capture, changes, erosion, sandbox as sb, spec, turn  # noqa: E402
 
 BAR = "=" * 78
 SUB = "-" * 78
@@ -84,6 +84,29 @@ def wrap(text: str, indent: str = "    ", width: int = 74) -> str:
 # --- the mutation catalogue ----------------------------------------------------
 
 
+def report_leaks(hits: dict[str, list[str]], cfg: dict, seen: set[str]) -> None:
+    """Print each distinct leak ONCE per run — they are the same at every checkpoint, and
+    repeating 60 times would bury the things that do change.
+
+    A HARD hit names a specific checkpoint or the harness; `blind.strict` refuses the run on
+    one. A SOFT hit only says a checkpointed run exists, which the stack's base scaffolding has
+    said in a few comments since before this harness existed."""
+    strict = bool((cfg.get("blind") or {}).get("strict"))
+    for kind in ("hard", "soft"):
+        fresh = [h for h in hits.get(kind) or [] if h not in seen]
+        for h in fresh:
+            seen.add(h)
+        if fresh:
+            label = "LEAK" if kind == "hard" else "hint"
+            print(f"    {label}   : {len(fresh)} new {kind} match(es) in the sandbox:")
+            for h in fresh[:10]:
+                print(f"             {h}")
+    if strict and hits.get("hard"):
+        raise RuntimeError(
+            f"blind.strict is set and the sandbox contains {len(hits['hard'])} hard leak(s) "
+            f"naming a checkpoint or the harness; refusing the turn")
+
+
 def replay_suite(harness: str, n: int) -> dict[str, list[str]]:
     """{spec basename -> test ids} for the erosion harness's authored suite at checkpoint n —
     replay's baseline, computed without materialising anything."""
@@ -135,8 +158,9 @@ def revert_tree(tree: str) -> None:
 # --- one checkpoint ------------------------------------------------------------
 
 
-def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, gate_cfg: dict,
-                   out_dir: str, prev_ids: set[str], prev_suite: dict) -> dict:
+def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, agent, landlock,
+                   gate_cfg: dict, out_dir: str, prev_ids: set[str], prev_suite: dict,
+                   suite_repo: str | None, seen_leaks: set[str]) -> dict:
     cp_id = cp["id"]
     cp_type = cp.get("type", "additive")
     mutates = [int(m) for m in (cp.get("mutates") or [])]
@@ -170,6 +194,10 @@ def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, gate_cfg: 
     # reports all 14 tests as newly added.
     if args.mode == "replay" and n > 1:
         prev_suite = replay_suite(cfg["erosion_harness"], n - 1)
+    elif args.mode == "agent":
+        # the agent's own accumulated suite — authoritative, and correct even when the run is
+        # resumed or started part-way
+        prev_suite = changes.suite_tests(suite_repo)
     prior_files = sorted(prev_suite)
     prior_count = sum(len(v) for v in prev_suite.values())
     prompt = spec.build_prompt(cp["request"], contract, fields, args.code_view,
@@ -209,8 +237,115 @@ def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, gate_cfg: 
         print(f"  tests  : replay — installed {len(installed)} spec file(s) from the "
               f"erosion harness")
     else:
-        raise SystemExit("agent mode is not implemented yet — see DESIGN.md §11. "
-                         "Run --mode replay.")
+        # ---- agent mode -------------------------------------------------------------
+        # The application the agent may see: cp(N-1), i.e. BEFORE this change (DESIGN.md §4.2).
+        # At cp01 that is the base application; at a no-code checkpoint it is identical to cpN,
+        # which is unavoidable and harmless.
+        view_n = {"previous": max(n - 1, 0), "current": n, "none": None}[args.code_view]
+        app_pristine = os.path.join(work, f"cp{n:02d}-view")
+        if view_n is not None:
+            refmod.materialise(view_n, app_pristine)
+        else:
+            refmod.materialise(0, app_pristine)      # base: scaffolding only, no features
+        sandbox_dir = os.path.join(work, f"cp{n:02d}-sandbox")
+
+        def rebuild():
+            sb.build_sandbox(sandbox=sandbox_dir, app_tree=app_pristine,
+                             suite_repo=suite_repo, specs_rel=specs_rel)
+            if args.code_view == "none":
+                # keep the e2e scaffolding and bin/*, drop the application sources
+                for rel in ("src/main/frontend", "src/main/java", "src/main/resources"):
+                    shutil.rmtree(os.path.join(sandbox_dir, rel), ignore_errors=True)
+
+        stream_file = f"cp{n:02d}.agent.jsonl"
+        print(f"  agent  : view=cp{view_n:02d} " if view_n else "  agent  : view=none ",
+              end="", flush=True)
+        print(f"({len(sb.spec_files(suite_repo))} spec file(s) in its suite)", flush=True)
+
+        if args.dry_run:
+            # Show the confined area and what is withheld, and run NO turn. A dry run must not
+            # cost an agent call — that is the whole reason to have one.
+            rebuild()
+            cc = turn.confine_config(cfg, sandbox_dir, landlock, out_dir)
+            report_leaks(sb.leak_scan(sandbox_dir, specs_rel), cfg, seen_leaks)
+            top = sorted(os.listdir(sandbox_dir))
+            print(f"    sandbox: {sandbox_dir}")
+            print(f"      holds   : {', '.join(top)}")
+            print(f"      specs   : {len(sb.spec_files(os.path.join(sandbox_dir, specs_rel)))} "
+                  f"file(s), git history "
+                  + ("present" if os.path.isdir(os.path.join(sandbox_dir, specs_rel, ".git"))
+                     else "MISSING"))
+            print(f"      app .git: "
+                  + ("PRESENT — would leak the checkpoint number"
+                     if os.path.isdir(os.path.join(sandbox_dir, ".git")) else "absent (correct)"))
+            if cc:
+                print(f"      withheld (refused if reachable):")
+                for sx in cc["sentinels"]:
+                    print(f"        {sx}")
+            else:
+                print("      confinement: DISABLED")
+            print(f"    turn   : skipped (--dry-run)")
+            capture.write_json(os.path.join(out_dir, f"cp{n:02d}.dryrun.json"), {
+                "checkpoint": n, "checkpoint_id": cp_id, "mode": args.mode, "dry_run": True,
+                "prompt": prompt, "contract": contract, "code_view": args.code_view,
+                "view_checkpoint": view_n, "sandbox_top_level": top,
+                "withheld": (cc or {}).get("sentinels", []),
+                "suite_in_sandbox": sb.spec_files(os.path.join(sandbox_dir, specs_rel))})
+            if not args.keep_work:
+                shutil.rmtree(sandbox_dir, ignore_errors=True)
+                shutil.rmtree(app_pristine, ignore_errors=True)
+                shutil.rmtree(gate_tree, ignore_errors=True)
+            return {"record": None, "suite": prev_suite, "ids": prev_ids}
+        # Fail-closed check on what IS in the sandbox, not on what should be: a changed stack
+        # doc or a new base file can reintroduce a hint no deny list would catch.
+        rebuild()
+        leaks = sb.leak_scan(sandbox_dir, specs_rel)
+        report_leaks(leaks, cfg, seen_leaks)
+
+        t_agent = time.time()
+        ar, attempts = turn.run_turn(
+            agent=agent, landlock=landlock, cfg=cfg, sandbox=sandbox_dir, prompt=prompt,
+            model=args.model or cfg.get("model"),
+            stream_path=os.path.join(out_dir, stream_file), run_dir=out_dir, rebuild=rebuild)
+        agent_block = turn.result_block(ar, attempts)
+        print(f"    turn   : ok={ar.ok} turns={ar.num_turns} cost=${ar.cost_usd:.4f} "
+              f"{hms(time.time() - t_agent)} attempts={len(attempts)}"
+              + (f"  stop={ar.stop_reason}" if ar.stop_reason else ""))
+        if ar.error:
+            print(f"    error  : {ar.error[:300]}")
+
+        # Did it touch the application? It was told not to; a run that did is void, and the
+        # diff is the evidence (DESIGN.md §4.1).
+        adiff = sb.app_diff(app_pristine, sandbox_dir, specs_rel)
+        if adiff:
+            capture.write_text(os.path.join(out_dir, f"cp{n:02d}.agent.appdiff"), adiff)
+
+        # take ONLY the spec files, then commit them on the run's branch
+        moved = sb.copy_back(sandbox=sandbox_dir, suite_repo=suite_repo, specs_rel=specs_rel)
+        test_diff = sb.commit_suite(suite_repo, f"cp{n:02d} {cp_id}: agent test changes")
+        suite_sha, diff_text = test_diff
+        capture.write_text(os.path.join(out_dir, f"cp{n:02d}.agent.testdiff"), diff_text)
+        agent_block["app_diff_file"] = f"cp{n:02d}.agent.appdiff" if adiff else None
+        agent_block["test_diff_file"] = f"cp{n:02d}.agent.testdiff"
+        agent_block["stream_file"] = stream_file
+        agent_block["suite_commit"] = suite_sha
+        agent_block["sandbox_leaks"] = leaks
+
+        # install the agent's suite into the gate tree
+        os.makedirs(specs_dir, exist_ok=True)
+        for fn in os.listdir(specs_dir):
+            if fn.endswith(".spec.ts"):
+                os.remove(os.path.join(specs_dir, fn))
+        for fn in sb.spec_files(suite_repo):
+            shutil.copy2(os.path.join(suite_repo, fn), os.path.join(specs_dir, fn))
+        source = {"kind": "agent", "suite_repo": suite_repo, "suite_commit": suite_sha,
+                  "code_view": args.code_view, "view_checkpoint": view_n,
+                  "files_added": moved["added"], "files_removed": moved["removed"]}
+        print(f"  tests  : agent wrote {len(moved['present'])} spec file(s); committed "
+              f"{suite_sha[:8]} on the run branch")
+        if not args.keep_work:
+            shutil.rmtree(sandbox_dir, ignore_errors=True)
+            shutil.rmtree(app_pristine, ignore_errors=True)
 
     # what moved, and did anything touch the application
     suite_now = changes.suite_tests(specs_dir)
@@ -427,6 +562,7 @@ def main() -> int:
     ap.add_argument("--keep-work", action="store_true",
                     help="keep each checkpoint's materialised tree for inspection")
     ap.add_argument("--run-id", default=None)
+    ap.add_argument("--model", default=None, help="override the configured agent model")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -436,10 +572,27 @@ def main() -> int:
     if args.checkpoint:
         args.first = args.last = args.checkpoint
 
-    correctness, _agent = erosion.load(cfg["erosion_harness"])
+    correctness, agent = erosion.load(cfg["erosion_harness"])
     gate_cfg = erosion.gate_config(cfg)
     if not os.path.isdir(os.path.join(ROOT, "reference", "base")):
         raise SystemExit("reference/ is not imported — run tools/reference.py import first")
+
+    landlock = None
+    suite_repo = None
+    if args.mode == "agent":
+        if agent is None:
+            raise SystemExit("harness.agent could not be imported from the erosion harness")
+        sys.path.insert(0, cfg["erosion_harness"])
+        from harness import landlock as landlock      # noqa: E402
+        # A run spawns a fresh agent per checkpoint over many hours, so an interactive login
+        # would expire mid-run. Fail here rather than at cp40.
+        if not args.dry_run and not os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"):
+            raise SystemExit(
+                "agent mode needs a long-lived token: export "
+                "CLAUDE_CODE_OAUTH_TOKEN=$(claude setup-token). A 60-checkpoint run spawns an "
+                "agent per checkpoint over hours, and an interactive login expires part-way.")
+        suite_repo = os.path.join(ROOT, "runs", args.run_id, "suite")
+        sb.init_suite_repo(suite_repo, f"agent/{args.run_id}")
 
     cps = {c["n"]: c for c in suitemod.checkpoints(cfg["erosion_harness"])}
     todo = [n for n in sorted(cps) if args.first <= n <= args.last]
@@ -455,6 +608,9 @@ def main() -> int:
     print(f"  results   : results/{args.run_id}/")
     if args.mode == "replay":
         print("  replay mode: tests come from the erosion harness; NOTHING is committed")
+    else:
+        print(f"  agent     : {args.model or cfg.get('model')}  code_view={args.code_view}")
+        print(f"  suite repo: runs/{args.run_id}/suite  (branch agent/{args.run_id})")
     print(f"  started   : {now()}")
     print(BAR, flush=True)
 
@@ -467,12 +623,14 @@ def main() -> int:
     t_run = time.time()
     prev_suite: dict[str, list[str]] = {}
     prev_ids: set[str] = set()
+    seen_leaks: set[str] = set()
     rows: list[dict] = []
     for i, n in enumerate(todo, 1):
         try:
             res = run_checkpoint(n=n, cp=cps[n], cfg=cfg, args=args, correctness=correctness,
-                                 gate_cfg=gate_cfg, out_dir=out_dir, prev_ids=prev_ids,
-                                 prev_suite=prev_suite)
+                                 agent=agent, landlock=landlock, gate_cfg=gate_cfg,
+                                 out_dir=out_dir, prev_ids=prev_ids, prev_suite=prev_suite,
+                                 suite_repo=suite_repo, seen_leaks=seen_leaks)
         except Exception as e:                       # one bad checkpoint must not end the run
             print(f"  !! cp{n:02d} aborted: {type(e).__name__}: {e}", flush=True)
             capture.write_json(os.path.join(out_dir, f"cp{n:02d}.error.json"),
@@ -490,7 +648,30 @@ def main() -> int:
               f"results/{args.run_id}/\n{BAR}", flush=True)
         return 0
     write_summary(out_dir, args, rows, time.time() - t_run)
+    if args.mode == "agent" and suite_repo:
+        commit_capture(suite_repo, out_dir, args.run_id)
     return 0
+
+
+def commit_capture(suite_repo: str, out_dir: str, run_id: str) -> None:
+    """The final commit: the whole run's capture, alongside the suite it produced.
+
+    The per-checkpoint commits show WHAT the agent wrote; this shows what it was asked, what it
+    did to get there, and how it was judged — the agent's streamed turns, the prompts, the gate
+    output, the mutation verdicts. Kept in the same repository as the suite so reviewing a run is
+    one `git log`, and so the evidence cannot drift away from the tests it explains."""
+    dest = os.path.join(suite_repo, "capture")
+    if os.path.isdir(dest):
+        shutil.rmtree(dest)
+    shutil.copytree(out_dir, dest)
+    sb.git(suite_repo, "add", "-A")
+    subprocess.run(["git", "-C", suite_repo] + sb.GIT_ID
+                   + ["commit", "-q", "-m",
+                      f"run {run_id}: capture (prompts, agent streams, gate + mutation results)"],
+                   check=False, capture_output=True, text=True)
+    sha = sb.git(suite_repo, "rev-parse", "HEAD").strip()
+    print(f"  suite + capture committed: {suite_repo}  ({sha[:8]})")
+    print(f"  review with:  git -C {suite_repo} log --stat")
 
 
 def write_summary(out_dir: str, args, rows: list[dict], elapsed: float) -> None:

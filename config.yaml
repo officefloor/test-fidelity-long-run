@@ -97,6 +97,24 @@ grading:
   maintenance:
     track_deletions: true          # a deleted prior is the cheap way out; counted separately
 
+# Agent-mode retry policy, mirroring the erosion harness: a usage limit is waited out, a
+# transient failure is backed off. Every attempt is recorded, so a checkpoint's true wall clock
+# and cost — retries and quota waits included — stay recoverable.
+limits:
+  max_attempts: 500
+  max_transient_attempts: 20
+  retry_backoff_max: 900
+  poll_seconds: 1800          # how long to wait out a usage limit before retrying
+
+isolation:
+  agent_confinement:
+    enabled: true             # Landlock. Agent mode REFUSES to run without it (unlike the
+                              #   erosion harness, which had a mirror-based fallback): here
+                              #   withholding the answers IS the confinement, so unconfined
+                              #   measures nothing. FIDELITY_NO_CONFINE=1 overrides deliberately.
+    extra_ro_binds: []
+    extra_rw_binds: []
+
 # BLINDNESS (DESIGN.md §7). Reuses the erosion harness's Landlock confinement, which fails closed
 # if any listed path is reachable from the agent turn. The inversion vs that harness: application
 # source is READABLE here — it is the input. What is withheld is every statement of what the
@@ -105,6 +123,12 @@ grading:
 # specification, and the application at cp(N-1). Everything below must be unreachable, and
 # verify_denied refuses to start the turn if any of it is not.
 blind:
+  # Refuse a turn when the sandbox contains a HARD leak — anything naming a specific checkpoint
+  # or the harness. Off by default because the stack's own base scaffolding carries a couple of
+  # such comments (e.g. pom.xml "Found via the cp01 dry run") that predate this harness and give
+  # away no position in the sequence. Leaks are reported once per run and recorded in the capture
+  # either way, so turning this on is a decision to clean the fixture first.
+  strict: false
   deny:
     - ${erosion_harness}/acceptance/specs    # the experimenter's reference suite — the answer
     - ${erosion_harness}/checkpoints.yaml    # future requests + sequence hints

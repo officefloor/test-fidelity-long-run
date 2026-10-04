@@ -204,8 +204,16 @@ Two consequences to keep in mind:
 
 The loop above is mode-independent. Only step 2–4 — where the tests come from — differs.
 
-**`agent` mode.** The real measurement. The agent writes the tests; they are committed per
-checkpoint on the run's branch.
+**`agent` mode.** The real measurement. The agent writes the tests in the confined area; the
+`*.spec.ts` files are copied back and committed per checkpoint on the run's branch
+(`runs/<run_id>/suite`, branch `agent/<run_id>`), and the run ends with one further commit
+carrying the whole capture — the prompts, the streamed agent turns, the gate output and the
+mutation verdicts — in the same repository as the suite, so reviewing a run is one `git log` and
+the evidence cannot drift from the tests it explains.
+
+Confinement is fail-closed and, unlike the erosion harness, has no fallback: there the mirror
+hid the prior specs and Landlock was belt-and-braces, whereas here withholding the answers **is**
+the confinement, so an unavailable Landlock refuses the run rather than warning.
 
 **`replay` mode.** The validation run, and the way this harness is shown to work at all. Instead
 of an agent turn, the erosion harness's **own authored suite at checkpoint N** is installed
@@ -394,9 +402,42 @@ been revised. Those declarations have to be repaired before the maintenance metr
   build → serve → Playwright → grade → mutate one at a time → capture, with the specification
   printed in full and everything written under `results/<run_id>/` as it happens.
 
-**Not built**: the agent turn (§4 — the confined area, copy-back and commit; `--mode agent` exits
-with a message), and the mutation catalogue (§6 — format and one worked manifest only; mutation
-zero needs no authoring and already runs).
+- `fidelity/sandbox.py`, `fidelity/turn.py` — **agent mode**: the confined area, the turn with its
+  retry policy, copy-back, the per-checkpoint suite commit and the final capture commit.
+  Confinement verified on this host (Landlock ABI 8): all six withheld paths denied, the sandbox
+  reachable.
+
+**Not built**: the mutation catalogue (§6 — format and one worked manifest only; mutation zero
+needs no authoring and already runs).
+
+### §11.1 What the agent's area actually contains
+
+Assembled fresh each checkpoint, and two details are load-bearing rather than incidental.
+
+**The application copy carries no `.git`.** The materialised reference tree has one commit per
+checkpoint, messaged `cp24 reference code` — which states the checkpoint number outright. Any
+agent that ran `git log` would learn exactly where it sits in a sequence it is meant to know
+nothing about. So the application is copied as plain files, and the only repository in the
+sandbox is the suite's.
+
+**The suite IS a repository, rooted at `e2e/specs`.** That is what makes "see the history of all
+tests" true rather than approximately true: the agent reads the log of its own work, as it would
+in the pipeline. It is a clone, so nothing it does to that history reaches the run's real suite —
+only the `*.spec.ts` files are copied back.
+
+**The stack's own documentation is withheld too.** `BASE_CHECKLIST.md` explains the experiment
+outright ("one full-stack English change request per checkpoint", "cp01 adds `V1__*.sql`"), and
+`README.md` and `stack.yaml` name the harness and the sequence. `CLAUDE.md` and `AGENTS.md` stay:
+they are the stack's conventions and carry no reference to either — checked, not assumed.
+
+**And the sandbox is scanned, not just filtered.** The deny list and the doc exclusions are
+reasoning about what *should* be absent; `sandbox.leak_scan` checks what *is* there, because a
+changed stack doc or a new base file can reintroduce a hint no allowlist would catch. Hits are
+split by what they actually give away: a **hard** hit names a specific checkpoint or the harness;
+a **soft** hit only reveals that a checkpointed run exists. The stack's base scaffolding carries
+a few of each in source comments that predate this harness (`pom.xml`: "Found via the cp01 dry
+run"), so hits are reported once per run and recorded in the capture, and `blind.strict` decides
+whether a hard one refuses the turn.
 
 ### What a run records, and why those things
 

@@ -110,6 +110,35 @@ $V -m fidelity.run --mode replay --no-mutations       # green phase only, ~half 
 $V -m fidelity.run --mode replay --keep-work          # keep each materialised tree to poke at
 ```
 
+### Agent mode
+
+```sh
+# A run spawns a fresh agent per checkpoint over hours, so an interactive login would expire
+# part-way. The driver refuses to start without a long-lived token.
+export CLAUDE_CODE_OAUTH_TOKEN=$(claude setup-token)
+
+# Show the confined area and the exact prompt, and run NO agent turn. Costs nothing.
+$V -m fidelity.run --mode agent --checkpoint 3 --dry-run
+
+$V -m fidelity.run --mode agent                      # all 60
+$V -m fidelity.run --mode agent --from 1 --to 5      # a prefix
+$V -m fidelity.run --mode agent --code-view none     # harder: contract + prior tests only
+$V -m fidelity.run --mode agent --model <id>         # override the configured model
+
+# review a finished run: per-checkpoint test commits, then the capture commit
+git -C runs/<run_id>/suite log --stat
+```
+
+The agent's suite lives in `runs/<run_id>/suite` — its own git repository on branch
+`agent/<run_id>`, one commit per checkpoint. That history is both what §8 measures and what the
+agent itself reads inside the sandbox. The run ends with one further commit carrying the whole
+capture (prompts, streamed agent turns, gate output, mutation verdicts) alongside the suite it
+explains.
+
+Per checkpoint the capture also keeps `cpNN.agent.jsonl` (the streamed turn), `cpNN.agent.testdiff`
+(what it did to the suite) and, if it happened, `cpNN.agent.appdiff` — the evidence that it
+modified application code, which voids a checkpoint.
+
 Replay commits nothing. Everything lands under `results/<run_id>/` as it happens — a
 60-checkpoint run takes hours, and a record that only appears at the end is unreadable exactly
 when something has broken:
@@ -150,9 +179,12 @@ whether it was killed and which test caught it.
   build → serve → Playwright → grade → mutate one at a time → capture. Verified on cp01 (2/2
   green in 26s) and cp02.
 
-**Not built**: the agent turn (the confined area, copy-back and commit — `--mode agent` exits
-with a message), and the mutation catalogue (format and one worked manifest only; mutation zero
-needs no authoring and already runs).
+- `fidelity/sandbox.py`, `fidelity/turn.py` — **agent mode**: the confined area, the turn and its
+  retry policy, copy-back, the per-checkpoint suite commit and a final capture commit.
+  Confinement verified here (Landlock ABI 8): all six withheld paths denied, sandbox reachable.
+
+**Not built**: the mutation catalogue (format and one worked manifest only — mutation zero needs
+no authoring and already runs).
 
 **Order of work**: replay mode first — it needs no agent and is the only way to tell a harness bug
 from a fixture defect from a bad test. Then fix the reference chain until replay is green at all 60
