@@ -145,16 +145,24 @@ and contradicting cp60's own request. The fixtures have to be repaired first, wh
 
 ## 7. Plan
 
-1. **Backport the seed support** (five of six sites): the `archived` column on the projects
-   insert from cp36 into cp25, and on the clients insert from cp58 into cp29. Four lines each, in
-   profile-guarded test-support code. Then `contract.py check` should report no seed misses.
+1. ~~**Backport the seed support**~~ — **done**, as `repairs/` (DESIGN.md §2): `projects.archived`
+   from cp25 (two variants, since cp34 reshapes the block) and `clients.archived` from cp29, each
+   lifted verbatim from the upstream checkpoint that added it. `reference.py verify-repairs`
+   confirms all three apply at every checkpoint in range (cp25..cp57) and that upstream has fixed
+   each by its `until`; `contract.py check` now reports no seed misses on any of the 95 specs.
+
+   This addresses **two of the chosen chain's four sites** (cp25 → cp03/cp07 and cp29 →
+   cp01/cp06), and cp44 → cp01 in the other chains. Note that `reference_chain.py` still reports
+   four: it grades the erosion runs' historical capture, which no repair can change. Whether the
+   repair works is a replay-mode question.
 2. **Declare cp60's mutation of cp41** and ship the updated copy.
 3. **Diagnose cp49 → cp21** (tax in the invoice amount) — the one genuinely behavioural site.
 4. **Adopt** `officehq-tanstack-officefloor evolve/202610020135/just-solve/chain2`: the fewest
    repair sites, and the TanStack + OfficeFloor combination this work is standardising on. Pin it
    in `config.yaml`; the harness refuses to run until `reference_chain.py` grades it 0 sites.
 
-Step 1 touches only profile-guarded test-support code; step 2 is a spec edit. Step 3 is the only
+Remaining after step 1: **cp49 → cp21** (the tax behaviour) and **cp60 → cp41** (the undeclared
+mutation). Step 2 is a spec edit. Step 3 is the only
 one that may touch product code, and the erosion harness can rebuild and re-gate a single
 checkpoint on demand — far cheaper than a fresh 60-checkpoint run, which would not have settled it
 anyway.

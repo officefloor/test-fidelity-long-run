@@ -1,0 +1,57 @@
+# FIXTURE REPAIRS — kept separate from reference/ on purpose.
+#
+# reference/ is a faithful, re-importable copy of what the erosion run actually produced; editing
+# those patches would break both that claim and the digests in reference/manifest.yaml. These
+# repairs are a declared layer on top, applied by `reference.py materialise` AFTER the chain
+# patches and committed as their own commit, so the fixture is usable while the record stays
+# honest about what needed fixing.
+#
+# WHY THESE EXIST (REFERENCE_CHAIN.md §3): several checkpoints ship updated copies of earlier
+# specs that arrange archived records by passing `archived: true` to /__test__/seed. The seed
+# endpoint did not write that column yet, so the flag was silently dropped, the record seeded
+# active, and the spec failed from the moment it was installed — in 10 of 10 chains. Support
+# arrived upstream at cp36 for projects and cp58 for clients, 11 and 29 checkpoints late.
+#
+# Each repair is an exact-match text substitution rather than a diff: it either matches or it
+# does not, so it cannot misapply against drifting context the way patch fuzz can.
+# `reference.py verify-repairs` asserts every repair matches at every checkpoint in its range.
+#
+# All three touch ONLY TestSupportController, which is profile-guarded test-support code the
+# erosion harness explicitly treats as evolving app code ("This is APP CODE and EVOLVES with the
+# schema"). No product behaviour changes, and the columns already exist at these checkpoints
+# (Flyway V15 projects.archived at cp25, V18 clients.archived at cp29) — only the seed path was
+# missing. The replacement text is lifted verbatim from the upstream checkpoint that added it.
+#
+# `until` is EXCLUSIVE: it is the checkpoint where upstream fixes this itself.
+
+file: src/main/java/net/officefloor/hq/app/TestSupportController.java
+
+repairs:
+  - id: "001-projects-archived-pre-status"
+    seed_field: projects.archived
+    from_checkpoint: 25        # cp25_project_archive ships updated cp03 + cp07 specs needing it
+    until_checkpoint: 34       # cp34 adds `status` to the insert, changing the block (-> 002)
+    lifted_from: 36            # cp36 is where upstream finally honours projects.archived
+    reason: |
+      cp25's updated cp03_projects.spec.ts and cp07_client_detail_projects.spec.ts seed a project
+      with `archived: true` and assert the list excludes it. Without this the insert has no
+      archived column, the project seeds active, and both specs fail on arrival.
+
+  - id: "002-projects-archived-with-status"
+    seed_field: projects.archived
+    from_checkpoint: 34        # the same gap, against the block shape cp34 introduced
+    until_checkpoint: 36
+    lifted_from: 36
+    reason: |
+      Same defect as 001. Split only because cp34 added `status` to the insert, so the text to
+      replace differs. Two forms, one gap.
+
+  - id: "003-clients-archived"
+    seed_field: clients.archived
+    from_checkpoint: 29        # cp29_client_archive ships updated cp01 + cp06 specs needing it
+    until_checkpoint: 58       # cp58_client_restore is where upstream honours clients.archived
+    lifted_from: 58
+    reason: |
+      cp29's updated cp01_clients.spec.ts and cp06_client_search.spec.ts seed an archived client
+      and assert it is excluded; cp44 ships another cp01 copy with the same dependency. The
+      longest-lived of the three gaps at 29 checkpoints.

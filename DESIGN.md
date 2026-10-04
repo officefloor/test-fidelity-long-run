@@ -39,7 +39,32 @@ plus its overrides of prior code. `tools/reference.py` does the import and mater
 checkpoint; `verify` re-applies the whole chain and checks the digests.
 
 Materialising checkpoint N is base + patches 1..N, **as its own git repository**, committed one
-checkpoint at a time. The history is deliberate: it is what the agent sees of the code, where its
+checkpoint at a time, plus any **fixture repairs** due at N.
+
+### Repairs are a separate layer
+
+`reference/` must stay a faithful, re-importable copy of what the run produced — editing its
+patches would break that claim and the digests with it. So the fixes the fixture needs live in
+`repairs/`, applied after every chain patch and committed as their own commit, which keeps the
+fixture usable while the record stays honest about what had to be changed.
+
+Each repair is an exact-match text substitution rather than a diff: it either matches or it
+raises, so it cannot misapply against drifted context the way patch fuzz can. It carries a
+checkpoint range, `until` being exclusive — the checkpoint at which upstream fixes the defect
+itself. `reference.py verify-repairs` asserts every repair matches at every checkpoint in its
+range *and* that upstream really has fixed it by `until`, so a range is never longer than the
+defect.
+
+The three present repairs close the seed-contract gap of §3: `projects.archived` from cp25 (two
+variants, because cp34 changes the block's shape) and `clients.archived` from cp29. All three
+touch only `TestSupportController`, which the erosion harness explicitly treats as evolving
+test-support code, and the columns already exist at those checkpoints — only the seed path was
+missing. The replacement text is lifted verbatim from the upstream checkpoint that added it.
+
+A consequence worth keeping straight: `reference_chain.py` grades the erosion runs' **historical
+capture**, which a repair cannot change. Whether a repair actually fixes the fixture is a
+**replay-mode** question (§4.3), answered by running the known-good suite against the repaired
+application. The history is deliberate: it is what the agent sees of the code, where its
 own test commits land, and what makes test-suite churn measurable (§8).
 
 Two paths are excluded on import because they would hand the agent the answers: `evolve-results/`

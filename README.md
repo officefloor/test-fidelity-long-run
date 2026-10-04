@@ -80,7 +80,8 @@ $V tools/reference_chain.py --harness ~/ui-long-degradation-test --stacks ~
 # completed runs: nothing here ever writes to them.
 $V tools/reference.py import --repo ~/officehq-tanstack-officefloor \
     --branch evolve/202610020135/just-solve/chain2
-$V tools/reference.py verify                            # 60 patches apply in order, digests match
+$V tools/reference.py verify                   # 60 patches apply in order, digests match
+$V tools/reference.py verify-repairs          # each fixture repair applies across its whole range
 $V tools/reference.py materialise --checkpoint 8 --out work/cp08
 
 # the interface contract handed to the agent with each request
@@ -101,6 +102,9 @@ $V tools/suite.py sizes                      # suite size per checkpoint; checks
 - `tools/reference.py` — imports the chain as `reference/base/` + 60 per-checkpoint patches, and
   materialises any checkpoint as its own git repo with one commit per checkpoint. All 60 patches
   apply in order; digests match; cp60 comes out at 83 `.tsx` + 70 `.java`.
+- `repairs/` — the fixture repairs, as range-scoped exact-match substitutions with their rationale
+  and provenance. All three verified across cp25..cp57, with upstream confirmed to fix each by its
+  `until`.
 - `tools/contract.py` — 60 interface contracts (210 anchors and 14 audit-record formats by cp60),
   **calibrated against all 95 reference spec files**: every testid and audit record they assert
   appears in the contract by its checkpoint.
@@ -124,9 +128,13 @@ current request.
 
 Five of the six recurring defects are **failing replacement specs**: a mutative checkpoint shipped
 an updated copy of a prior spec that fails the moment it is installed. The root cause for most of
-them is a seed-contract gap — those specs arrange archived records by passing `archived: true` to
-`/__test__/seed`, which no implementation was ever asked to honour. So the repair is spec-side: no
-application change, no re-run. REFERENCE_CHAIN.md has the full diagnosis.
+them was a seed-contract gap — those specs arrange archived records by passing `archived: true` to
+`/__test__/seed`, which did not write that column until cp36 (projects) and cp58 (clients).
+
+**That gap is now repaired** (`repairs/`), closing two of the chosen chain's four sites. Repairs
+are a declared layer applied on top of the imported chain, never edits to it, so `reference/`
+stays a faithful copy of what the run produced. Remaining: cp49 → cp21 (tax behaviour) and
+cp60 → cp41 (an undeclared mutation). REFERENCE_CHAIN.md has the full diagnosis.
 
 **Two checkpoints (cp40, cp50) changed no code** in the reference chain — earlier code already
 satisfied the request. They are **kept and graded**: they test whether the agent recognises a

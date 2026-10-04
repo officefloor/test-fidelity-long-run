@@ -35,6 +35,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REFERENCE = os.path.join(ROOT, "reference")
+REPAIRS = os.path.join(ROOT, "repairs")
 EXCLUDE = ("evolve-results", "e2e/specs")
 LAST = 60
 
@@ -168,8 +169,66 @@ def load_manifest() -> dict:
 GIT_ID = ["-c", "user.name=test-fidelity-long-run", "-c", "user.email=harness@localhost"]
 
 
+def load_repairs() -> dict:
+    """repairs/manifest.yaml, or an empty set if there are none.
+
+    Kept OUT of reference/: that directory is a faithful, re-importable copy of what the erosion
+    run produced, and editing its patches would break both that claim and the digests. Repairs
+    are a declared layer applied on top (see repairs/manifest.yaml for why each exists)."""
+    path = os.path.join(REPAIRS, "manifest.yaml")
+    if not os.path.isfile(path):
+        return {"file": None, "repairs": []}
+    import yaml
+    with open(path) as fh:
+        return yaml.safe_load(fh) or {"file": None, "repairs": []}
+
+
+def repairs_for(n: int, manifest: dict | None = None) -> list[dict]:
+    """The repairs that apply at checkpoint n. `until_checkpoint` is EXCLUSIVE — it is the
+    checkpoint at which upstream fixes the defect itself."""
+    man = manifest if manifest is not None else load_repairs()
+    return [r for r in (man.get("repairs") or [])
+            if r["from_checkpoint"] <= n < r["until_checkpoint"]]
+
+
+def _repair_block(repair_id: str, which: str) -> str:
+    with open(os.path.join(REPAIRS, f"{repair_id}.{which}.java")) as fh:
+        return fh.read()
+
+
+def apply_repairs(out: str, n: int, manifest: dict | None = None) -> list[str]:
+    """Apply every in-range repair to the materialised tree. Exact-match substitution, so a
+    repair either matches or raises — it cannot misapply against drifted context the way patch
+    fuzz can. Returns the ids applied."""
+    man = manifest if manifest is not None else load_repairs()
+    due = repairs_for(n, man)
+    if not due:
+        return []
+    target = os.path.join(out, man["file"])
+    with open(target) as fh:
+        src = fh.read()
+    applied = []
+    for r in due:
+        find = _repair_block(r["id"], "find")
+        replace = _repair_block(r["id"], "replace")
+        if find not in src:
+            raise RuntimeError(
+                f"repair {r['id']} does not match at cp{n:02d}: its find block is absent from "
+                f"{man['file']}. The block shape changed — narrow the repair's range and add a "
+                f"variant for the new shape (see repairs/manifest.yaml, 001 vs 002).")
+        if src.count(find) != 1:
+            raise RuntimeError(f"repair {r['id']} matches {src.count(find)} times at cp{n:02d}; "
+                               f"it must identify exactly one site")
+        src = src.replace(find, replace)
+        applied.append(r["id"])
+    with open(target, "w") as fh:
+        fh.write(src)
+    return applied
+
+
 def materialise(n: int, out: str) -> None:
-    """base + patches 1..n into `out`, as its own git repository. n=0 gives the base.
+    """base + patches 1..n (+ any in-range fixture repairs) into `out`, as its own git
+    repository. n=0 gives the base.
 
     `out` is made a repository for two reasons. The practical one: `git apply` resolves paths
     against the enclosing repository root, and run from a subdirectory of one it silently
@@ -206,6 +265,16 @@ def materialise(n: int, out: str) -> None:
         git("add", "-A")
         git("commit", "-q", "-m", f"cp{cp['n']:02d} reference code")
 
+    # Repairs land AFTER every chain patch, never between them: a repaired intermediate tree
+    # would conflict with the next upstream patch (cp36's own diff adds the very lines repair
+    # 002 adds, against unrepaired context). One commit, so the fixture's history says plainly
+    # what was changed and why.
+    applied = apply_repairs(out, n)
+    if applied:
+        git("add", "-A")
+        git("commit", "-q", "-m",
+            "fixture repair: " + ", ".join(applied) + " (see repairs/manifest.yaml)")
+
 
 def cmd_materialise(args) -> int:
     materialise(args.checkpoint, os.path.expanduser(args.out))
@@ -229,11 +298,64 @@ def cmd_verify(args) -> int:
                              capture_output=True, text=True, check=True).stdout.strip()
     applied = sum(1 for cp in man["checkpoints"] if cp["files_changed"])
     files = sum(len(f) for _, _, f in os.walk(os.path.join(tmp, "src")))
-    if int(commits) != applied + 1:
-        sys.exit(f"expected {applied + 1} commits (base + applied patches), got {commits}")
+    # base + one commit per non-empty patch, + one more if a fixture repair was due at `last`
+    expect = applied + 1 + (1 if repairs_for(last) else 0)
+    if int(commits) != expect:
+        sys.exit(f"expected {expect} commits (base + applied patches + any repair commit), "
+                 f"got {commits}")
     print(f"ok: {len(man['checkpoints'])} patches apply in order up to cp{last:02d}, "
           f"digests match, {commits} commits, {files} source files at cp{last:02d}")
     shutil.rmtree(tmp, ignore_errors=True)
+    return 0
+
+
+def cmd_verify_repairs(args) -> int:
+    """Every repair matches at EVERY checkpoint in its range, and nowhere outside it.
+
+    The range is the fragile part: a repair is an exact-match substitution against a block of
+    code that other checkpoints also edit, so a range that outlives the block's shape would
+    raise mid-run. Checking the whole union up front turns that into a one-command answer.
+
+    Also asserts the repair is NOT needed at `until_checkpoint` — i.e. upstream really does fix
+    it there — so a range is never longer than the defect."""
+    man = load_repairs()
+    if not man.get("repairs"):
+        print("no repairs declared")
+        return 0
+    lo = min(r["from_checkpoint"] for r in man["repairs"])
+    hi = max(r["until_checkpoint"] for r in man["repairs"])
+    tmp = os.path.join(ROOT, "work", "verify-repairs")
+    failures: list[str] = []
+    for n in range(lo, hi + 1):
+        due = repairs_for(n, man)
+        try:
+            materialise(n, tmp)                    # raises if an in-range repair cannot apply
+        except RuntimeError as e:
+            failures.append(f"cp{n:02d}: {e}")
+            continue
+        target = os.path.join(tmp, man["file"])
+        with open(target) as fh:
+            text = fh.read()
+        for r in due:
+            # the replacement is in place
+            if _repair_block(r["id"], "replace") not in text:
+                failures.append(f"cp{n:02d}: {r['id']} applied but its text is absent")
+        if n == hi:
+            # at `until`, upstream should already honour it: the un-repaired form must be gone
+            for r in man["repairs"]:
+                if r["until_checkpoint"] == n and _repair_block(r["id"], "find") in text:
+                    failures.append(
+                        f"cp{n:02d}: {r['id']} ends here but upstream has NOT fixed it — the "
+                        f"range is too short")
+        print(f"  cp{n:02d}  {len(due)} repair(s) applied" + ("" if due else "  (none due)"))
+    shutil.rmtree(tmp, ignore_errors=True)
+    if failures:
+        print("\nFAILED:")
+        for f in failures:
+            print(f"  {f}")
+        return 1
+    print(f"\nok: {len(man['repairs'])} repair(s) apply at every checkpoint in range "
+          f"(cp{lo:02d}..cp{hi - 1:02d}), and upstream has fixed each by its `until`")
     return 0
 
 
@@ -252,6 +374,9 @@ def main() -> int:
     p.set_defaults(fn=cmd_materialise)
     p = sub.add_parser("verify", help="patches apply in order and match their digests")
     p.set_defaults(fn=cmd_verify)
+    p = sub.add_parser("verify-repairs",
+                       help="every fixture repair matches at every checkpoint in its range")
+    p.set_defaults(fn=cmd_verify_repairs)
     args = ap.parse_args()
     return args.fn(args)
 
