@@ -390,8 +390,29 @@ been revised. Those declarations have to be repaired before the maintenance metr
   on known-good tests.
 - `tools/reference_chain.py` — chain ranking and repair-site attribution by kind.
 
-**Not built**: the driver (§4 — the confined area, the agent turn, copy-back and commit), the
-grader (§5), the mutation catalogue (§6 — format and one worked manifest only).
+- `fidelity/` — the driver and grader. **Replay mode runs end to end**: materialise → install →
+  build → serve → Playwright → grade → mutate one at a time → capture, with the specification
+  printed in full and everything written under `results/<run_id>/` as it happens.
+
+**Not built**: the agent turn (§4 — the confined area, copy-back and commit; `--mode agent` exits
+with a message), and the mutation catalogue (§6 — format and one worked manifest only; mutation
+zero needs no authoring and already runs).
+
+### What a run records, and why those things
+
+Grading leaves numbers; diagnosis needs the irreproducible material behind them. Each checkpoint's
+`cpNN.json` keeps **the exact prompt sent** (a bad score is often a bad prompt, and the prompt is
+assembled from the contract so it cannot be reconstructed later), the contract as handed over, the
+raw `{test_id: passed}` map plus Playwright's full failure text, the suite's file- and test-level
+movement, every mutation run with the tests that caught it, and whether application code was
+touched. Every aggregate in the verdict is re-derivable from that, so a later question never
+requires re-running anything.
+
+Two of those deserve naming. **Application code touched** answers a question the pass/fail numbers
+cannot: the agent was told to write tests only, and a run that changed the subject has to be void
+rather than silently credited. And test movement is classified as **revised** versus **dropped** —
+both look like "an id disappeared", and conflating them is the difference between the maintenance
+discipline working and the cheap way out of deleting the failing test.
 
 **Order of work.** Replay mode comes first and needs no agent: it exercises materialise → confine
 → install → build → serve → grade on tests whose verdict is already known, and it is the only way

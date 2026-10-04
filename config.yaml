@@ -34,11 +34,29 @@ checkpoints_file: ${erosion_harness}/checkpoints.yaml
 # otherwise change what every score here meant. reference/manifest.yaml holds the provenance.
 reference:
   dir: reference
+  repo: ~/officehq-tanstack-officefloor          # provenance only; the import already happened
+  branch: evolve/202610020135/just-solve/chain2
   # Checkpoints whose patch is empty: the chain already satisfied the request. GRADED like any
   # other — they test whether the agent recognises a request its suite already covers, or writes
   # tests for it that pass with no code change. Only mutation zero inverts: N-1 is the same
   # application, so this round's tests must PASS against it (DESIGN.md §2, §5).
   no_code_change: [40, 50]
+  # The stack's own contract for building, serving and stopping the app (docs/SUT_CONTRACT.md in
+  # the erosion harness). The driver never looks inside these.
+  app:
+    build_cmd: bin/build
+    start_cmd: bin/start
+    stop_cmd: bin/stop
+    port: 0                   # 0 = pick a free port per run. NOT pinned: a 60-checkpoint run
+                              #   serves the app 100+ times, and a JVM left by a killed run
+                              #   would hold the port and let the next checkpoint gate against
+                              #   a stale app that still reports healthy.
+    health_url: null          # derived from the chosen port
+
+build:
+  timeout: 1800               # bin/build (Maven: front-end -> static/, then the jar)
+  start_timeout: 300
+  ready_timeout: 180
 
 # The interface contract handed to the agent with each request (DESIGN.md §3), so its anchors
 # match the implementation. Built by tools/contract.py, calibrated by `contract.py check`.

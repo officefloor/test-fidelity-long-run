@@ -91,9 +91,41 @@ $V tools/contract.py show --checkpoint 8
 
 # replay mode's test source: the erosion harness's authored suite at a checkpoint
 $V tools/suite.py resolve --checkpoint 25
-$V tools/suite.py install --checkpoint 25 --out work/cp25/e2e/specs
 $V tools/suite.py sizes                      # suite size per checkpoint; checks the growth rule
 ```
+
+### Running it
+
+```sh
+# See exactly what the agent would be given, build nothing. Seconds per checkpoint — do this
+# before paying for a full run.
+$V -m fidelity.run --mode replay --dry-run
+$V -m fidelity.run --mode replay --checkpoint 25 --dry-run
+
+# The real thing. Each checkpoint builds and serves the app, so budget minutes per checkpoint.
+$V -m fidelity.run --mode replay                      # all 60
+$V -m fidelity.run --mode replay --from 1 --to 8      # a prefix
+$V -m fidelity.run --mode replay --checkpoint 25      # one
+$V -m fidelity.run --mode replay --no-mutations       # green phase only, ~half the wall clock
+$V -m fidelity.run --mode replay --keep-work          # keep each materialised tree to poke at
+```
+
+Replay commits nothing. Everything lands under `results/<run_id>/` as it happens — a
+60-checkpoint run takes hours, and a record that only appears at the end is unreadable exactly
+when something has broken:
+
+| file | holds |
+| --- | --- |
+| `run.json` | mode, code_view, the reference chain, the resolved config |
+| `cpNN.json` | the request, **the exact prompt sent**, the contract, the suite and what moved in it, the full gate result with per-test failure text, every mutation run, and the verdict |
+| `cpNN.prompt.txt` | the prompt again as plain text, for reading |
+| `cpNN.build.log` | the whole build + serve + Playwright console |
+| `summary.md` | run-level: what was not green, where mutation zero was wrong, which mutations survived |
+
+Per checkpoint the console shows the request, the full interface contract being handed over, which
+spec files and individual tests were added / revised / dropped, whether application code was
+touched, the gate result with each failing test and its failure text, and then each mutation with
+whether it was killed and which test caught it.
 
 ## Status
 
@@ -114,8 +146,13 @@ $V tools/suite.py sizes                      # suite size per checkpoint; checks
   35, 40, 59, 72), and it confirms the reference suite never shrinks, so the non-decreasing rule
   holds on known-good tests.
 
-**Not built**: the driver (the confined area, the agent turn, copy-back and commit), the grader,
-the mutation catalogue (format and one worked manifest only).
+- `fidelity/` — **the driver and grader**. Replay mode runs end to end: materialise → install →
+  build → serve → Playwright → grade → mutate one at a time → capture. Verified on cp01 (2/2
+  green in 26s) and cp02.
+
+**Not built**: the agent turn (the confined area, copy-back and commit — `--mode agent` exits
+with a message), and the mutation catalogue (format and one worked manifest only; mutation zero
+needs no authoring and already runs).
 
 **Order of work**: replay mode first — it needs no agent and is the only way to tell a harness bug
 from a fixture defect from a bad test. Then fix the reference chain until replay is green at all 60

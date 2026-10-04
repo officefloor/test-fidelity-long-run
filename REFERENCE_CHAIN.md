@@ -170,3 +170,17 @@ anyway.
 **Replay mode is how this gets verified** (DESIGN.md §4.3): run it across all 60 checkpoints and
 every remaining red is a fixture defect, since the suite it installs is known-good. Repair until
 replay is green.
+
+### First replay evidence
+
+Three checkpoints have been run through the real gate (build → serve → Playwright):
+
+| checkpoint | gate | mutation zero | note |
+| --- | --- | --- | --- |
+| cp01 | **2/2 green** | n/a (no cp00) | |
+| cp02 | **5/5 green** | **KILLED**, as required — the two email-validation tests fail against cp01's application | |
+| cp25 | **35/35 green** | | **the repair verified**: cp25 failed in 10 of 10 erosion chains, on exactly the cp03 and cp07 "excluding archived" specs |
+
+cp25 is the one that matters. The same known-good suite that failed in every chain now passes
+against the repaired application, which is direct evidence that the seed-contract diagnosis was
+right and that repair 001 fixes it — rather than an argument that it should.
