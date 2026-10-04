@@ -3,12 +3,11 @@
 # "I want to track the projects I do for clients. Let me add a project and pick which client it
 #  is for. Show each project with the client's name."
 #
-# Noted while authoring: the reference spec never asserts how MANY project rows appear, so a
-# mutation that shows only the first project would survive it. That is a hole in the reference
-# suite rather than a bad mutation, and it is left out here so the set stays calibratable —
-# worth fixing in the erosion harness's cp03 spec.
+# The reference spec did not assert how MANY project rows appear, so a mutation showing only the
+# first project would have survived it. That hole is now CLOSED — cp03 seeds two projects and
+# asserts the count (erosion harness 3a8b947) — and 004 below is the mutation it unlocked.
 checkpoint: 3
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-project-shows-the-wrong-client"
