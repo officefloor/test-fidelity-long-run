@@ -1,8 +1,25 @@
 # test-fidelity-long-run configuration. The driver and grader that consume this are not built yet
 # (DESIGN.md §11); the values here record decisions already made, so they are not re-litigated.
 
+# MODE (DESIGN.md §4.3). `replay` installs the erosion harness's own authored suite instead of
+# running an agent, commits nothing, and validates the harness, the fixture and the mutation
+# catalogue all at once. It is the first thing to run and the only way to tell a harness bug from
+# a fixture defect from a bad test. `agent` is the real measurement.
+mode: replay
+
 model: claude-opus-4-8
 agent_timeout: 3600
+
+# What the test-writing agent may READ of the application (DESIGN.md §4.2).
+#   previous  the app at cp(N-1) — the pipeline's own information state, and the default. The new
+#             behaviour is absent, so there is nothing to copy; the agent can confirm its priors
+#             still pass and its new test correctly fails, but CANNOT iterate the new test to
+#             green. That asymmetry is the thing being measured — do not remove it.
+#   none      contract and prior tests only. Strictly harder, but it conflates "could not
+#             navigate" with "misread the request".
+#   current   DIAGNOSTIC ONLY — a ceiling. If fidelity is poor even with the implementation
+#             visible, the problem is not information.
+code_view: previous
 
 # The 60 plain-English change requests, with their `type` and `mutates`. Read from the erosion
 # harness rather than copied, so a repair to the checkpoint metadata lands in one place — and it
@@ -27,10 +44,16 @@ reference:
 # match the implementation. Built by tools/contract.py, calibrated by `contract.py check`.
 contracts:
   dir: contracts
-  include_in_prompt: [new_testids, new_audit_records, available_testids, available_audit_records]
+  # seed_accepts is not optional: a seed field the endpoint does not honour is accepted and
+  # silently dropped, and the spec then fails nowhere near the mistake. That is the cp25 defect
+  # (DESIGN.md §3), and an agent told only the testids walks straight into it.
+  include_in_prompt: [new_testids, new_audit_records, available_testids, available_audit_records,
+                      seed_accepts]
 
-# Where the agent's OWN accumulated suite lives in the materialised app. Its git history is what
-# DESIGN.md §8 measures, so it is committed per checkpoint, not a scratch area.
+# Where the suite under test lives in the confined area. In `agent` mode this is the agent's own
+# accumulated suite and its git history is what DESIGN.md §8 measures, so it is committed per
+# checkpoint. In `replay` mode tools/suite.py installs the erosion harness's authored suite here
+# and NOTHING is committed.
 generated_suite:
   dest_subpath: e2e/specs
   support_subpath: e2e/support     # seed + audit helpers: READ-ONLY to the agent — the two
@@ -47,6 +70,10 @@ grading:
   mutation:
     catalogue: mutations/
     require_calibrated: true       # refuse an uncalibrated set rather than report a soft number
+    one_at_a_time: true            # apply ONE mutation, run, require a new failure, REVERT.
+                                   #   Batched mutations are indistinguishable: one failing test
+                                   #   would mark the whole batch killed, so a suite pinning one
+                                   #   clause scores the same as one pinning them all.
     zero: previous_checkpoint      # mutation zero is free: the app at N-1 is the feature removed
     zero_inverted_on_no_code: true #   ... except where N-1 is the same app: then it must SURVIVE
   maintenance:
@@ -56,8 +83,14 @@ grading:
 # if any listed path is reachable from the agent turn. The inversion vs that harness: application
 # source is READABLE here — it is the input. What is withheld is every statement of what the
 # application should do.
+# The confined area holds the suite so far, the e2e scaffolding (read-only), the checkpoint
+# specification, and the application at cp(N-1). Everything below must be unreachable, and
+# verify_denied refuses to start the turn if any of it is not.
 blind:
   deny:
-    - ${erosion_harness}/acceptance/specs    # the experimenter's reference suite
+    - ${erosion_harness}/acceptance/specs    # the experimenter's reference suite — the answer
     - ${erosion_harness}/checkpoints.yaml    # future requests + sequence hints
     - mutations/                             # the depth oracle's patches
+    - reference/                             # EVERY future checkpoint's code. The area is built
+                                             #   by materialising cp(N-1) elsewhere and copying
+                                             #   it in; the patch chain never enters it.

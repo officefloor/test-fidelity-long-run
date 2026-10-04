@@ -84,33 +84,129 @@ contracts/cp08.yaml   new_testids / new_audit_records              introduced he
                       no_code_change                               the §2 exclusion flag
 ```
 
-Both assertion channels the reference specs use are covered: `data-testid` anchors (static and
-the `client-row-<id>` dynamic shapes) and the audit-file record formats
-(`INVOICE_PAID id=<id> amount=<amount>`).
+Three channels are covered: `data-testid` anchors (static and the `client-row-<id>` dynamic
+shapes), the audit-file record formats (`INVOICE_PAID id=<id> amount=<amount>`), and — the one
+added last, for a reason — **the seed fields `/__test__/seed` actually honours**.
+
+The seed channel is in the contract because leaving it out reproduces a real defect. cp25's
+updated cp03 spec seeds a project as `{ id: 2, ..., archived: true }` and expects the list to
+exclude it; at cp25 the projects INSERT has no `archived` column at all, so the flag is silently
+dropped, the project seeds active, and the spec fails from the moment it is installed. Support
+arrived at cp36 for projects and cp58 for clients — 11 and 29 checkpoints after the specs that
+needed it. A seed field that is *accepted and ignored* is the worst kind of interface gap: the
+test looks right, the request succeeds, and the assertion fails nowhere near the mistake. An
+agent told only the testids would walk straight into it.
 
 `contract.py check` validates the extraction against the erosion harness's own 95 spec files:
-every testid and audit record they assert must appear in the contract by their checkpoint. It
-passes. That check reads those specs **offline, for calibration only** — they are never shown to
+every testid, audit record and seed field they use must be in the contract by their checkpoint.
+The testid and audit channels pass. The seed channel reports exactly three sites —
+`cp25 projects.archived`, `cp29 clients.archived`, `cp44 clients.archived` — which is the same
+set the dynamic analysis found from test results (REFERENCE_CHAIN.md §3), reached statically and
+without running anything. Two independent methods agreeing on the same three defects is the
+strongest evidence available that the diagnosis is right. That check reads those specs **offline, for calibration only** — they are never shown to
 the agent (§7). Without it, a pattern gap would silently hand the agent a short contract and the
 agent would be blamed for the harness's omission.
 
 ## §4 The loop
 
-For each checkpoint N in order:
+For each checkpoint N in order, 1..60:
 
-1. **Materialise** the reference application at N (§2). Application source is **read-only** to the
-   agent; a run that modifies it is void.
-2. **Specify.** The agent is given the plain-English request for N, the interface contract for N
-   (§3), and the instruction that it is writing **tests only**.
-3. **Write.** From cp02 on it also has the full test suite **it has written so far**, and that
-   suite's git history — so it can revise its earlier tests when the request changes earlier
-   behaviour, with the same view it would have in the pipeline.
-4. **Commit.** Its suite is copied back and committed. That commit is the unit §8 measures.
-5. **Grade** (§5). Then on to N+1.
+1. **Build the agent's area.** A Landlock-confined directory holding only what the agent may see
+   (§4.1), with its own accumulated suite from cp01..N-1 and that suite's git history.
+2. **Specify.** The checkpoint specification: the plain-English request, and the interface
+   contract for N (§3) — the `data-testid` anchors, the audit-record formats, and the seed fields
+   `/__test__/seed` honours. The instruction is explicit that it writes **tests only**: new tests
+   for new functionality, and updates to its own existing tests where the request revises
+   behaviour they assert.
+3. **Write.** The agent works inside the confined area.
+4. **Copy back and commit.** The test code is copied out and committed on the run's branch — one
+   commit per checkpoint, which is the unit §8 measures.
+5. **Grade** (§5): green against checkpoint N's application, then one mutation at a time.
 
-The suite accumulates, exactly as the application did in the erosion harness. The interesting
-failures are late, where the agent is maintaining 100+ of its own tests it no longer remembers
-writing.
+### §4.1 What the agent can see
+
+Inside the confined area:
+
+- its own suite for cp01..N-1, with git history — the view it would have in the pipeline;
+- the `e2e/` scaffolding, read-only: `playwright.config.ts`, `package.json`, `node_modules`, and
+  `support/seed.ts` + `support/audit.ts`, the two assertion channels;
+- the checkpoint specification from step 2;
+- **the application at cp(N-1)**, read-only, and runnable — see §4.2.
+
+Unreachable, and `verify_denied` refuses to start the turn if any of it is:
+
+- **the application at cpN** — the implementation of the change it is writing tests for;
+- the erosion harness's `acceptance/specs/` — the experimenter's answer;
+- `checkpoints.yaml` — future requests and sequence hints;
+- `mutations/` — the depth oracle's patches;
+- **`reference/`** — easy to overlook and the worst leak of all: `cp01.patch`..`cp60.patch` is
+  every future checkpoint's code, including the one being tested. The area is built by
+  materialising cp(N-1) *elsewhere* and copying it in; the patch chain itself never enters.
+
+### §4.2 Should the agent see the previous checkpoint's code?
+
+**Yes — cp(N-1), read-only, and let it run the app.** Four reasons:
+
+1. **It is exactly the pipeline's information state.** The pipeline order is request → tests →
+   implement. At test-writing time the code that exists is the pre-change code. Withholding it
+   measures a situation that will never occur; showing cpN measures one that cannot.
+2. **It defuses the objection to showing code at all.** The worry is tests that restate the
+   implementation instead of the request. That requires the behaviour to be present — and at
+   cp(N-1) the new behaviour is absent. There is nothing to copy; the expected behaviour has to
+   come from the request.
+3. **It separates two failures that must not score alike.** With no code, a test that fails
+   because the agent could not find the nav button is indistinguishable from one that fails
+   because the agent misread the request. Only the second is what this measures.
+4. **It lets the agent verify the half it legitimately can**: that its prior tests still pass, and
+   that its new test fails against cp(N-1). It cannot iterate the new test to green.
+
+That last point is the asymmetry worth protecting. **The agent cannot confirm its new test
+passes** — the behaviour does not exist yet. That is the hard part of test-first work and the
+main source of test inaccuracy, so it is the thing being measured. Showing cpN would remove it
+and turn the exercise into "write a test that passes", which is easy and tells us nothing.
+
+Two consequences to keep in mind:
+
+- At a §2 no-code checkpoint cp(N-1) and cpN are the same application, so there the agent *can*
+  iterate to green. Unavoidable, harmless, and consistent with mutation zero inverting (§5).
+- `code_view` is therefore a condition, not a constant: `previous` (the default and the
+  pipeline-faithful setting), `none` (contract and prior tests only — strictly harder, and it
+  conflates navigation failures with comprehension failures), and `current` (diagnostic only — a
+  ceiling: if fidelity is poor even with the implementation visible, the problem is not
+  information).
+
+### §4.3 Two modes
+
+The loop above is mode-independent. Only step 2–4 — where the tests come from — differs.
+
+**`agent` mode.** The real measurement. The agent writes the tests; they are committed per
+checkpoint on the run's branch.
+
+**`replay` mode.** The validation run, and the way this harness is shown to work at all. Instead
+of an agent turn, the erosion harness's **own authored suite at checkpoint N** is installed
+(`tools/suite.py` — its own spec plus the updated prior copies it ships, later copies winning by
+basename, exactly as `run_experiment._authored_specs` resolves it). Nothing is committed: replay
+changes no state and can be re-run freely.
+
+Those specs are known-good — they are what the application was built against — so replay mode
+answers three questions at once, and all three have to be settled before any agent score means
+anything:
+
+| question | what replay shows |
+| --- | --- |
+| does this harness work? | materialise → confine → install → build → serve → grade, 60 times, on tests whose verdict is already known |
+| is the reference chain a sound fixture? | step 1 must be green at every checkpoint. Where it is not, that is a fixture defect, not an agent error (§10, REFERENCE_CHAIN.md) |
+| is the mutation catalogue calibrated? | every mutation must be killed by the known-good suite. One that survives is a bad mutation or a hole in the reference suite — unusable for grading either way (§6) |
+
+Replay subsumes the separate calibration step §6 described: calibration *is* replay restricted to
+step 2.
+
+`tools/suite.py` is verified against the completed runs: the suite it resolves matches the
+capture's `total_selected` exactly at every checkpoint sampled (cp01, 05, 08, 25, 30, 49, 60 →
+2, 11, 14, 35, 40, 59, 72). It also confirms the grading rule of §5: the reference suite adds at
+least one test at every checkpoint and never shrinks, so a non-decreasing requirement holds on
+known-good tests. The leniency of allowing *equal* is headroom for the agent, not a workaround for
+the fixture.
 
 ## §5 Grading: fidelity testing
 
@@ -127,10 +223,19 @@ Run the suite **twice**. A test whose result flips between identical runs is **f
 reported separately — in an unattended pipeline a flake is the most expensive kind of wrong test,
 because it spends human attention on nothing.
 
-**Step 2 — mutation.** For each mutation authored for checkpoint N (§6): apply it to the code, run
-the suite, and require **at least one test to fail**. A mutation that the suite survives is a part
-of the request that no test pins. Kill rate over the checkpoint's mutation set is the fidelity
-score for that checkpoint.
+**Step 2 — mutation, one at a time.** For each mutation authored for checkpoint N (§6): apply
+that mutation alone to the checkpoint's application, run the suite, and require **at least one
+test to fail**. Then revert it and move to the next. A new test failure is the success signal — it
+says the agent's tests covered that aspect of the functionality.
+
+One at a time is not an optimisation detail. Mutations applied together are indistinguishable: a
+single failing test would mark the whole batch killed, and a suite that pins one clause of the
+request would score the same as one that pins them all. Isolation is what makes kill rate mean
+"how much of the request is held". Each mutation is also reverted rather than accumulated, so
+every run starts from the same known-good application.
+
+Kill rate over the checkpoint's mutation set is that checkpoint's fidelity score, and `survived`
+names the mutations nothing caught — the actionable output.
 
 Mutation **zero is free**: the application at N-1 *is* the whole-feature mutation. Removing one
 patch from the chain gives a build with the feature absent, and the tests added this round must
@@ -188,20 +293,26 @@ behaviour observable through the UI or the audit file; it is minimal and single-
 derived from a **clause of the English request**, so kill rate reads as "how much of what the user
 asked for does this suite hold".
 
-**Calibration before use.** Run the *experimenter's* reference spec for the checkpoint against
-every mutation in its set. Each must die. One that survives is either a bad mutation or a real hole
-in the reference suite — both worth knowing, and neither usable for grading an agent until
-resolved. Grading refuses an uncalibrated set.
+**Calibration before use — this is replay mode (§4.3).** Run the *experimenter's* known-good
+suite at the checkpoint against every mutation in its set. Each must die. One that survives is
+either a bad mutation or a real hole in the reference suite — both worth knowing, and neither
+usable for grading an agent until resolved. Grading refuses an uncalibrated set.
+
+There is no separate calibration tool: calibration is replay mode restricted to step 2.
 
 ## §7 Blindness
 
-The agent must not see the experimenter's reference specs (it would copy them), the mutation
-catalogue (it would target the patches, not the behaviour), future requests, or `checkpoints.yaml`.
-The erosion harness's Landlock confinement enforces exactly this shape and fails closed if any
-listed path is reachable; reuse it unchanged.
+§4.1 lists the area's contents and what must be unreachable. The erosion harness's Landlock
+confinement enforces exactly this shape and fails closed if any denied path is reachable; reuse it
+unchanged.
 
-The inversion vs the erosion harness: application source is **readable** here. It is the input, not
-a leak. What is withheld is every statement of what the application *should* do.
+The inversion vs the erosion harness: application source is **readable** here — the previous
+checkpoint's, which is the input, not a leak (§4.2). What is withheld is every statement of what
+the application *should* do, and the implementation that answers it.
+
+The deny list's least obvious entry is `reference/`: the patch chain is every future checkpoint's
+code. Build the area by materialising cp(N-1) somewhere else and copying it in — never by giving
+the confined area access to the patches.
 
 ## §8 Test-suite erosion
 
@@ -243,13 +354,22 @@ been revised. Those declarations have to be repaired before the maintenance metr
 
 ## §11 Status
 
-**Built and verified**: the import and materialise chain (`tools/reference.py` — 60 patches apply
-in order, digests match), the contract extractor (`tools/contract.py` — 60 contracts, calibrated
-against all 95 reference spec files), reference-chain selection (`tools/reference_chain.py`), and
-the design.
+**Built and verified**
 
-**Not built**: the driver (§4), the grader (§5), the mutation catalogue (§6 — format and one worked
-manifest only).
+- `tools/reference.py` — import and materialise; 60 patches apply in order, digests match.
+- `tools/contract.py` — 60 contracts over three channels; testids and audit records calibrate
+  clean against all 95 reference spec files, and the seed channel reports exactly the three known
+  fixture defects.
+- `tools/suite.py` — replay mode's test source; resolution matches the completed runs'
+  `total_selected` exactly at every checkpoint sampled, and confirms the non-decreasing rule holds
+  on known-good tests.
+- `tools/reference_chain.py` — chain ranking and repair-site attribution by kind.
 
-**Prerequisite**: the reference chain still needs its repair sites resolved (REFERENCE_CHAIN.md)
-before a score distinguishes a bad test from a bad fixture.
+**Not built**: the driver (§4 — the confined area, the agent turn, copy-back and commit), the
+grader (§5), the mutation catalogue (§6 — format and one worked manifest only).
+
+**Order of work.** Replay mode comes first and needs no agent: it exercises materialise → confine
+→ install → build → serve → grade on tests whose verdict is already known, and it is the only way
+to tell a harness bug from a fixture defect from a bad test. The reference chain's repair sites
+(REFERENCE_CHAIN.md) are then fixed until replay is green at all 60 checkpoints. Authoring the
+mutation catalogue and running agent mode come after that.

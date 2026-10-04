@@ -67,7 +67,20 @@ basename it scores in the regression category rather than against the checkpoint
 so cp49 reports `func_p 1/1`, its own request solved, while the cp21 spec it shipped to define the
 effect on invoices fails.
 
-### Root cause: a seed-contract gap
+### Root cause: a seed-contract gap, confirmed two ways
+
+`tools/contract.py check` now compares every seed field the reference specs pass against the
+fields `/__test__/seed` actually honours at that checkpoint, statically and without running
+anything. It reports exactly three sites:
+
+```
+cp25: seed field NOT HONOURED by /__test__/seed -> ['projects.archived']
+cp29: seed field NOT HONOURED by /__test__/seed -> ['clients.archived']
+cp44: seed field NOT HONOURED by /__test__/seed -> ['clients.archived']
+```
+
+That is the same set the dynamic analysis found from test results, reached by an independent
+method. The mechanism:
 
 cp25's updated `cp03_projects.spec.ts` arranges its fixture like this:
 
@@ -90,11 +103,20 @@ cp29 → cp01/cp06 and cp44 → cp01 are the same shape for archived *clients*. 
 different and genuinely behavioural: the updated cp21 spec expects tax in the invoice amount
 (`$1,200.00`) and gets `$1,000.00`.
 
-**This is good news for the fixture.** Five of the six sites are spec-side: the application is
-fine, and the repair is to the erosion harness's `acceptance/specs/cp25|cp29|cp44/` copies — either
-arrange archived state through the UI action, or extend the seed contract in
-`docs/SUT_CONTRACT.md` and have the checkpoints that introduce archiving exercise it in their own
-specs. No application change and no re-run.
+**The gap closes on its own, far too late.** Seed support for `archived` arrives at **cp36** for
+projects and **cp58** for clients — 11 and 29 checkpoints after the specs that needed it, added
+by whichever later checkpoint happened to require it. So these specs fail on arrival, stay failing
+for a long stretch, and then silently start passing.
+
+**The repair is small and surgical: backport the seed support.** Add the `archived` column to the
+projects insert in cp25's `TestSupportController` and to the clients insert in cp29's — about four
+lines each, lifted verbatim from the cp36 and cp58 versions. `TestSupportController` is
+profile-guarded test-support code that the harness explicitly treats as evolving app code, so
+changing it alters no product behaviour and keeps the fixture faithful. The alternative — rewriting
+the updated prior specs to arrange archived state through the UI — also works but changes what
+those specs test.
+
+Either way: no product-code change, and no re-run.
 
 ## 4. Two checkpoints were never implemented
 
@@ -123,15 +145,20 @@ and contradicting cp60's own request. The fixtures have to be repaired first, wh
 
 ## 7. Plan
 
-1. **Fix the seed-contract gap** in `acceptance/specs/cp25|cp29|cp44/` (five of six sites). Either
-   arrange archived state through the UI action, or declare `archived` in the seed contract and
-   make cp25/cp29 exercise it in their own specs so an implementation is actually asked for it.
+1. **Backport the seed support** (five of six sites): the `archived` column on the projects
+   insert from cp36 into cp25, and on the clients insert from cp58 into cp29. Four lines each, in
+   profile-guarded test-support code. Then `contract.py check` should report no seed misses.
 2. **Declare cp60's mutation of cp41** and ship the updated copy.
 3. **Diagnose cp49 → cp21** (tax in the invoice amount) — the one genuinely behavioural site.
 4. **Adopt** `officehq-tanstack-officefloor evolve/202610020135/just-solve/chain2`: the fewest
    repair sites, and the TanStack + OfficeFloor combination this work is standardising on. Pin it
    in `config.yaml`; the harness refuses to run until `reference_chain.py` grades it 0 sites.
 
-Steps 1 and 2 are spec edits. Step 3 is the only one that may touch the application, and the
-erosion harness can rebuild and re-gate a single checkpoint on demand — far cheaper than a fresh
-60-checkpoint run, which would not have settled it anyway.
+Step 1 touches only profile-guarded test-support code; step 2 is a spec edit. Step 3 is the only
+one that may touch product code, and the erosion harness can rebuild and re-gate a single
+checkpoint on demand — far cheaper than a fresh 60-checkpoint run, which would not have settled it
+anyway.
+
+**Replay mode is how this gets verified** (DESIGN.md §4.3): run it across all 60 checkpoints and
+every remaining red is a fixture defect, since the suite it installs is known-good. Repair until
+replay is green.

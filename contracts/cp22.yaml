@@ -110,3 +110,11 @@ available_audit_records:
   - 'INVOICE_PAID id=<id> amount=<amount>'
   - 'INVOICE_SENT id=<id> amount=<amount>'
   - 'TASK_TOGGLED id=<id> done=<done>'
+# Fields /__test__/seed HONOURS here. A field absent from this list is IGNORED,
+# not rejected: seeding it looks like it worked and the assertion fails later.
+seed_accepts:
+  clients: [email, id, name]
+  contacts: [clientId, email, id, name, role]
+  invoices: [amount, description, dueDate, id, issuedDate, lineItems, projectId, qty, status, unitPrice]
+  projects: [clientId, id, name]
+  tasks: [done, id, projectId, title]

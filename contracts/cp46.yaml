@@ -194,3 +194,16 @@ available_audit_records:
   - 'PROJECT_TAGGED project=<project> tag=<tag>'
   - 'PROJECT_UNTAGGED project=<project> tag=<tag>'
   - 'TASK_TOGGLED id=<id> done=<done>'
+# Fields /__test__/seed HONOURS here. A field absent from this list is IGNORED,
+# not rejected: seeding it looks like it worked and the assertion fails later.
+seed_accepts:
+  asOf: []
+  clients: [email, id, name]
+  contacts: [clientId, email, id, name, primary, role]
+  invoices: [amount, description, dueDate, id, issuedDate, lineItems, projectId, qty, status, unit, unitPrice]
+  notes: [at, id, targetId, targetType, text]
+  payments: [amount, date, id, invoiceId]
+  projectTags: [projectId, tagId]
+  projects: [archived, budget, clientId, id, name, status]
+  tags: [id, name]
+  tasks: [done, id, projectId, title]

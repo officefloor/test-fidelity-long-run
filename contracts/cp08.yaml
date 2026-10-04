@@ -68,3 +68,9 @@ available_testids:
   - projects-table
 available_audit_records:
   - 'INVOICE_PAID id=<id> amount=<amount>'
+# Fields /__test__/seed HONOURS here. A field absent from this list is IGNORED,
+# not rejected: seeding it looks like it worked and the assertion fails later.
+seed_accepts:
+  clients: [email, id, name]
+  invoices: [amount, id, projectId, status]
+  projects: [clientId, id, name]

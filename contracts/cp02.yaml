@@ -25,3 +25,7 @@ available_testids:
   - nav-clients
   - nav-home
 available_audit_records:
+# Fields /__test__/seed HONOURS here. A field absent from this list is IGNORED,
+# not rejected: seeding it looks like it worked and the assertion fails later.
+seed_accepts:
+  clients: [email, id, name]
