@@ -1,0 +1,362 @@
+diff --git a/src/main/frontend/features/projects/ProjectTasks.tsx b/src/main/frontend/features/projects/ProjectTasks.tsx
+new file mode 100644
+index 0000000..2fbd1d2
+--- /dev/null
++++ b/src/main/frontend/features/projects/ProjectTasks.tsx
+@@ -0,0 +1,47 @@
++import { useTasks, useToggleTask } from './tasks';
++
++// A project's task checklist. Reads its own query key (scoped to the project) and shows each task's
++// title and status (OPEN while not done, DONE once ticked off) with a control to toggle it. A toggle
++// is a mutation that invalidates the shared key, so the row re-reads its status from the server.
++export function ProjectTasks({ projectId }: { projectId: number }) {
++  const { data: tasks } = useTasks(projectId);
++  const toggle = useToggleTask(projectId);
++
++  if (!tasks) {
++    return null;
++  }
++
++  if (tasks.length === 0) {
++    return <p data-testid="project-tasks-empty">No tasks yet.</p>;
++  }
++
++  return (
++    <table data-testid="project-tasks-table">
++      <thead>
++        <tr>
++          <th>Task</th>
++          <th>Status</th>
++          <th></th>
++        </tr>
++      </thead>
++      <tbody>
++        {tasks.map((task) => (
++          <tr key={task.id} data-testid={`task-row-${task.id}`}>
++            <td data-testid="task-title">{task.title}</td>
++            <td data-testid="task-status">{task.done ? 'DONE' : 'OPEN'}</td>
++            <td>
++              <button
++                type="button"
++                data-testid={`task-toggle-${task.id}`}
++                disabled={toggle.isPending}
++                onClick={() => toggle.mutate({ id: task.id })}
++              >
++                {task.done ? 'Reopen' : 'Tick off'}
++              </button>
++            </td>
++          </tr>
++        ))}
++      </tbody>
++    </table>
++  );
++}
+diff --git a/src/main/frontend/features/projects/tasks.slot.tsx b/src/main/frontend/features/projects/tasks.slot.tsx
+new file mode 100644
+index 0000000..ffeb0a3
+--- /dev/null
++++ b/src/main/frontend/features/projects/tasks.slot.tsx
+@@ -0,0 +1,6 @@
++import { ProjectDetail } from '../../slots/defs/projectDetail';
++import { ProjectTasks } from './ProjectTasks';
++
++// The task list's presence on the project detail page — its own file, filling the shared
++// project.detail region. The detail route is not touched to add it (CLAUDE.md rule 3).
++export const contribution = ProjectDetail.fill({ order: 10, Component: ProjectTasks });
+diff --git a/src/main/frontend/features/projects/tasks.ts b/src/main/frontend/features/projects/tasks.ts
+new file mode 100644
+index 0000000..0b6a087
+--- /dev/null
++++ b/src/main/frontend/features/projects/tasks.ts
+@@ -0,0 +1,26 @@
++import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
++import { getJson, postJson } from '../../api/http';
++
++// A task on a project's checklist. Everything that shows a project's tasks shares the key
++// ['tasks', projectId]; invalidating it after a toggle refreshes the list from the server.
++export type Task = { id: number; projectId: number; title: string; done: boolean };
++
++export const tasksKey = (projectId: number) => ['tasks', projectId] as const;
++
++export function useTasks(projectId: number) {
++  return useQuery({
++    queryKey: tasksKey(projectId),
++    queryFn: () => getJson<Task[]>(`/api/tasks?projectId=${projectId}`),
++  });
++}
++
++// Tick a task off (or back on): POSTs {id} and invalidates ['tasks', projectId] so the list reflects
++// the new done flag from the server. The server also keeps an audit record of every toggle.
++export function useToggleTask(projectId: number) {
++  const queryClient = useQueryClient();
++  return useMutation({
++    mutationFn: (input: { id: number }) =>
++      postJson<Task>('/api/tasks/toggle', { id: input.id }),
++    onSuccess: () => queryClient.invalidateQueries({ queryKey: tasksKey(projectId) }),
++  });
++}
+diff --git a/src/main/frontend/routes/projects.$projectId.tsx b/src/main/frontend/routes/projects.$projectId.tsx
+index 7dda2b5..c9f21e3 100644
+--- a/src/main/frontend/routes/projects.$projectId.tsx
++++ b/src/main/frontend/routes/projects.$projectId.tsx
+@@ -1,9 +1,12 @@
+ import { createFileRoute } from '@tanstack/react-router';
+ import { InvoiceForm } from '../features/invoices/InvoiceForm';
+ import { InvoiceList } from '../features/invoices/InvoiceList';
++import { ProjectDetail } from '../slots/defs/projectDetail';
+ 
+ // Drilling into a project is its own route — a new file, not a flag on the list (CLAUDE.md rule 2).
+-// The detail page shows the project's invoices, their total, and a form to raise a new one.
++// The detail page shows the project's invoices, their total, and a form to raise a new one. Panels
++// about the project (its task list, and more over time) fill the project.detail slot region, each in
++// its own *.slot.tsx file — this route renders the region and never lists what goes in it.
+ export const Route = createFileRoute('/projects/$projectId')({
+   component: ProjectDetailPage,
+ });
+@@ -15,6 +18,7 @@ function ProjectDetailPage() {
+   return (
+     <section data-testid="project-detail-page">
+       <h1>Project</h1>
++      <ProjectDetail.Slot projectId={id} />
+       <InvoiceForm projectId={id} />
+       <InvoiceList projectId={id} />
+     </section>
+diff --git a/src/main/frontend/slots/defs/projectDetail.ts b/src/main/frontend/slots/defs/projectDetail.ts
+new file mode 100644
+index 0000000..68ffc1f
+--- /dev/null
++++ b/src/main/frontend/slots/defs/projectDetail.ts
+@@ -0,0 +1,8 @@
++import { defineSlot } from '../Slot';
++
++/**
++ * A project's detail page — panels about one project (its task list, and more over time). The detail
++ * route renders this region and never lists what fills it; each panel is its own `*.slot.tsx` file
++ * under `features/projects/`. Handed the project id as context.
++ */
++export const ProjectDetail = defineSlot<{ projectId: number }>('project.detail');
+diff --git a/src/main/java/net/officefloor/hq/app/Task.java b/src/main/java/net/officefloor/hq/app/Task.java
+new file mode 100644
+index 0000000..1f867f4
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/Task.java
+@@ -0,0 +1,70 @@
++package net.officefloor.hq.app;
++
++import jakarta.persistence.Column;
++import jakarta.persistence.Entity;
++import jakarta.persistence.GeneratedValue;
++import jakarta.persistence.GenerationType;
++import jakarta.persistence.Id;
++import jakarta.persistence.Table;
++
++/**
++ * A checklist item on a project: a title, the id of the project it belongs to, and whether it is
++ * done. Persisted to the {@code tasks} table (Flyway V12). The id is database-generated (IDENTITY)
++ * on create; the seed path inserts explicit ids directly via JdbcTemplate (see
++ * {@link TestSupportController}). A task is OPEN while {@code done} is false and DONE once ticked off.
++ */
++@Entity
++@Table(name = "tasks")
++public class Task {
++
++    @Id
++    @GeneratedValue(strategy = GenerationType.IDENTITY)
++    private Long id;
++
++    @Column(name = "project_id")
++    private Long projectId;
++
++    private String title;
++
++    private boolean done;
++
++    public Task() {
++    }
++
++    public Task(Long projectId, String title) {
++        this.projectId = projectId;
++        this.title = title;
++    }
++
++    public Long getId() {
++        return id;
++    }
++
++    public void setId(Long id) {
++        this.id = id;
++    }
++
++    public Long getProjectId() {
++        return projectId;
++    }
++
++    public void setProjectId(Long projectId) {
++        this.projectId = projectId;
++    }
++
++    public String getTitle() {
++        return title;
++    }
++
++    public void setTitle(String title) {
++        this.title = title;
++    }
++
++    public boolean isDone() {
++        return done;
++    }
++
++    public void setDone(boolean done) {
++        this.done = done;
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/TaskRepository.java b/src/main/java/net/officefloor/hq/app/TaskRepository.java
+new file mode 100644
+index 0000000..bcaffcb
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/TaskRepository.java
+@@ -0,0 +1,11 @@
++package net.officefloor.hq.app;
++
++import java.util.List;
++import org.springframework.data.jpa.repository.JpaRepository;
++
++/** Data access for {@link Task}. Injected into the OfficeFloor REST logic classes. */
++public interface TaskRepository extends JpaRepository<Task, Long> {
++
++    /** The tasks for one project, oldest first, so a project's detail page lists only its own. */
++    List<Task> findByProjectIdOrderByIdAsc(Long projectId);
++}
+diff --git a/src/main/java/net/officefloor/hq/app/TasksGetLogic.java b/src/main/java/net/officefloor/hq/app/TasksGetLogic.java
+new file mode 100644
+index 0000000..4d977f6
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/TasksGetLogic.java
+@@ -0,0 +1,18 @@
++package net.officefloor.hq.app;
++
++import java.util.List;
++import org.springframework.web.bind.annotation.RequestParam;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code GET /api/tasks?projectId=<id>} — list the tasks that belong to one project, oldest first,
++ * so a project's detail page shows only its own checklist. Wired by
++ * {@code officefloor/rest/api/tasks.GET.yml}.
++ */
++public class TasksGetLogic {
++
++    public void service(@RequestParam("projectId") Long projectId, TaskRepository tasks,
++            ObjectResponse<List<Task>> response) {
++        response.send(tasks.findByProjectIdOrderByIdAsc(projectId));
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/TasksToggleLogic.java b/src/main/java/net/officefloor/hq/app/TasksToggleLogic.java
+new file mode 100644
+index 0000000..34c5b3e
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/TasksToggleLogic.java
+@@ -0,0 +1,42 @@
++package net.officefloor.hq.app;
++
++import org.springframework.web.bind.annotation.RequestBody;
++import net.officefloor.server.http.HttpException;
++import net.officefloor.server.http.HttpStatus;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code POST /api/tasks/toggle} — tick a task off (or back on) from an {id} body and return the
++ * updated row. Wired by {@code officefloor/rest/api/tasks/toggle.POST.yml}. Flips the task's done
++ * flag (OPEN &lt;-&gt; DONE) and appends one {@code TASK_TOGGLED} audit record, so the change can be
++ * checked back later through the audit file even though the UI only shows the status.
++ */
++public class TasksToggleLogic {
++
++    public void service(@RequestBody ToggleTask body, TaskRepository tasks, Audit audit,
++            ObjectResponse<Task> response) {
++        Long id = body.getId();
++        if (id == null) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A task id is required");
++        }
++        Task task = tasks.findById(id)
++                .orElseThrow(() -> new HttpException(HttpStatus.NOT_FOUND, "No such task"));
++        task.setDone(!task.isDone());
++        Task saved = tasks.save(task);
++        audit.record("TASK_TOGGLED id=" + saved.getId() + " done=" + saved.isDone());
++        response.send(saved);
++    }
++
++    /** Request body for toggling a task's done flag. */
++    public static class ToggleTask {
++        private Long id;
++
++        public Long getId() {
++            return id;
++        }
++
++        public void setId(Long id) {
++            this.id = id;
++        }
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/TestSupportController.java b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+index 9f718dc..2cc8d8f 100644
+--- a/src/main/java/net/officefloor/hq/app/TestSupportController.java
++++ b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+@@ -35,6 +35,7 @@ public class TestSupportController {
+         // projects -> clients foreign key: H2 refuses TRUNCATE on a referenced table, so drop
+         // referential integrity for the truncate and restore it immediately after.
+         jdbc.execute("SET REFERENTIAL_INTEGRITY FALSE");
++        jdbc.execute("TRUNCATE TABLE tasks RESTART IDENTITY");
+         jdbc.execute("TRUNCATE TABLE invoices RESTART IDENTITY");
+         jdbc.execute("TRUNCATE TABLE contacts RESTART IDENTITY");
+         jdbc.execute("TRUNCATE TABLE projects RESTART IDENTITY");
+@@ -73,6 +74,17 @@ public class TestSupportController {
+                         contact.get("email"), contact.get("role"));
+             }
+         }
++        List<Map<String, Object>> tasks = (List<Map<String, Object>>) fixture.get("tasks");
++        if (tasks != null) {
++            for (Map<String, Object> task : tasks) {
++                // done is optional in a fixture; default to false (OPEN) when absent.
++                Object done = task.get("done");
++                jdbc.update("INSERT INTO tasks (id, project_id, title, done) VALUES (?, ?, ?, ?)",
++                        ((Number) task.get("id")).longValue(),
++                        ((Number) task.get("projectId")).longValue(), task.get("title"),
++                        done != null && Boolean.parseBoolean(done.toString()));
++            }
++        }
+         List<Map<String, Object>> invoices = (List<Map<String, Object>>) fixture.get("invoices");
+         if (invoices != null) {
+             for (Map<String, Object> invoice : invoices) {
+diff --git a/src/main/resources/db/migration/V12__tasks.sql b/src/main/resources/db/migration/V12__tasks.sql
+new file mode 100644
+index 0000000..2bd1cd5
+--- /dev/null
++++ b/src/main/resources/db/migration/V12__tasks.sql
+@@ -0,0 +1,8 @@
++-- Tasks: a checklist item on a project. Each task belongs to one project (project_id -> projects.id)
++-- and is either OPEN (done = FALSE, the default) or DONE (done = TRUE), ticked off as work completes.
++CREATE TABLE tasks (
++    id         BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
++    project_id BIGINT NOT NULL REFERENCES projects(id),
++    title      VARCHAR(255) NOT NULL,
++    done       BOOLEAN NOT NULL DEFAULT FALSE
++);
+diff --git a/src/main/resources/officefloor/rest/api/tasks.GET.yml b/src/main/resources/officefloor/rest/api/tasks.GET.yml
+new file mode 100644
+index 0000000..9a78f28
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/tasks.GET.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.TasksGetLogic
+diff --git a/src/main/resources/officefloor/rest/api/tasks/toggle.POST.yml b/src/main/resources/officefloor/rest/api/tasks/toggle.POST.yml
+new file mode 100644
+index 0000000..760d75e
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/tasks/toggle.POST.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.TasksToggleLogic

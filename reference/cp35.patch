@@ -1,0 +1,63 @@
+diff --git a/src/main/frontend/features/projects/ProjectList.tsx b/src/main/frontend/features/projects/ProjectList.tsx
+index 0b74803..0e07c3c 100644
+--- a/src/main/frontend/features/projects/ProjectList.tsx
++++ b/src/main/frontend/features/projects/ProjectList.tsx
+@@ -13,6 +13,9 @@ export function ProjectList() {
+   // Shared with the tag-filter toolbar control via the `projectTag` key (no import). When set, keep
+   // only projects carrying that tag; empty shows every tag.
+   const [tagFilter] = useSearchParam('projectTag', asString);
++  // Shared with the status-filter toolbar control via the `projectStatus` key (no import). When set,
++  // keep only projects at that lifecycle status; empty shows every status.
++  const [statusFilter] = useSearchParam('projectStatus', asString);
+ 
+   if (!projects) {
+     return null;
+@@ -25,7 +28,8 @@ export function ProjectList() {
+   const tagId = tagFilter === '' ? undefined : Number(tagFilter);
+   const shown = projects
+     .filter((project) => showArchived || !project.archived)
+-    .filter((project) => tagId === undefined || project.tagIds.includes(tagId));
++    .filter((project) => tagId === undefined || project.tagIds.includes(tagId))
++    .filter((project) => statusFilter === '' || project.status === statusFilter);
+ 
+   return (
+     <>
+diff --git a/src/main/frontend/features/projects/statusFilter.slot.tsx b/src/main/frontend/features/projects/statusFilter.slot.tsx
+new file mode 100644
+index 0000000..f13a6ce
+--- /dev/null
++++ b/src/main/frontend/features/projects/statusFilter.slot.tsx
+@@ -0,0 +1,33 @@
++import { ProjectsToolbar } from '../../slots/defs/projectsToolbar';
++import { useSearchParam, asString } from '../../url/useSearchParam';
++import type { ProjectStatus } from './projects';
++
++// "Show just the projects at one lifecycle status" — a self-contained control that owns the
++// `projectStatus` URL key. The projects list reads the same key and keeps only projects whose
++// status matches; the two share only the key, no import. Choosing a status commits it to the URL
++// (so the narrowed view outlives the click and is shareable); the empty option clears the key.
++const STATUSES: { value: ProjectStatus; label: string }[] = [
++  { value: 'ACTIVE', label: 'Active' },
++  { value: 'ON_HOLD', label: 'On hold' },
++  { value: 'FINISHED', label: 'Finished' },
++];
++
++function StatusFilter() {
++  const [status, setStatus] = useSearchParam('projectStatus', asString);
++  return (
++    <select
++      data-testid="project-status-filter"
++      value={status}
++      onChange={(e) => setStatus(e.target.value)}
++    >
++      <option value="">All statuses</option>
++      {STATUSES.map((s) => (
++        <option key={s.value} value={s.value}>
++          {s.label}
++        </option>
++      ))}
++    </select>
++  );
++}
++
++export const contribution = ProjectsToolbar.fill({ order: 30, Component: StatusFilter });

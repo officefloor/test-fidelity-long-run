@@ -1,0 +1,168 @@
+diff --git a/src/main/frontend/features/invoices/InvoiceList.tsx b/src/main/frontend/features/invoices/InvoiceList.tsx
+index 23425cd..757601f 100644
+--- a/src/main/frontend/features/invoices/InvoiceList.tsx
++++ b/src/main/frontend/features/invoices/InvoiceList.tsx
+@@ -1,16 +1,18 @@
+ import { InvoiceListToolbar } from '../../slots/defs/invoiceListToolbar';
+ import { useSearchParam, asString } from '../../url/useSearchParam';
+ import { formatMoney } from '../../ui/money';
+-import { useInvoices, usePayInvoice } from './invoices';
++import { useInvoices, usePayInvoice, useSendInvoice } from './invoices';
+ 
+ // A project's invoices and what they add up to. Reads its own query key (scoped to the project) and
+ // derives the total from the rows — the aggregate is never stored, so it always matches the list.
+-// Each row shows its payment status and, while UNPAID, a control to mark it paid. The ordering comes
++// Each row shows its lifecycle status and the control for its next step: Send while DRAFT, Mark paid
++// while SENT (payment is only offered once an invoice has been sent), nothing once PAID. The ordering comes
+ // from the shared `invoiceSort` URL key (set by a toolbar control), so the server returns the rows
+ // already in order.
+ export function InvoiceList({ projectId }: { projectId: number }) {
+   const [sort] = useSearchParam('invoiceSort', asString);
+   const { data: invoices } = useInvoices(projectId, sort || undefined);
++  const send = useSendInvoice(projectId);
+   const pay = usePayInvoice(projectId);
+ 
+   if (!invoices) {
+@@ -40,7 +42,17 @@ export function InvoiceList({ projectId }: { projectId: number }) {
+             <td data-testid="invoice-due">{invoice.dueDate}</td>
+             <td data-testid="invoice-status">{invoice.status}</td>
+             <td>
+-              {invoice.status !== 'PAID' && (
++              {invoice.status === 'DRAFT' && (
++                <button
++                  type="button"
++                  data-testid={`invoice-send-${invoice.id}`}
++                  disabled={send.isPending}
++                  onClick={() => send.mutate({ id: invoice.id })}
++                >
++                  Send
++                </button>
++              )}
++              {invoice.status === 'SENT' && (
+                 <button
+                   type="button"
+                   data-testid={`invoice-pay-${invoice.id}`}
+diff --git a/src/main/frontend/features/invoices/invoices.ts b/src/main/frontend/features/invoices/invoices.ts
+index 965f7c7..0321f5e 100644
+--- a/src/main/frontend/features/invoices/invoices.ts
++++ b/src/main/frontend/features/invoices/invoices.ts
+@@ -34,6 +34,17 @@ export function useCreateInvoice(projectId: number) {
+   });
+ }
+ 
++// Send a draft invoice: POSTs {id} and invalidates ['invoices', projectId] so the list reflects the
++// new SENT status from the server. Sending is what records the audit entry and unlocks payment.
++export function useSendInvoice(projectId: number) {
++  const queryClient = useQueryClient();
++  return useMutation({
++    mutationFn: (input: { id: number }) =>
++      postJson<Invoice>('/api/invoices/send', { id: input.id }),
++    onSuccess: () => queryClient.invalidateQueries({ queryKey: invoicesKey(projectId) }),
++  });
++}
++
+ // Mark an invoice paid: POSTs {id} and invalidates ['invoices', projectId] so the list reflects the
+ // new status from the server. The server also keeps an audit record of every payment.
+ export function usePayInvoice(projectId: number) {
+diff --git a/src/main/java/net/officefloor/hq/app/Invoice.java b/src/main/java/net/officefloor/hq/app/Invoice.java
+index 43fa1d5..0347ed0 100644
+--- a/src/main/java/net/officefloor/hq/app/Invoice.java
++++ b/src/main/java/net/officefloor/hq/app/Invoice.java
+@@ -27,8 +27,8 @@ public class Invoice {
+ 
+     private BigDecimal amount;
+ 
+-    /** Payment status: UNPAID (default, matching Flyway V5) until the invoice is marked paid. */
+-    private String status = "UNPAID";
++    /** Lifecycle status: DRAFT (default, matching Flyway V9) -> SENT (once sent) -> PAID (once paid). */
++    private String status = "DRAFT";
+ 
+     /** The date the invoice went out (Flyway V7). Serialized as an ISO date, e.g. "2026-01-05". */
+     @Column(name = "issued_date")
+diff --git a/src/main/java/net/officefloor/hq/app/InvoicesPayLogic.java b/src/main/java/net/officefloor/hq/app/InvoicesPayLogic.java
+index b53c9a1..647aa57 100644
+--- a/src/main/java/net/officefloor/hq/app/InvoicesPayLogic.java
++++ b/src/main/java/net/officefloor/hq/app/InvoicesPayLogic.java
+@@ -22,6 +22,10 @@ public class InvoicesPayLogic {
+         }
+         Invoice invoice = invoices.findById(id)
+                 .orElseThrow(() -> new HttpException(HttpStatus.NOT_FOUND, "No such invoice"));
++        // Payment is only allowed once the invoice has been sent: a DRAFT must be sent first.
++        if (!"SENT".equals(invoice.getStatus())) {
++            throw new HttpException(HttpStatus.CONFLICT, "An invoice must be sent before it can be paid");
++        }
+         invoice.setStatus("PAID");
+         Invoice saved = invoices.save(invoice);
+         String amount = saved.getAmount().setScale(2, RoundingMode.HALF_UP).toPlainString();
+diff --git a/src/main/java/net/officefloor/hq/app/InvoicesSendLogic.java b/src/main/java/net/officefloor/hq/app/InvoicesSendLogic.java
+new file mode 100644
+index 0000000..84597a3
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/InvoicesSendLogic.java
+@@ -0,0 +1,48 @@
++package net.officefloor.hq.app;
++
++import java.math.RoundingMode;
++import org.springframework.web.bind.annotation.RequestBody;
++import net.officefloor.server.http.HttpException;
++import net.officefloor.server.http.HttpStatus;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code POST /api/invoices/send} — send a DRAFT invoice from an {id} body and return the updated row.
++ * Wired by {@code officefloor/rest/api/invoices/send.POST.yml}. Flips the invoice's status to SENT and
++ * appends one {@code INVOICE_SENT} audit record (the kept record the request asks for), so the send
++ * can be checked back later through the audit file even though the UI only shows the status. Only a
++ * DRAFT invoice can be sent; sending is also what unlocks payment (see {@link InvoicesPayLogic}).
++ */
++public class InvoicesSendLogic {
++
++    public void service(@RequestBody SendInvoice body, InvoiceRepository invoices, Audit audit,
++            ObjectResponse<Invoice> response) {
++        Long id = body.getId();
++        if (id == null) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "An invoice id is required");
++        }
++        Invoice invoice = invoices.findById(id)
++                .orElseThrow(() -> new HttpException(HttpStatus.NOT_FOUND, "No such invoice"));
++        if (!"DRAFT".equals(invoice.getStatus())) {
++            throw new HttpException(HttpStatus.CONFLICT, "Only a draft invoice can be sent");
++        }
++        invoice.setStatus("SENT");
++        Invoice saved = invoices.save(invoice);
++        String amount = saved.getAmount().setScale(2, RoundingMode.HALF_UP).toPlainString();
++        audit.record("INVOICE_SENT id=" + saved.getId() + " amount=" + amount);
++        response.send(saved);
++    }
++
++    /** Request body for sending an invoice. */
++    public static class SendInvoice {
++        private Long id;
++
++        public Long getId() {
++            return id;
++        }
++
++        public void setId(Long id) {
++            this.id = id;
++        }
++    }
++}
+diff --git a/src/main/resources/db/migration/V9__invoices_status_draft_default.sql b/src/main/resources/db/migration/V9__invoices_status_draft_default.sql
+new file mode 100644
+index 0000000..537e96f
+--- /dev/null
++++ b/src/main/resources/db/migration/V9__invoices_status_draft_default.sql
+@@ -0,0 +1,4 @@
++-- Invoices now move through a lifecycle: DRAFT -> SENT -> PAID. A freshly raised invoice starts as a
++-- DRAFT (it is sent later, which is what records an audit entry and unlocks payment), so the column
++-- default becomes DRAFT. Existing rows keep whatever status they already hold.
++ALTER TABLE invoices ALTER COLUMN status SET DEFAULT 'DRAFT';
+diff --git a/src/main/resources/officefloor/rest/api/invoices/send.POST.yml b/src/main/resources/officefloor/rest/api/invoices/send.POST.yml
+new file mode 100644
+index 0000000..5a4a9b7
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/invoices/send.POST.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.InvoicesSendLogic

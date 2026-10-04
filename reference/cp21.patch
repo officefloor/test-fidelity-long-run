@@ -1,0 +1,603 @@
+diff --git a/src/main/frontend/features/invoices/InvoiceList.tsx b/src/main/frontend/features/invoices/InvoiceList.tsx
+index 757601f..7cfb3ac 100644
+--- a/src/main/frontend/features/invoices/InvoiceList.tsx
++++ b/src/main/frontend/features/invoices/InvoiceList.tsx
+@@ -1,3 +1,4 @@
++import { Link } from '@tanstack/react-router';
+ import { InvoiceListToolbar } from '../../slots/defs/invoiceListToolbar';
+ import { useSearchParam, asString } from '../../url/useSearchParam';
+ import { formatMoney } from '../../ui/money';
+@@ -42,6 +43,13 @@ export function InvoiceList({ projectId }: { projectId: number }) {
+             <td data-testid="invoice-due">{invoice.dueDate}</td>
+             <td data-testid="invoice-status">{invoice.status}</td>
+             <td>
++              <Link
++                to="/invoices/$invoiceId"
++                params={{ invoiceId: String(invoice.id) }}
++                data-testid={`invoice-open-${invoice.id}`}
++              >
++                Open
++              </Link>
+               {invoice.status === 'DRAFT' && (
+                 <button
+                   type="button"
+diff --git a/src/main/frontend/features/invoices/LineItemForm.tsx b/src/main/frontend/features/invoices/LineItemForm.tsx
+new file mode 100644
+index 0000000..373a7eb
+--- /dev/null
++++ b/src/main/frontend/features/invoices/LineItemForm.tsx
+@@ -0,0 +1,86 @@
++import { useState } from 'react';
++import { useAddLineItem } from './lineItems';
++
++// Add-a-line-item form. useState holds only what the user is currently typing (the description, how
++// many, and the price of each) and the validation error for the current attempt. A line needs a
++// description, a positive quantity and a positive unit price — otherwise a visible error is shown
++// and no row is added (the server + DB enforce the same). On a valid submit it POSTs the line and
++// invalidates ['lineItems', invoiceId]; the list and the worked-out total refresh from the server —
++// nothing is hand-maintained here.
++export function LineItemForm({ invoiceId }: { invoiceId: number }) {
++  const [description, setDescription] = useState('');
++  const [qty, setQty] = useState('');
++  const [unitPrice, setUnitPrice] = useState('');
++  const [error, setError] = useState('');
++  const add = useAddLineItem(invoiceId);
++
++  return (
++    <form
++      data-testid="lineitem-form"
++      onSubmit={(event) => {
++        event.preventDefault();
++        const qtyValue = Number(qty);
++        const priceValue = Number(unitPrice);
++        if (!description.trim()) {
++          setError('A description is required');
++          return;
++        }
++        if (!qty.trim() || Number.isNaN(qtyValue) || qtyValue <= 0) {
++          setError('Quantity must be more than zero');
++          return;
++        }
++        if (!unitPrice.trim() || Number.isNaN(priceValue) || priceValue <= 0) {
++          setError('Unit price must be more than zero');
++          return;
++        }
++        setError('');
++        add.mutate(
++          { description: description.trim(), qty: qtyValue, unitPrice: priceValue },
++          {
++            onSuccess: () => {
++              setDescription('');
++              setQty('');
++              setUnitPrice('');
++            },
++          },
++        );
++      }}
++    >
++      <input
++        data-testid="lineitem-form-description"
++        placeholder="Description"
++        value={description}
++        onChange={(event) => {
++          setDescription(event.target.value);
++          setError('');
++        }}
++      />
++      <input
++        data-testid="lineitem-form-qty"
++        placeholder="Qty"
++        value={qty}
++        onChange={(event) => {
++          setQty(event.target.value);
++          setError('');
++        }}
++      />
++      <input
++        data-testid="lineitem-form-unitprice"
++        placeholder="Unit price"
++        value={unitPrice}
++        onChange={(event) => {
++          setUnitPrice(event.target.value);
++          setError('');
++        }}
++      />
++      <button data-testid="lineitem-form-submit" type="submit">
++        Add line item
++      </button>
++      {error && (
++        <p data-testid="lineitem-form-error" role="alert">
++          {error}
++        </p>
++      )}
++    </form>
++  );
++}
+diff --git a/src/main/frontend/features/invoices/LineItemList.tsx b/src/main/frontend/features/invoices/LineItemList.tsx
+new file mode 100644
+index 0000000..1cc7fbc
+--- /dev/null
++++ b/src/main/frontend/features/invoices/LineItemList.tsx
+@@ -0,0 +1,53 @@
++import { formatMoney } from '../../ui/money';
++import { useLineItems } from './lineItems';
++
++// An invoice's line items and what they add up to. Reads its own query key (scoped to the invoice)
++// and derives the invoice amount from the rows — the total is never stored on the client, so it
++// always matches the list. Each row shows a description, how many, the price of each, and that
++// line's own amount (qty * unit price). The table is always rendered, so an invoice with no lines
++// yet still shows the region (and a $0.00 total) ready for the first line to be added.
++export function LineItemList({ invoiceId }: { invoiceId: number }) {
++  const { data: lineItems } = useLineItems(invoiceId);
++
++  if (!lineItems) {
++    return null;
++  }
++
++  const total = lineItems.reduce(
++    (sum, line) => sum + Number(line.qty) * Number(line.unitPrice),
++    0,
++  );
++
++  return (
++    <table data-testid="invoice-lineitems-table">
++      <thead>
++        <tr>
++          <th>Description</th>
++          <th>Qty</th>
++          <th>Unit price</th>
++          <th>Amount</th>
++        </tr>
++      </thead>
++      <tbody>
++        {lineItems.map((line) => (
++          <tr key={line.id} data-testid={`lineitem-row-${line.id}`}>
++            <td data-testid="lineitem-description">{line.description}</td>
++            <td data-testid="lineitem-qty">{line.qty}</td>
++            <td data-testid="lineitem-unitprice">{formatMoney(line.unitPrice)}</td>
++            <td data-testid="lineitem-amount">
++              {formatMoney(Number(line.qty) * Number(line.unitPrice))}
++            </td>
++          </tr>
++        ))}
++      </tbody>
++      <tfoot>
++        <tr>
++          <td>Total</td>
++          <td></td>
++          <td></td>
++          <td data-testid="invoice-amount">{formatMoney(total)}</td>
++        </tr>
++      </tfoot>
++    </table>
++  );
++}
+diff --git a/src/main/frontend/features/invoices/lineItems.ts b/src/main/frontend/features/invoices/lineItems.ts
+new file mode 100644
+index 0000000..68d0040
+--- /dev/null
++++ b/src/main/frontend/features/invoices/lineItems.ts
+@@ -0,0 +1,38 @@
++import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
++import { getJson, postJson } from '../../api/http';
++
++// A line item on an invoice: one thing being charged for — a description, how many (qty) and the
++// price of each (unitPrice). Everything that shows an invoice's lines shares the key
++// ['lineItems', invoiceId]; invalidating it after a write refreshes the list and its total together.
++export type LineItem = {
++  id: number;
++  invoiceId: number;
++  description: string;
++  qty: number;
++  unitPrice: number;
++};
++
++export const lineItemsKey = (invoiceId: number) => ['lineItems', invoiceId] as const;
++
++export function useLineItems(invoiceId: number) {
++  return useQuery({
++    queryKey: lineItemsKey(invoiceId),
++    queryFn: () => getJson<LineItem[]>(`/api/lineitems?invoiceId=${invoiceId}`),
++  });
++}
++
++// Add a line to an invoice: POSTs {invoiceId, description, qty, unitPrice} and returns the saved row.
++// Invalidates ['lineItems', invoiceId] so the line list and its total re-read from the server, and
++// the ['invoices'] prefix so every invoice list (which shows the worked-out amount) refreshes too —
++// the two stay in step by sharing the key, with no import between them.
++export function useAddLineItem(invoiceId: number) {
++  const queryClient = useQueryClient();
++  return useMutation({
++    mutationFn: (input: { description: string; qty: number; unitPrice: number }) =>
++      postJson<LineItem>('/api/lineitems', { invoiceId, ...input }),
++    onSuccess: () => {
++      void queryClient.invalidateQueries({ queryKey: lineItemsKey(invoiceId) });
++      void queryClient.invalidateQueries({ queryKey: ['invoices'] });
++    },
++  });
++}
+diff --git a/src/main/frontend/routes/invoices.$invoiceId.tsx b/src/main/frontend/routes/invoices.$invoiceId.tsx
+new file mode 100644
+index 0000000..b2e561e
+--- /dev/null
++++ b/src/main/frontend/routes/invoices.$invoiceId.tsx
+@@ -0,0 +1,24 @@
++import { createFileRoute } from '@tanstack/react-router';
++import { LineItemForm } from '../features/invoices/LineItemForm';
++import { LineItemList } from '../features/invoices/LineItemList';
++
++// Drilling into an invoice is its own route — a new file, not a flag on the list (CLAUDE.md rule 2).
++// The detail page lists the invoice's line items (what is being charged for), their worked-out
++// total, and a form to add another line. Each panel reads its own query key and derives the total
++// from the rows — this route renders them and never holds the data itself.
++export const Route = createFileRoute('/invoices/$invoiceId')({
++  component: InvoiceDetailPage,
++});
++
++function InvoiceDetailPage() {
++  const { invoiceId } = Route.useParams();
++  const id = Number(invoiceId);
++
++  return (
++    <section data-testid="invoice-detail-page">
++      <h1>Invoice</h1>
++      <LineItemList invoiceId={id} />
++      <LineItemForm invoiceId={id} />
++    </section>
++  );
++}
+diff --git a/src/main/frontend/routes/invoices.tsx b/src/main/frontend/routes/invoices.tsx
+new file mode 100644
+index 0000000..26ee0a6
+--- /dev/null
++++ b/src/main/frontend/routes/invoices.tsx
+@@ -0,0 +1,9 @@
++import { Outlet, createFileRoute } from '@tanstack/react-router';
++
++// Invoices is now a section with detail views, so it gets a one-line layout route rendering
++// <Outlet />: the all-invoices list (invoices.index.tsx) and a single invoice's detail
++// (invoices.$invoiceId.tsx) are its children. Written once; adding a detail view is a new sibling
++// file, never an edit here (CLAUDE.md rule 1/2).
++export const Route = createFileRoute('/invoices')({
++  component: () => <Outlet />,
++});
+diff --git a/src/main/java/net/officefloor/hq/app/LineItem.java b/src/main/java/net/officefloor/hq/app/LineItem.java
+new file mode 100644
+index 0000000..caae9b5
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/LineItem.java
+@@ -0,0 +1,91 @@
++package net.officefloor.hq.app;
++
++import java.math.BigDecimal;
++import jakarta.persistence.Column;
++import jakarta.persistence.Entity;
++import jakarta.persistence.GeneratedValue;
++import jakarta.persistence.GenerationType;
++import jakarta.persistence.Id;
++import jakarta.persistence.Table;
++
++/**
++ * A single thing being charged for on an invoice: a {@code description}, how many ({@code qty}) and
++ * the price of each ({@code unitPrice}). Persisted to the {@code invoice_line_items} table (Flyway
++ * V13) and belonging to one invoice ({@code invoiceId} -&gt; invoices.id). The line's own amount is
++ * {@code qty * unitPrice}; an invoice's amount is the sum of its lines' amounts, worked out on the
++ * server rather than typed. The id is database-generated (IDENTITY) on create; the seed path inserts
++ * explicit ids directly via JdbcTemplate (see {@link TestSupportController}).
++ */
++@Entity
++@Table(name = "invoice_line_items")
++public class LineItem {
++
++    @Id
++    @GeneratedValue(strategy = GenerationType.IDENTITY)
++    private Long id;
++
++    @Column(name = "invoice_id")
++    private Long invoiceId;
++
++    private String description;
++
++    private Integer qty;
++
++    @Column(name = "unit_price")
++    private BigDecimal unitPrice;
++
++    public LineItem() {
++    }
++
++    public LineItem(Long invoiceId, String description, Integer qty, BigDecimal unitPrice) {
++        this.invoiceId = invoiceId;
++        this.description = description;
++        this.qty = qty;
++        this.unitPrice = unitPrice;
++    }
++
++    /** This line's own amount: how many times the price of each. */
++    public BigDecimal getAmount() {
++        return unitPrice.multiply(BigDecimal.valueOf(qty));
++    }
++
++    public Long getId() {
++        return id;
++    }
++
++    public void setId(Long id) {
++        this.id = id;
++    }
++
++    public Long getInvoiceId() {
++        return invoiceId;
++    }
++
++    public void setInvoiceId(Long invoiceId) {
++        this.invoiceId = invoiceId;
++    }
++
++    public String getDescription() {
++        return description;
++    }
++
++    public void setDescription(String description) {
++        this.description = description;
++    }
++
++    public Integer getQty() {
++        return qty;
++    }
++
++    public void setQty(Integer qty) {
++        this.qty = qty;
++    }
++
++    public BigDecimal getUnitPrice() {
++        return unitPrice;
++    }
++
++    public void setUnitPrice(BigDecimal unitPrice) {
++        this.unitPrice = unitPrice;
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/LineItemRepository.java b/src/main/java/net/officefloor/hq/app/LineItemRepository.java
+new file mode 100644
+index 0000000..4d8c8dc
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/LineItemRepository.java
+@@ -0,0 +1,11 @@
++package net.officefloor.hq.app;
++
++import java.util.List;
++import org.springframework.data.jpa.repository.JpaRepository;
++
++/** Data access for {@link LineItem}. Injected into the OfficeFloor REST logic classes. */
++public interface LineItemRepository extends JpaRepository<LineItem, Long> {
++
++    /** The line items for one invoice, oldest first, so an invoice's detail shows only its own. */
++    List<LineItem> findByInvoiceIdOrderByIdAsc(Long invoiceId);
++}
+diff --git a/src/main/java/net/officefloor/hq/app/LineItemsGetLogic.java b/src/main/java/net/officefloor/hq/app/LineItemsGetLogic.java
+new file mode 100644
+index 0000000..deb0bde
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/LineItemsGetLogic.java
+@@ -0,0 +1,18 @@
++package net.officefloor.hq.app;
++
++import java.util.List;
++import org.springframework.web.bind.annotation.RequestParam;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code GET /api/lineitems?invoiceId=<id>} — list the line items that belong to one invoice, oldest
++ * first, so an invoice's detail page shows only its own charges (description, qty, unit price). Wired
++ * by {@code officefloor/rest/api/lineitems.GET.yml}.
++ */
++public class LineItemsGetLogic {
++
++    public void service(@RequestParam("invoiceId") Long invoiceId, LineItemRepository lineItems,
++            ObjectResponse<List<LineItem>> response) {
++        response.send(lineItems.findByInvoiceIdOrderByIdAsc(invoiceId));
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/LineItemsPostLogic.java b/src/main/java/net/officefloor/hq/app/LineItemsPostLogic.java
+new file mode 100644
+index 0000000..b63998f
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/LineItemsPostLogic.java
+@@ -0,0 +1,93 @@
++package net.officefloor.hq.app;
++
++import java.math.BigDecimal;
++import java.util.List;
++import org.springframework.web.bind.annotation.RequestBody;
++import net.officefloor.server.http.HttpException;
++import net.officefloor.server.http.HttpStatus;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code POST /api/lineitems} — add a line item to an invoice from a
++ * {invoiceId, description, qty, unitPrice} body and return the saved row (with its generated id).
++ * Wired by {@code officefloor/rest/api/lineitems.POST.yml}. A line must belong to an existing
++ * invoice, carry a non-blank description, a positive quantity and a positive unit price; all are
++ * validated here and rejected with 400. Adding a line re-works the invoice's amount (the sum of
++ * qty * unitPrice across its lines) and stores it, so the total the UI shows is always worked out,
++ * never typed.
++ */
++public class LineItemsPostLogic {
++
++    public void service(@RequestBody NewLineItem body, LineItemRepository lineItems,
++            InvoiceRepository invoices, ObjectResponse<LineItem> response) {
++        Long invoiceId = body.getInvoiceId();
++        if (invoiceId == null || !invoices.existsById(invoiceId)) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A valid invoice is required");
++        }
++        String description = body.getDescription();
++        if (description == null || description.isBlank()) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A description is required");
++        }
++        Integer qty = body.getQty();
++        if (qty == null || qty <= 0) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A positive quantity is required");
++        }
++        BigDecimal unitPrice = body.getUnitPrice();
++        if (unitPrice == null || unitPrice.signum() <= 0) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A positive unit price is required");
++        }
++
++        LineItem saved = lineItems.save(new LineItem(invoiceId, description.trim(), qty, unitPrice));
++
++        // Re-work the invoice's amount from its lines and store it, so the figure is derived.
++        Invoice invoice = invoices.findById(invoiceId)
++                .orElseThrow(() -> new HttpException(HttpStatus.NOT_FOUND, "No such invoice"));
++        List<LineItem> lines = lineItems.findByInvoiceIdOrderByIdAsc(invoiceId);
++        BigDecimal total = lines.stream().map(LineItem::getAmount)
++                .reduce(BigDecimal.ZERO, BigDecimal::add);
++        invoice.setAmount(total);
++        invoices.save(invoice);
++
++        response.send(saved);
++    }
++
++    /** Request body for adding a line item to an invoice. */
++    public static class NewLineItem {
++        private Long invoiceId;
++        private String description;
++        private Integer qty;
++        private BigDecimal unitPrice;
++
++        public Long getInvoiceId() {
++            return invoiceId;
++        }
++
++        public void setInvoiceId(Long invoiceId) {
++            this.invoiceId = invoiceId;
++        }
++
++        public String getDescription() {
++            return description;
++        }
++
++        public void setDescription(String description) {
++            this.description = description;
++        }
++
++        public Integer getQty() {
++            return qty;
++        }
++
++        public void setQty(Integer qty) {
++            this.qty = qty;
++        }
++
++        public BigDecimal getUnitPrice() {
++            return unitPrice;
++        }
++
++        public void setUnitPrice(BigDecimal unitPrice) {
++            this.unitPrice = unitPrice;
++        }
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/TestSupportController.java b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+index 2cc8d8f..18c4fb9 100644
+--- a/src/main/java/net/officefloor/hq/app/TestSupportController.java
++++ b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+@@ -36,6 +36,7 @@ public class TestSupportController {
+         // referential integrity for the truncate and restore it immediately after.
+         jdbc.execute("SET REFERENTIAL_INTEGRITY FALSE");
+         jdbc.execute("TRUNCATE TABLE tasks RESTART IDENTITY");
++        jdbc.execute("TRUNCATE TABLE invoice_line_items RESTART IDENTITY");
+         jdbc.execute("TRUNCATE TABLE invoices RESTART IDENTITY");
+         jdbc.execute("TRUNCATE TABLE contacts RESTART IDENTITY");
+         jdbc.execute("TRUNCATE TABLE projects RESTART IDENTITY");
+@@ -93,15 +94,43 @@ public class TestSupportController {
+                 // issuedDate/dueDate are optional; fall back to the Flyway V7 column defaults when absent.
+                 Object issuedDate = invoice.get("issuedDate");
+                 Object dueDate = invoice.get("dueDate");
++                // An invoice is built from line items (Flyway V13). Its amount is the worked-out sum
++                // of qty * unitPrice across them (zero when there are none yet) — a fixture no longer
++                // types a figure, it lists what is charged. (An explicit `amount` still wins if a
++                // fixture gives one, for back-compatibility with lump-sum invoices.)
++                List<Map<String, Object>> lineItems =
++                        (List<Map<String, Object>>) invoice.get("lineItems");
++                java.math.BigDecimal amount = java.math.BigDecimal.ZERO;
++                if (lineItems != null) {
++                    for (Map<String, Object> line : lineItems) {
++                        java.math.BigDecimal unitPrice =
++                                new java.math.BigDecimal(line.get("unitPrice").toString());
++                        int qty = ((Number) line.get("qty")).intValue();
++                        amount = amount.add(unitPrice.multiply(java.math.BigDecimal.valueOf(qty)));
++                    }
++                }
++                if (invoice.get("amount") != null) {
++                    amount = new java.math.BigDecimal(invoice.get("amount").toString());
++                }
++                long invoiceId = ((Number) invoice.get("id")).longValue();
+                 jdbc.update("INSERT INTO invoices (id, project_id, amount, status, issued_date, due_date)"
+                         + " VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_DATE),"
+                         + " COALESCE(?, DATEADD('DAY', 30, CURRENT_DATE)))",
+-                        ((Number) invoice.get("id")).longValue(),
++                        invoiceId,
+                         ((Number) invoice.get("projectId")).longValue(),
+-                        new java.math.BigDecimal(invoice.get("amount").toString()),
++                        amount,
+                         status != null ? status.toString() : "UNPAID",
+                         issuedDate != null ? java.sql.Date.valueOf(issuedDate.toString()) : null,
+                         dueDate != null ? java.sql.Date.valueOf(dueDate.toString()) : null);
++                if (lineItems != null) {
++                    for (Map<String, Object> line : lineItems) {
++                        jdbc.update("INSERT INTO invoice_line_items"
++                                + " (id, invoice_id, description, qty, unit_price) VALUES (?, ?, ?, ?, ?)",
++                                ((Number) line.get("id")).longValue(), invoiceId,
++                                line.get("description"), ((Number) line.get("qty")).intValue(),
++                                new java.math.BigDecimal(line.get("unitPrice").toString()));
++                    }
++                }
+             }
+         }
+     }
+diff --git a/src/main/resources/db/migration/V13__invoice_line_items.sql b/src/main/resources/db/migration/V13__invoice_line_items.sql
+new file mode 100644
+index 0000000..a9529f6
+--- /dev/null
++++ b/src/main/resources/db/migration/V13__invoice_line_items.sql
+@@ -0,0 +1,11 @@
++-- An invoice is now built from line items: one row per thing being charged for — a description, how
++-- many (qty), and the price of each (unit_price). An invoice's amount is the sum of qty * unit_price
++-- across its lines, so the figure is worked out, never typed. Each line belongs to one invoice
++-- (invoice_id -> invoices.id), so an invoice's detail page lists only its own lines.
++CREATE TABLE invoice_line_items (
++    id          BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
++    invoice_id  BIGINT NOT NULL REFERENCES invoices(id),
++    description VARCHAR(255) NOT NULL,
++    qty         INTEGER NOT NULL,
++    unit_price  NUMERIC(12, 2) NOT NULL
++);
+diff --git a/src/main/resources/db/migration/V14__invoices_amount_derived.sql b/src/main/resources/db/migration/V14__invoices_amount_derived.sql
+new file mode 100644
+index 0000000..2326390
+--- /dev/null
++++ b/src/main/resources/db/migration/V14__invoices_amount_derived.sql
+@@ -0,0 +1,6 @@
++-- The invoice amount is now DERIVED: it is the sum of the invoice's line items (Flyway V13), kept
++-- in the amount column as a worked-out total rather than a figure typed by hand. An invoice with no
++-- lines yet totals zero, so the "amount must be positive" rule (Flyway V6) no longer holds — a draft
++-- can exist before anything has been charged to it. Drop that constraint; the total is still
++-- recomputed on the server every time a line is added.
++ALTER TABLE invoices DROP CONSTRAINT invoices_amount_positive;
+diff --git a/src/main/resources/officefloor/rest/api/lineitems.GET.yml b/src/main/resources/officefloor/rest/api/lineitems.GET.yml
+new file mode 100644
+index 0000000..bd6fdc3
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/lineitems.GET.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.LineItemsGetLogic
+diff --git a/src/main/resources/officefloor/rest/api/lineitems.POST.yml b/src/main/resources/officefloor/rest/api/lineitems.POST.yml
+new file mode 100644
+index 0000000..4c825ab
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/lineitems.POST.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.LineItemsPostLogic

@@ -1,0 +1,21 @@
+# Build output — the agent's committed delta is source only (BASE_CHECKLIST.md §G).
+target/
+*.jar
+node_modules/
+.run/
+# static/ is pure build output (vite outDir). Ignore everything but the .gitkeep.
+src/main/resources/static/*
+!src/main/resources/static/.gitkeep
+# Playwright
+e2e/test-results/
+e2e/playwright-report/
+# The harness copies cpNN specs in per checkpoint; don't commit them to the base.
+e2e/specs/*
+!e2e/specs/.gitkeep
+/.idea/
+
+# frontend-maven-plugin downloads node here
+src/main/frontend/node/
+
+# TanStack Router generates this from routes/ — build artifact, never committed.
+src/main/frontend/routeTree.gen.ts

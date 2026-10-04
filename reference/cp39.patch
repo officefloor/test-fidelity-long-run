@@ -1,0 +1,111 @@
+diff --git a/src/main/frontend/features/invoices/AllInvoiceList.tsx b/src/main/frontend/features/invoices/AllInvoiceList.tsx
+index 16abd99..4472531 100644
+--- a/src/main/frontend/features/invoices/AllInvoiceList.tsx
++++ b/src/main/frontend/features/invoices/AllInvoiceList.tsx
+@@ -2,6 +2,7 @@ import { AllInvoicesToolbar } from '../../slots/defs/allInvoicesToolbar';
+ import { useSearchParam, asString } from '../../url/useSearchParam';
+ import { formatMoney } from '../../ui/money';
+ import { useAllInvoices } from './allInvoices';
++import { INVOICE_PAGE_SIZE, useInvoicePage } from './pagination';
+ 
+ // One place listing every invoice from every project. Reads its own query key and shows, per row,
+ // which project the invoice is for and what stage (status) it is at. When the shared `invoiceStatus`
+@@ -9,6 +10,7 @@ import { useAllInvoices } from './allInvoices';
+ export function AllInvoiceList() {
+   const { data: invoices } = useAllInvoices();
+   const [status] = useSearchParam('invoiceStatus', asString);
++  const [page] = useInvoicePage();
+ 
+   if (!invoices) {
+     return null;
+@@ -19,6 +21,9 @@ export function AllInvoiceList() {
+   }
+ 
+   const shown = status ? invoices.filter((invoice) => invoice.status === status) : invoices;
++  // One page at a time: the pager owns the `invoicePage` key, we show only that window of rows.
++  const start = (page - 1) * INVOICE_PAGE_SIZE;
++  const pageRows = shown.slice(start, start + INVOICE_PAGE_SIZE);
+ 
+   return (
+     <>
+@@ -32,7 +37,7 @@ export function AllInvoiceList() {
+         </tr>
+       </thead>
+       <tbody>
+-        {shown.map((invoice) => (
++        {pageRows.map((invoice) => (
+           <tr key={invoice.id} data-testid={`invoice-row-${invoice.id}`}>
+             <td data-testid="invoice-project">{invoice.projectName}</td>
+             <td data-testid="invoice-amount">{formatMoney(invoice.amount)}</td>
+diff --git a/src/main/frontend/features/invoices/pagination.slot.tsx b/src/main/frontend/features/invoices/pagination.slot.tsx
+new file mode 100644
+index 0000000..576532a
+--- /dev/null
++++ b/src/main/frontend/features/invoices/pagination.slot.tsx
+@@ -0,0 +1,45 @@
++import { AllInvoicesToolbar } from '../../slots/defs/allInvoicesToolbar';
++import { useSearchParam, asString } from '../../url/useSearchParam';
++import { useAllInvoices } from './allInvoices';
++import { INVOICE_PAGE_SIZE, useInvoicePage } from './pagination';
++
++// "Next / Previous" — a self-contained control that owns the `invoicePage` URL key. The all-invoices
++// list reads the same key and shows only that page's rows. The pager queries the invoices itself (and
++// reads the shared `invoiceStatus` filter) so it knows how many pages there are and can stop at the
++// ends — it shares the query key and URL keys with the list, never an import of it.
++function InvoicePager() {
++  const [page, setPage] = useInvoicePage();
++  const { data: invoices } = useAllInvoices();
++  const [status] = useSearchParam('invoiceStatus', asString);
++
++  const shown = invoices
++    ? status
++      ? invoices.filter((invoice) => invoice.status === status)
++      : invoices
++    : [];
++  const lastPage = Math.max(1, Math.ceil(shown.length / INVOICE_PAGE_SIZE));
++
++  return (
++    <span data-testid="invoice-pager">
++      <button
++        type="button"
++        data-testid="invoice-page-prev"
++        disabled={page <= 1}
++        onClick={() => setPage(page - 1)}
++      >
++        Previous
++      </button>
++      <span data-testid="invoice-page-label">{page}</span>
++      <button
++        type="button"
++        data-testid="invoice-page-next"
++        disabled={page >= lastPage}
++        onClick={() => setPage(page + 1)}
++      >
++        Next
++      </button>
++    </span>
++  );
++}
++
++export const contribution = AllInvoicesToolbar.fill({ order: 20, Component: InvoicePager });
+diff --git a/src/main/frontend/features/invoices/pagination.ts b/src/main/frontend/features/invoices/pagination.ts
+new file mode 100644
+index 0000000..3685d3c
+--- /dev/null
++++ b/src/main/frontend/features/invoices/pagination.ts
+@@ -0,0 +1,15 @@
++import { useSearchParam, asNumber } from '../../url/useSearchParam';
++
++// The all-invoices list is shown one page at a time. Which page you are on is state that outlives a
++// click, so it lives in the URL under the `invoicePage` key (DESIGN rule 4). The pager control owns
++// the key; the list reads the same key and slices to that window — the two share only the key, no
++// import between them.
++export const INVOICE_PAGE_SIZE = 10;
++
++// 1-based page number, defaulting to the first page and never below it. Writing page 1 clears the key
++// so the first page stays off the URL (the clean, shareable default).
++export function useInvoicePage(): [number, (page: number) => void] {
++  const [raw, setRaw] = useSearchParam('invoicePage', asNumber);
++  const page = raw && raw >= 1 ? Math.floor(raw) : 1;
++  return [page, (next) => setRaw(next <= 1 ? undefined : next)];
++}

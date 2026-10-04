@@ -1,0 +1,357 @@
+diff --git a/src/main/frontend/features/invoices/InvoiceList.tsx b/src/main/frontend/features/invoices/InvoiceList.tsx
+index c1611d2..a4edc29 100644
+--- a/src/main/frontend/features/invoices/InvoiceList.tsx
++++ b/src/main/frontend/features/invoices/InvoiceList.tsx
+@@ -3,19 +3,19 @@ import { InvoiceListToolbar } from '../../slots/defs/invoiceListToolbar';
+ import { InvoiceRow } from '../../slots/defs/invoiceRow';
+ import { useSearchParam, asString } from '../../url/useSearchParam';
+ import { formatMoney } from '../../ui/money';
+-import { useInvoices, usePayInvoice, useSendInvoice } from './invoices';
++import { useInvoices, useSendInvoice } from './invoices';
+ 
+ // A project's invoices and what they add up to. Reads its own query key (scoped to the project) and
+ // derives the total from the rows — the aggregate is never stored, so it always matches the list.
+-// Each row shows its lifecycle status and the control for its next step: Send while DRAFT, Mark paid
+-// while SENT (payment is only offered once an invoice has been sent), nothing once PAID. The ordering comes
+-// from the shared `invoiceSort` URL key (set by a toolbar control), so the server returns the rows
+-// already in order.
++// Each row shows its status, which is WORKED OUT from the payments recorded against the invoice
++// (SENT while unpaid, PARTIAL once part paid, PAID once covered), and the control for its next step:
++// Send while DRAFT, then Open to record payments — there is no mark-paid-by-hand flip anymore. The
++// ordering comes from the shared `invoiceSort` URL key (set by a toolbar control), so the server
++// returns the rows already in order.
+ export function InvoiceList({ projectId }: { projectId: number }) {
+   const [sort] = useSearchParam('invoiceSort', asString);
+   const { data: invoices } = useInvoices(projectId, sort || undefined);
+   const send = useSendInvoice(projectId);
+-  const pay = usePayInvoice(projectId);
+ 
+   if (!invoices) {
+     return null;
+@@ -65,16 +65,6 @@ export function InvoiceList({ projectId }: { projectId: number }) {
+                   Send
+                 </button>
+               )}
+-              {invoice.status === 'SENT' && (
+-                <button
+-                  type="button"
+-                  data-testid={`invoice-pay-${invoice.id}`}
+-                  disabled={pay.isPending}
+-                  onClick={() => pay.mutate({ id: invoice.id })}
+-                >
+-                  Mark paid
+-                </button>
+-              )}
+             </td>
+           </tr>
+         ))}
+diff --git a/src/main/frontend/features/invoices/invoiceDue.ts b/src/main/frontend/features/invoices/invoiceDue.ts
+index 0459ca3..26e537a 100644
+--- a/src/main/frontend/features/invoices/invoiceDue.ts
++++ b/src/main/frontend/features/invoices/invoiceDue.ts
+@@ -10,6 +10,8 @@ export type InvoiceDue = {
+   amount: number;
+   paid: number;
+   due: number;
++  // Worked out from the payments on the server (SENT / PARTIAL / PAID), not a hand-set flag.
++  status: string;
+ };
+ 
+ export const invoiceDueKey = (invoiceId: number) => ['invoices', 'due', invoiceId] as const;
+diff --git a/src/main/frontend/features/invoices/invoices.ts b/src/main/frontend/features/invoices/invoices.ts
+index 0321f5e..49dae17 100644
+--- a/src/main/frontend/features/invoices/invoices.ts
++++ b/src/main/frontend/features/invoices/invoices.ts
+@@ -44,14 +44,3 @@ export function useSendInvoice(projectId: number) {
+     onSuccess: () => queryClient.invalidateQueries({ queryKey: invoicesKey(projectId) }),
+   });
+ }
+-
+-// Mark an invoice paid: POSTs {id} and invalidates ['invoices', projectId] so the list reflects the
+-// new status from the server. The server also keeps an audit record of every payment.
+-export function usePayInvoice(projectId: number) {
+-  const queryClient = useQueryClient();
+-  return useMutation({
+-    mutationFn: (input: { id: number }) =>
+-      postJson<Invoice>('/api/invoices/pay', { id: input.id }),
+-    onSuccess: () => queryClient.invalidateQueries({ queryKey: invoicesKey(projectId) }),
+-  });
+-}
+diff --git a/src/main/frontend/features/invoices/status.slot.tsx b/src/main/frontend/features/invoices/status.slot.tsx
+new file mode 100644
+index 0000000..c426b4d
+--- /dev/null
++++ b/src/main/frontend/features/invoices/status.slot.tsx
+@@ -0,0 +1,19 @@
++import { InvoiceDetail } from '../../slots/defs/invoiceDetail';
++import { useInvoiceDue } from './invoiceDue';
++
++// "What is this invoice's status" — a self-contained panel filling the invoice.detail region. The
++// detail route is not edited to add it beyond rendering the region (CLAUDE.md rule 3). The status is
++// WORKED OUT from the payments on the server (SENT while unpaid, PARTIAL once part paid, PAID once
++// covered), replacing flipping it to paid by hand. Sharing the ['invoices'] query key (via
++// useInvoiceDue), it re-reads on its own whenever a payment is recorded — no parent hands it data.
++function InvoiceStatus({ invoiceId }: { invoiceId: number }) {
++  const { data } = useInvoiceDue(invoiceId);
++  return (
++    <section data-testid="invoice-status-panel">
++      <h2>Status</h2>
++      <span data-testid="invoice-status">{data ? data.status : ''}</span>
++    </section>
++  );
++}
++
++export const contribution = InvoiceDetail.fill({ order: 5, Component: InvoiceStatus });
+diff --git a/src/main/java/net/officefloor/hq/app/AllInvoicesGetLogic.java b/src/main/java/net/officefloor/hq/app/AllInvoicesGetLogic.java
+index 222aba8..d9754cf 100644
+--- a/src/main/java/net/officefloor/hq/app/AllInvoicesGetLogic.java
++++ b/src/main/java/net/officefloor/hq/app/AllInvoicesGetLogic.java
+@@ -16,13 +16,18 @@ import net.officefloor.web.ObjectResponse;
+ public class AllInvoicesGetLogic {
+ 
+     public void service(InvoiceRepository invoices, ProjectRepository projects,
+-            ObjectResponse<List<InvoiceView>> response) {
++            PaymentRepository payments, ObjectResponse<List<InvoiceView>> response) {
+         Map<Long, String> nameByProject = projects.findAll().stream()
+                 .collect(Collectors.toMap(Project::getId, Project::getName));
+         List<InvoiceView> views = invoices.findAll().stream()
+                 .sorted(Comparator.comparing(Invoice::getId))
+-                .map(i -> new InvoiceView(i.getId(), i.getProjectId(),
+-                        nameByProject.get(i.getProjectId()), i.getAmount(), i.getStatus()))
++                .map(i -> {
++                    BigDecimal paid = payments.findByInvoiceIdOrderByIdAsc(i.getId()).stream()
++                            .map(Payment::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
++                    String status = InvoiceStatus.derive(i.getStatus(), i.getAmount(), paid);
++                    return new InvoiceView(i.getId(), i.getProjectId(),
++                            nameByProject.get(i.getProjectId()), i.getAmount(), status);
++                })
+                 .collect(Collectors.toList());
+         response.send(views);
+     }
+diff --git a/src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java b/src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java
+index 4ccdeb3..2b40a8c 100644
+--- a/src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java
++++ b/src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java
+@@ -15,26 +15,36 @@ public class InvoiceDueGetLogic {
+ 
+     public void service(@RequestParam("invoiceId") Long invoiceId, InvoiceRepository invoices,
+             PaymentRepository payments, ObjectResponse<InvoiceDueView> response) {
+-        BigDecimal amount = invoices.findById(invoiceId).map(Invoice::getAmount)
+-                .orElse(BigDecimal.ZERO);
++        Invoice invoice = invoices.findById(invoiceId).orElse(null);
++        BigDecimal amount = invoice != null ? invoice.getAmount() : BigDecimal.ZERO;
+         BigDecimal paid = payments.findByInvoiceIdOrderByIdAsc(invoiceId).stream()
+                 .map(Payment::getAmount)
+                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+-        response.send(new InvoiceDueView(invoiceId, amount, paid, amount.subtract(paid)));
++        // The status is worked out from the payments too (see InvoiceStatus), so the detail page
++        // reads the same one-place rule as the list — no hand-set paid flag.
++        String status = InvoiceStatus.derive(invoice != null ? invoice.getStatus() : null, amount,
++                paid);
++        response.send(new InvoiceDueView(invoiceId, amount, paid, amount.subtract(paid), status));
+     }
+ 
+-    /** What is left to pay on one invoice: its amount, what has been paid, and the difference. */
++    /**
++     * What is left to pay on one invoice: its amount, what has been paid, the difference, and the
++     * status worked out from the payments (SENT / PARTIAL / PAID).
++     */
+     public static class InvoiceDueView {
+         private final long invoiceId;
+         private final BigDecimal amount;
+         private final BigDecimal paid;
+         private final BigDecimal due;
++        private final String status;
+ 
+-        public InvoiceDueView(long invoiceId, BigDecimal amount, BigDecimal paid, BigDecimal due) {
++        public InvoiceDueView(long invoiceId, BigDecimal amount, BigDecimal paid, BigDecimal due,
++                String status) {
+             this.invoiceId = invoiceId;
+             this.amount = amount;
+             this.paid = paid;
+             this.due = due;
++            this.status = status;
+         }
+ 
+         public long getInvoiceId() {
+@@ -52,5 +62,9 @@ public class InvoiceDueGetLogic {
+         public BigDecimal getDue() {
+             return due;
+         }
++
++        public String getStatus() {
++            return status;
++        }
+     }
+ }
+diff --git a/src/main/java/net/officefloor/hq/app/InvoiceStatus.java b/src/main/java/net/officefloor/hq/app/InvoiceStatus.java
+new file mode 100644
+index 0000000..6a5b67e
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/InvoiceStatus.java
+@@ -0,0 +1,38 @@
++package net.officefloor.hq.app;
++
++import java.math.BigDecimal;
++
++/**
++ * Works out an invoice's status from the payments recorded against it, instead of a hand-set flag: a
++ * DRAFT (not yet sent) keeps its stored lifecycle status, but once an invoice is SENT its status is
++ * derived — SENT while nothing is paid, PARTIAL once some of the amount is covered, and PAID once the
++ * payments cover it in full. Kept in one place so the per-project list, the invoice detail page and
++ * the all-invoices view all agree on the same rule.
++ */
++public final class InvoiceStatus {
++
++    private InvoiceStatus() {
++    }
++
++    /**
++     * @param baseStatus the invoice's stored lifecycle status (e.g. DRAFT, SENT).
++     * @param amount     what the invoice totals (its line items), null-safe.
++     * @param paid       the sum of its payments, null-safe.
++     * @return the status to show: the stored status for anything not yet SENT; otherwise SENT /
++     *         PARTIAL / PAID worked out from the payments.
++     */
++    public static String derive(String baseStatus, BigDecimal amount, BigDecimal paid) {
++        if (!"SENT".equals(baseStatus)) {
++            // Not yet sent — payments do not apply; keep the lifecycle status as stored.
++            return baseStatus;
++        }
++        BigDecimal paidAmount = paid != null ? paid : BigDecimal.ZERO;
++        if (paidAmount.signum() <= 0) {
++            return "SENT";
++        }
++        if (amount != null && paidAmount.compareTo(amount) >= 0) {
++            return "PAID";
++        }
++        return "PARTIAL";
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/InvoicesGetLogic.java b/src/main/java/net/officefloor/hq/app/InvoicesGetLogic.java
+index b6552eb..77b0484 100644
+--- a/src/main/java/net/officefloor/hq/app/InvoicesGetLogic.java
++++ b/src/main/java/net/officefloor/hq/app/InvoicesGetLogic.java
+@@ -1,23 +1,79 @@
+ package net.officefloor.hq.app;
+ 
++import java.math.BigDecimal;
++import java.time.LocalDate;
+ import java.util.List;
++import java.util.stream.Collectors;
+ import org.springframework.web.bind.annotation.RequestParam;
+ import net.officefloor.web.ObjectResponse;
+ 
+ /**
+  * {@code GET /api/invoices?projectId=<id>&sort=<order>} — list the invoices that belong to one
+  * project, so a project's detail page shows only its own. The optional {@code sort} orders the rows:
+- * {@code due} returns them earliest due date first; anything else (the default) keeps id order.
+- * Wired by {@code officefloor/rest/api/invoices.GET.yml}.
++ * {@code due} returns them earliest due date first; anything else (the default) keeps id order. Each
++ * row's status is WORKED OUT from its payments (see {@link InvoiceStatus}) rather than a hand-set
++ * flag — SENT while unpaid, PARTIAL once part paid, PAID once covered. Wired by
++ * {@code officefloor/rest/api/invoices.GET.yml}.
+  */
+ public class InvoicesGetLogic {
+ 
+     public void service(@RequestParam("projectId") Long projectId,
+             @RequestParam(value = "sort", required = false) String sort, InvoiceRepository invoices,
+-            ObjectResponse<List<Invoice>> response) {
++            PaymentRepository payments, ObjectResponse<List<InvoiceView>> response) {
+         List<Invoice> rows = "due".equals(sort)
+                 ? invoices.findByProjectIdOrderByDueDateAscIdAsc(projectId)
+                 : invoices.findByProjectIdOrderByIdAsc(projectId);
+-        response.send(rows);
++        List<InvoiceView> views = rows.stream().map(invoice -> {
++            BigDecimal paid = payments.findByInvoiceIdOrderByIdAsc(invoice.getId()).stream()
++                    .map(Payment::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
++            String status = InvoiceStatus.derive(invoice.getStatus(), invoice.getAmount(), paid);
++            return new InvoiceView(invoice.getId(), invoice.getProjectId(), invoice.getAmount(),
++                    status, invoice.getIssuedDate(), invoice.getDueDate());
++        }).collect(Collectors.toList());
++        response.send(views);
++    }
++
++    /** An invoice as the list needs it, with its status worked out from the payments recorded. */
++    public static class InvoiceView {
++        private final Long id;
++        private final Long projectId;
++        private final BigDecimal amount;
++        private final String status;
++        private final LocalDate issuedDate;
++        private final LocalDate dueDate;
++
++        public InvoiceView(Long id, Long projectId, BigDecimal amount, String status,
++                LocalDate issuedDate, LocalDate dueDate) {
++            this.id = id;
++            this.projectId = projectId;
++            this.amount = amount;
++            this.status = status;
++            this.issuedDate = issuedDate;
++            this.dueDate = dueDate;
++        }
++
++        public Long getId() {
++            return id;
++        }
++
++        public Long getProjectId() {
++            return projectId;
++        }
++
++        public BigDecimal getAmount() {
++            return amount;
++        }
++
++        public String getStatus() {
++            return status;
++        }
++
++        public LocalDate getIssuedDate() {
++            return issuedDate;
++        }
++
++        public LocalDate getDueDate() {
++            return dueDate;
++        }
+     }
+ }
+diff --git a/src/main/java/net/officefloor/hq/app/PaymentsPostLogic.java b/src/main/java/net/officefloor/hq/app/PaymentsPostLogic.java
+index 53a07d5..c64f9ca 100644
+--- a/src/main/java/net/officefloor/hq/app/PaymentsPostLogic.java
++++ b/src/main/java/net/officefloor/hq/app/PaymentsPostLogic.java
+@@ -1,6 +1,7 @@
+ package net.officefloor.hq.app;
+ 
+ import java.math.BigDecimal;
++import java.math.RoundingMode;
+ import java.time.LocalDate;
+ import java.time.format.DateTimeParseException;
+ import org.springframework.web.bind.annotation.RequestBody;
+@@ -12,12 +13,15 @@ import net.officefloor.web.ObjectResponse;
+  * {@code POST /api/payments} — record a payment against an invoice from a {invoiceId, amount, date}
+  * body and return the saved row (with its generated id). Wired by
+  * {@code officefloor/rest/api/payments.POST.yml}. A payment must belong to an existing invoice,
+- * carry a positive amount and an ISO date; all are validated here and rejected with 400.
++ * carry a positive amount and an ISO date; all are validated here and rejected with 400. Recording a
++ * payment is what drives the invoice's status now (SENT -&gt; PARTIAL -&gt; PAID, worked out from the
++ * payments, see {@link InvoiceStatus}), replacing the old mark-paid-by-hand flip; it appends one
++ * {@code PAYMENT_RECORDED} audit record so the payment can be checked back through the audit file.
+  */
+ public class PaymentsPostLogic {
+ 
+     public void service(@RequestBody NewPayment body, PaymentRepository payments,
+-            InvoiceRepository invoices, ObjectResponse<Payment> response) {
++            InvoiceRepository invoices, Audit audit, ObjectResponse<Payment> response) {
+         Long invoiceId = body.getInvoiceId();
+         if (invoiceId == null || !invoices.existsById(invoiceId)) {
+             throw new HttpException(HttpStatus.BAD_REQUEST, "A valid invoice is required");
+@@ -38,6 +42,8 @@ public class PaymentsPostLogic {
+         }
+ 
+         Payment saved = payments.save(new Payment(invoiceId, amount, date));
++        String amountText = amount.setScale(2, RoundingMode.HALF_UP).toPlainString();
++        audit.record("PAYMENT_RECORDED id=" + invoiceId + " amount=" + amountText);
+         response.send(saved);
+     }
+ 

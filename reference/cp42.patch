@@ -1,0 +1,238 @@
+diff --git a/src/main/frontend/features/clients/PrimaryContact.tsx b/src/main/frontend/features/clients/PrimaryContact.tsx
+new file mode 100644
+index 0000000..c4e18d6
+--- /dev/null
++++ b/src/main/frontend/features/clients/PrimaryContact.tsx
+@@ -0,0 +1,36 @@
++import { useContacts, useSetPrimaryContact, type Contact } from './contacts';
++
++// The "main contact" panel on a client's page: who the client's one main (primary) contact is, and
++// a control per contact to change it. Contacts are read from the shared ['contacts'] key and
++// filtered to this client (CLAUDE.md rule 5) — never copied into state. Picking a main contact POSTs
++// through the shared mutation, which invalidates ['contacts'] so this panel (and anything else
++// showing contacts) re-reads and the shown main contact updates itself.
++export function PrimaryContact({ clientId }: { clientId: number }) {
++  const { data: contacts } = useContacts();
++  const setPrimary = useSetPrimaryContact();
++
++  const forClient: Contact[] = (contacts ?? []).filter((c) => c.clientId === clientId);
++  const main = forClient.find((c) => c.primary);
++
++  return (
++    <section data-testid="client-main-contact">
++      <h2>Main contact</h2>
++      <p data-testid="client-primary-contact">{main ? main.name : ''}</p>
++      <ul data-testid="client-main-contact-choices">
++        {forClient.map((contact) => (
++          <li key={contact.id}>
++            {contact.name}
++            <button
++              type="button"
++              data-testid={`contact-primary-${contact.id}`}
++              disabled={setPrimary.isPending || contact.primary}
++              onClick={() => setPrimary.mutate(contact.id)}
++            >
++              Make main contact
++            </button>
++          </li>
++        ))}
++      </ul>
++    </section>
++  );
++}
+diff --git a/src/main/frontend/features/clients/contacts.ts b/src/main/frontend/features/clients/contacts.ts
+index c8a3bdb..a49135a 100644
+--- a/src/main/frontend/features/clients/contacts.ts
++++ b/src/main/frontend/features/clients/contacts.ts
+@@ -10,6 +10,7 @@ export type Contact = {
+   name: string;
+   email: string;
+   role: string;
++  primary: boolean;
+ };
+ 
+ export const contactsKey = ['contacts'] as const;
+@@ -29,3 +30,15 @@ export function useCreateContact() {
+     onSuccess: () => queryClient.invalidateQueries({ queryKey: contactsKey }),
+   });
+ }
++
++// Pick a client's one main contact: POSTs {id} (the contact id) and returns the id made primary.
++// The server clears the other contacts' primary flag so exactly one is main; invalidating
++// ['contacts'] re-reads every view so the shown main contact updates with no hand-maintained state
++// (CLAUDE.md rule 5). The audit record is written server-side.
++export function useSetPrimaryContact() {
++  const queryClient = useQueryClient();
++  return useMutation({
++    mutationFn: (id: number) => postJson<{ id: number }>('/api/contacts/primary', { id }),
++    onSuccess: () => queryClient.invalidateQueries({ queryKey: contactsKey }),
++  });
++}
+diff --git a/src/main/frontend/features/clients/primaryContact.slot.tsx b/src/main/frontend/features/clients/primaryContact.slot.tsx
+new file mode 100644
+index 0000000..5fefa2b
+--- /dev/null
++++ b/src/main/frontend/features/clients/primaryContact.slot.tsx
+@@ -0,0 +1,7 @@
++import { ClientDetail } from '../../slots/defs/clientDetail';
++import { PrimaryContact } from './PrimaryContact';
++
++// The main-contact panel's presence on the client detail page — its own file, filling the shared
++// client.detail region ahead of the contacts list. The detail route is not touched to add it
++// (CLAUDE.md rule 3).
++export const contribution = ClientDetail.fill({ order: 10, Component: PrimaryContact });
+diff --git a/src/main/java/net/officefloor/hq/app/Contact.java b/src/main/java/net/officefloor/hq/app/Contact.java
+index 86d9cbe..82435d5 100644
+--- a/src/main/java/net/officefloor/hq/app/Contact.java
++++ b/src/main/java/net/officefloor/hq/app/Contact.java
+@@ -31,6 +31,10 @@ public class Contact {
+     @Column(name = "contact_role")
+     private String role;
+ 
++    /** Whether this contact is the client's one main (primary) contact. Maps to is_primary (V24). */
++    @Column(name = "is_primary")
++    private boolean primary;
++
+     public Contact() {
+     }
+ 
+@@ -80,4 +84,12 @@ public class Contact {
+     public void setRole(String role) {
+         this.role = role;
+     }
++
++    public boolean isPrimary() {
++        return primary;
++    }
++
++    public void setPrimary(boolean primary) {
++        this.primary = primary;
++    }
+ }
+diff --git a/src/main/java/net/officefloor/hq/app/ContactRepository.java b/src/main/java/net/officefloor/hq/app/ContactRepository.java
+index 8c2578a..8e031f5 100644
+--- a/src/main/java/net/officefloor/hq/app/ContactRepository.java
++++ b/src/main/java/net/officefloor/hq/app/ContactRepository.java
+@@ -1,7 +1,11 @@
+ package net.officefloor.hq.app;
+ 
++import java.util.List;
+ import org.springframework.data.jpa.repository.JpaRepository;
+ 
+ /** Data access for {@link Contact}. Injected into the OfficeFloor REST logic classes. */
+ public interface ContactRepository extends JpaRepository<Contact, Long> {
++
++    /** Every contact belonging to one client — used to keep "one main contact per client". */
++    List<Contact> findByClientId(Long clientId);
+ }
+diff --git a/src/main/java/net/officefloor/hq/app/ContactsPrimaryLogic.java b/src/main/java/net/officefloor/hq/app/ContactsPrimaryLogic.java
+new file mode 100644
+index 0000000..da7349b
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/ContactsPrimaryLogic.java
+@@ -0,0 +1,63 @@
++package net.officefloor.hq.app;
++
++import org.springframework.web.bind.annotation.RequestBody;
++import net.officefloor.server.http.HttpException;
++import net.officefloor.server.http.HttpStatus;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code POST /api/contacts/primary} — pick a client's one main contact, from an {id} (contact id)
++ * body, and return the id that was made primary. Wired by
++ * {@code officefloor/rest/api/contacts/primary.POST.yml}. The contact must exist (404 otherwise).
++ * "One main contact per client" is kept here: every other contact of the same client has its primary
++ * flag cleared before this one is set, so exactly one row is primary. One {@code CONTACT_PRIMARY_SET}
++ * audit record is appended so the change can be checked back later through the audit file.
++ */
++public class ContactsPrimaryLogic {
++
++    public void service(@RequestBody PrimaryContact body, ContactRepository contacts, Audit audit,
++            ObjectResponse<PrimaryContactSet> response) {
++        Long id = body.getId();
++        if (id == null) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A contact id is required");
++        }
++        Contact target = contacts.findById(id)
++                .orElseThrow(() -> new HttpException(HttpStatus.NOT_FOUND, "No such contact"));
++        for (Contact other : contacts.findByClientId(target.getClientId())) {
++            if (other.isPrimary() && !other.getId().equals(id)) {
++                other.setPrimary(false);
++                contacts.save(other);
++            }
++        }
++        target.setPrimary(true);
++        contacts.save(target);
++        audit.record("CONTACT_PRIMARY_SET client=" + target.getClientId() + " contact=" + id);
++        response.send(new PrimaryContactSet(id));
++    }
++
++    /** Request body for picking a client's main contact. */
++    public static class PrimaryContact {
++        private Long id;
++
++        public Long getId() {
++            return id;
++        }
++
++        public void setId(Long id) {
++            this.id = id;
++        }
++    }
++
++    /** The id of the contact that was made primary. */
++    public static class PrimaryContactSet {
++        private final Long id;
++
++        public PrimaryContactSet(Long id) {
++            this.id = id;
++        }
++
++        public Long getId() {
++            return id;
++        }
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/TestSupportController.java b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+index 7bc34f9..48651d5 100644
+--- a/src/main/java/net/officefloor/hq/app/TestSupportController.java
++++ b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+@@ -92,11 +92,14 @@ public class TestSupportController {
+         List<Map<String, Object>> contacts = (List<Map<String, Object>>) fixture.get("contacts");
+         if (contacts != null) {
+             for (Map<String, Object> contact : contacts) {
+-                jdbc.update("INSERT INTO contacts (id, client_id, name, email, contact_role)"
+-                        + " VALUES (?, ?, ?, ?, ?)",
++                // primary is optional; default to false (not the main contact, matching Flyway V24).
++                Object primary = contact.get("primary");
++                jdbc.update("INSERT INTO contacts (id, client_id, name, email, contact_role, is_primary)"
++                        + " VALUES (?, ?, ?, ?, ?, ?)",
+                         ((Number) contact.get("id")).longValue(),
+                         ((Number) contact.get("clientId")).longValue(), contact.get("name"),
+-                        contact.get("email"), contact.get("role"));
++                        contact.get("email"), contact.get("role"),
++                        primary != null && Boolean.parseBoolean(primary.toString()));
+             }
+         }
+         List<Map<String, Object>> tasks = (List<Map<String, Object>>) fixture.get("tasks");
+diff --git a/src/main/resources/db/migration/V24__contacts_primary.sql b/src/main/resources/db/migration/V24__contacts_primary.sql
+new file mode 100644
+index 0000000..e8abf9e
+--- /dev/null
++++ b/src/main/resources/db/migration/V24__contacts_primary.sql
+@@ -0,0 +1,6 @@
++-- A client has one main (primary) contact. Flag it on the contact row: at most one contact per
++-- client is the main one. Defaults to FALSE so existing contacts are "not the main contact" until
++-- one is chosen; the server (ContactsPrimaryLogic) keeps the "one per client" invariant by clearing
++-- the others when a new main contact is set. (`primary` is a SQL keyword, so the column is is_primary.)
++ALTER TABLE contacts
++    ADD COLUMN is_primary BOOLEAN NOT NULL DEFAULT FALSE;
+diff --git a/src/main/resources/officefloor/rest/api/contacts/primary.POST.yml b/src/main/resources/officefloor/rest/api/contacts/primary.POST.yml
+new file mode 100644
+index 0000000..ddc82c4
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/contacts/primary.POST.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.ContactsPrimaryLogic

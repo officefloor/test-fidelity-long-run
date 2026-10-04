@@ -1,0 +1,214 @@
+diff --git a/src/main/frontend/features/projects/ProjectBudget.tsx b/src/main/frontend/features/projects/ProjectBudget.tsx
+new file mode 100644
+index 0000000..55874c9
+--- /dev/null
++++ b/src/main/frontend/features/projects/ProjectBudget.tsx
+@@ -0,0 +1,27 @@
++import { formatMoney } from '../../ui/money';
++import { useProjectBudget } from './budget';
++
++// A project's budget standing: the agreed budget, how much has been invoiced against it, and what is
++// left over (budget minus invoiced). Reads its own query key, scoped to the project; the figures are
++// derived on the server. A project with no budget set shows nothing here.
++export function ProjectBudget({ projectId }: { projectId: number }) {
++  const { data } = useProjectBudget(projectId);
++
++  if (!data || data.budget === null || data.remaining === null) {
++    return null;
++  }
++
++  return (
++    <section data-testid="project-budget-panel">
++      <h2>Budget</h2>
++      <dl>
++        <dt>Budget</dt>
++        <dd data-testid="project-budget">{formatMoney(data.budget)}</dd>
++        <dt>Invoiced</dt>
++        <dd data-testid="project-invoiced">{formatMoney(data.invoiced)}</dd>
++        <dt>Remaining</dt>
++        <dd data-testid="project-remaining">{formatMoney(data.remaining)}</dd>
++      </dl>
++    </section>
++  );
++}
+diff --git a/src/main/frontend/features/projects/budget.slot.tsx b/src/main/frontend/features/projects/budget.slot.tsx
+new file mode 100644
+index 0000000..09c6fcf
+--- /dev/null
++++ b/src/main/frontend/features/projects/budget.slot.tsx
+@@ -0,0 +1,6 @@
++import { ProjectDetail } from '../../slots/defs/projectDetail';
++import { ProjectBudget } from './ProjectBudget';
++
++// The budget panel's presence on the project detail page — its own file, filling the shared
++// project.detail region (CLAUDE.md rule 3). The detail route is not touched to add it.
++export const contribution = ProjectDetail.fill({ order: 5, Component: ProjectBudget });
+diff --git a/src/main/frontend/features/projects/budget.ts b/src/main/frontend/features/projects/budget.ts
+new file mode 100644
+index 0000000..5bd02cf
+--- /dev/null
++++ b/src/main/frontend/features/projects/budget.ts
+@@ -0,0 +1,20 @@
++import { useQuery } from '@tanstack/react-query';
++import { getJson } from '../../api/http';
++
++// A project's budget standing, read from GET /api/projects/budget: the agreed budget, how much has
++// been invoiced against it, and what is left (budget minus invoiced). Derived on the server so the
++// money math lives in one place. Its own query key, scoped to the one project; budget and remaining
++// are null when the project has no budget set.
++export type ProjectBudget = {
++  projectId: number;
++  budget: number | null;
++  invoiced: number;
++  remaining: number | null;
++};
++
++export function useProjectBudget(projectId: number) {
++  return useQuery({
++    queryKey: ['projects', projectId, 'budget'] as const,
++    queryFn: () => getJson<ProjectBudget>(`/api/projects/budget?projectId=${projectId}`),
++  });
++}
+diff --git a/src/main/java/net/officefloor/hq/app/Project.java b/src/main/java/net/officefloor/hq/app/Project.java
+index 66c8107..a17ce3f 100644
+--- a/src/main/java/net/officefloor/hq/app/Project.java
++++ b/src/main/java/net/officefloor/hq/app/Project.java
+@@ -1,5 +1,6 @@
+ package net.officefloor.hq.app;
+ 
++import java.math.BigDecimal;
+ import jakarta.persistence.Column;
+ import jakarta.persistence.Entity;
+ import jakarta.persistence.GeneratedValue;
+@@ -31,6 +32,10 @@ public class Project {
+     // Lifecycle status: ACTIVE, ON_HOLD or FINISHED. Defaults to ACTIVE (Flyway V21).
+     private String status = "ACTIVE";
+ 
++    // The agreed spend for this project, against which invoiced-so-far is measured. Nullable: a
++    // project may have no budget set (Flyway V22).
++    private BigDecimal budget;
++
+     public Project() {
+     }
+ 
+@@ -78,4 +83,12 @@ public class Project {
+     public void setStatus(String status) {
+         this.status = status;
+     }
++
++    public BigDecimal getBudget() {
++        return budget;
++    }
++
++    public void setBudget(BigDecimal budget) {
++        this.budget = budget;
++    }
+ }
+diff --git a/src/main/java/net/officefloor/hq/app/ProjectBudgetGetLogic.java b/src/main/java/net/officefloor/hq/app/ProjectBudgetGetLogic.java
+new file mode 100644
+index 0000000..c56ef7b
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/ProjectBudgetGetLogic.java
+@@ -0,0 +1,61 @@
++package net.officefloor.hq.app;
++
++import java.math.BigDecimal;
++import java.util.List;
++import org.springframework.web.bind.annotation.RequestParam;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code GET /api/projects/budget?projectId=<id>} — a project's budget standing: the agreed BUDGET
++ * (Flyway V22), how much has been INVOICED against it (the sum of the amounts of that project's
++ * invoices — the same worked-out figure a project's invoice list totals), and what is LEFT (budget
++ * minus invoiced). Derived on the server so the money math lives in one place. When the project has
++ * no budget set, budget and remaining come back null. Wired by
++ * {@code officefloor/rest/api/projects/budget.GET.yml}.
++ */
++public class ProjectBudgetGetLogic {
++
++    public void service(@RequestParam("projectId") Long projectId, ProjectRepository projects,
++            InvoiceRepository invoices, ObjectResponse<ProjectBudgetView> response) {
++        Project project = projects.findById(projectId).orElseThrow();
++        BigDecimal budget = project.getBudget();
++        List<Invoice> projectInvoices = invoices.findByProjectIdOrderByIdAsc(projectId);
++        BigDecimal invoiced = projectInvoices.stream()
++                .map(Invoice::getAmount)
++                .reduce(BigDecimal.ZERO, BigDecimal::add);
++        BigDecimal remaining = budget != null ? budget.subtract(invoiced) : null;
++        response.send(new ProjectBudgetView(projectId, budget, invoiced, remaining));
++    }
++
++    /** A project's budget standing: its budget, the amount invoiced against it, and what is left. */
++    public static class ProjectBudgetView {
++        private final long projectId;
++        private final BigDecimal budget;
++        private final BigDecimal invoiced;
++        private final BigDecimal remaining;
++
++        public ProjectBudgetView(long projectId, BigDecimal budget, BigDecimal invoiced,
++                BigDecimal remaining) {
++            this.projectId = projectId;
++            this.budget = budget;
++            this.invoiced = invoiced;
++            this.remaining = remaining;
++        }
++
++        public long getProjectId() {
++            return projectId;
++        }
++
++        public BigDecimal getBudget() {
++            return budget;
++        }
++
++        public BigDecimal getInvoiced() {
++            return invoiced;
++        }
++
++        public BigDecimal getRemaining() {
++            return remaining;
++        }
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/TestSupportController.java b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+index e55aa34..978c61c 100644
+--- a/src/main/java/net/officefloor/hq/app/TestSupportController.java
++++ b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+@@ -68,12 +68,15 @@ public class TestSupportController {
+                 Object status = project.get("status");
+                 // archived is optional; default to false (matching Flyway V15) when absent.
+                 Object archived = project.get("archived");
+-                jdbc.update("INSERT INTO projects (id, name, client_id, status, archived)"
+-                        + " VALUES (?, ?, ?, ?, ?)",
++                // budget is optional; a project without one has no budget set (NULL, Flyway V22).
++                Object budget = project.get("budget");
++                jdbc.update("INSERT INTO projects (id, name, client_id, status, archived, budget)"
++                        + " VALUES (?, ?, ?, ?, ?, ?)",
+                         ((Number) project.get("id")).longValue(), project.get("name"),
+                         ((Number) project.get("clientId")).longValue(),
+                         status != null ? status.toString() : "ACTIVE",
+-                        archived != null && Boolean.parseBoolean(archived.toString()));
++                        archived != null && Boolean.parseBoolean(archived.toString()),
++                        budget != null ? new java.math.BigDecimal(budget.toString()) : null);
+             }
+         }
+         List<Map<String, Object>> contacts = (List<Map<String, Object>>) fixture.get("contacts");
+diff --git a/src/main/resources/db/migration/V22__projects_budget.sql b/src/main/resources/db/migration/V22__projects_budget.sql
+new file mode 100644
+index 0000000..a72e482
+--- /dev/null
++++ b/src/main/resources/db/migration/V22__projects_budget.sql
+@@ -0,0 +1,4 @@
++-- A project can carry a budget: the figure the owner has agreed to spend on it, against which the
++-- amount invoiced so far is measured. A new nullable NUMERIC column — a project without one set
++-- simply has no budget yet, so every existing row stays untouched (NULL = no budget).
++ALTER TABLE projects ADD COLUMN budget NUMERIC(12, 2);
+diff --git a/src/main/resources/officefloor/rest/api/projects/budget.GET.yml b/src/main/resources/officefloor/rest/api/projects/budget.GET.yml
+new file mode 100644
+index 0000000..c43cbe7
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/projects/budget.GET.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.ProjectBudgetGetLogic

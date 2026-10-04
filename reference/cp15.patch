@@ -1,0 +1,96 @@
+diff --git a/src/main/frontend/features/invoices/AllInvoiceList.tsx b/src/main/frontend/features/invoices/AllInvoiceList.tsx
+index 42b168e..16abd99 100644
+--- a/src/main/frontend/features/invoices/AllInvoiceList.tsx
++++ b/src/main/frontend/features/invoices/AllInvoiceList.tsx
+@@ -1,10 +1,14 @@
++import { AllInvoicesToolbar } from '../../slots/defs/allInvoicesToolbar';
++import { useSearchParam, asString } from '../../url/useSearchParam';
+ import { formatMoney } from '../../ui/money';
+ import { useAllInvoices } from './allInvoices';
+ 
+ // One place listing every invoice from every project. Reads its own query key and shows, per row,
+-// which project the invoice is for and what stage (status) it is at.
++// which project the invoice is for and what stage (status) it is at. When the shared `invoiceStatus`
++// URL key (set by a toolbar control) names a stage, the list keeps only the rows at that stage.
+ export function AllInvoiceList() {
+   const { data: invoices } = useAllInvoices();
++  const [status] = useSearchParam('invoiceStatus', asString);
+ 
+   if (!invoices) {
+     return null;
+@@ -14,7 +18,11 @@ export function AllInvoiceList() {
+     return <p data-testid="all-invoices-empty">No invoices yet.</p>;
+   }
+ 
++  const shown = status ? invoices.filter((invoice) => invoice.status === status) : invoices;
++
+   return (
++    <>
++    <AllInvoicesToolbar.Slot />
+     <table data-testid="all-invoices-table">
+       <thead>
+         <tr>
+@@ -24,7 +32,7 @@ export function AllInvoiceList() {
+         </tr>
+       </thead>
+       <tbody>
+-        {invoices.map((invoice) => (
++        {shown.map((invoice) => (
+           <tr key={invoice.id} data-testid={`invoice-row-${invoice.id}`}>
+             <td data-testid="invoice-project">{invoice.projectName}</td>
+             <td data-testid="invoice-amount">{formatMoney(invoice.amount)}</td>
+@@ -33,5 +41,6 @@ export function AllInvoiceList() {
+         ))}
+       </tbody>
+     </table>
++    </>
+   );
+ }
+diff --git a/src/main/frontend/features/invoices/statusFilter.slot.tsx b/src/main/frontend/features/invoices/statusFilter.slot.tsx
+new file mode 100644
+index 0000000..9200a0c
+--- /dev/null
++++ b/src/main/frontend/features/invoices/statusFilter.slot.tsx
+@@ -0,0 +1,28 @@
++import { AllInvoicesToolbar } from '../../slots/defs/allInvoicesToolbar';
++import { useSearchParam, asString } from '../../url/useSearchParam';
++
++// "Show one stage" — a self-contained control that owns the `invoiceStatus` URL key. The all-invoices
++// list reads the same key and keeps only rows at that stage; the two share only the key, no import.
++// Choosing a stage commits it to the URL (so the narrowed view outlives the click and is shareable);
++// the empty option clears the key and shows every stage again.
++const STAGES = ['DRAFT', 'SENT', 'PAID'] as const;
++
++function StatusFilter() {
++  const [status, setStatus] = useSearchParam('invoiceStatus', asString);
++  return (
++    <select
++      data-testid="invoice-status-filter"
++      value={status}
++      onChange={(e) => setStatus(e.target.value)}
++    >
++      <option value="">All stages</option>
++      {STAGES.map((stage) => (
++        <option key={stage} value={stage}>
++          {stage}
++        </option>
++      ))}
++    </select>
++  );
++}
++
++export const contribution = AllInvoicesToolbar.fill({ order: 10, Component: StatusFilter });
+diff --git a/src/main/frontend/slots/defs/allInvoicesToolbar.ts b/src/main/frontend/slots/defs/allInvoicesToolbar.ts
+new file mode 100644
+index 0000000..d307eec
+--- /dev/null
++++ b/src/main/frontend/slots/defs/allInvoicesToolbar.ts
+@@ -0,0 +1,8 @@
++import { defineSlot } from '../Slot';
++
++/**
++ * Controls that act on the all-invoices list — a filter, a sort, an export. Rendered above the
++ * cross-project invoice list by the invoices feature; each control is its own `*.slot.tsx` file and
++ * owns a URL search param, so the list never lists its controls. No context: it spans every project.
++ */
++export const AllInvoicesToolbar = defineSlot('allInvoices.toolbar');

@@ -1,0 +1,202 @@
+diff --git a/src/main/frontend/features/clients/ClientStatement.tsx b/src/main/frontend/features/clients/ClientStatement.tsx
+index 06fc93e..9e59ff0 100644
+--- a/src/main/frontend/features/clients/ClientStatement.tsx
++++ b/src/main/frontend/features/clients/ClientStatement.tsx
+@@ -23,28 +23,37 @@ export function ClientStatement({ clientId }: { clientId: number }) {
+ 
+   return (
+     <section data-testid="client-statement">
+-      <table data-testid="client-statement-table">
+-        <thead>
+-          <tr>
+-            <th>Invoice</th>
+-            <th>Amount</th>
+-            <th>Paid</th>
+-            <th>Due</th>
+-            <th>Status</th>
+-          </tr>
+-        </thead>
+-        <tbody>
+-          {data.invoices.map((invoice) => (
+-            <tr key={invoice.id} data-testid={`statement-invoice-row-${invoice.id}`}>
+-              <td data-testid="statement-invoice-id">{invoice.id}</td>
+-              <td data-testid="statement-invoice-amount">{formatMoney(invoice.amount)}</td>
+-              <td data-testid="statement-invoice-paid">{formatMoney(invoice.paid)}</td>
+-              <td data-testid="statement-invoice-due">{formatMoney(invoice.due)}</td>
+-              <td data-testid="statement-invoice-status">{invoice.status}</td>
+-            </tr>
+-          ))}
+-        </tbody>
+-      </table>
++      {data.projects.map((project) => (
++        <div key={project.projectId} data-testid={`statement-project-${project.projectId}`}>
++          <h3 data-testid="statement-project-name">{project.name}</h3>
++          <table data-testid="client-statement-table">
++            <thead>
++              <tr>
++                <th>Invoice</th>
++                <th>Amount</th>
++                <th>Paid</th>
++                <th>Due</th>
++                <th>Status</th>
++              </tr>
++            </thead>
++            <tbody>
++              {project.invoices.map((invoice) => (
++                <tr key={invoice.id} data-testid={`statement-invoice-row-${invoice.id}`}>
++                  <td data-testid="statement-invoice-id">{invoice.id}</td>
++                  <td data-testid="statement-invoice-amount">{formatMoney(invoice.amount)}</td>
++                  <td data-testid="statement-invoice-paid">{formatMoney(invoice.paid)}</td>
++                  <td data-testid="statement-invoice-due">{formatMoney(invoice.due)}</td>
++                  <td data-testid="statement-invoice-status">{invoice.status}</td>
++                </tr>
++              ))}
++            </tbody>
++          </table>
++          <p>
++            Subtotal:{' '}
++            <strong data-testid="statement-project-subtotal">{formatMoney(project.subtotal)}</strong>
++          </p>
++        </div>
++      ))}
+       <p>
+         Total owed:{' '}
+         <strong data-testid="client-outstanding-total">
+diff --git a/src/main/frontend/features/clients/statement.ts b/src/main/frontend/features/clients/statement.ts
+index 38b1edb..77cc15b 100644
+--- a/src/main/frontend/features/clients/statement.ts
++++ b/src/main/frontend/features/clients/statement.ts
+@@ -13,9 +13,17 @@ export type StatementInvoice = {
+   status: string;
+ };
+ 
++export type StatementProject = {
++  projectId: number;
++  name: string;
++  invoices: StatementInvoice[];
++  subtotal: number;
++};
++
+ export type ClientStatement = {
+   clientId: number;
+   invoices: StatementInvoice[];
++  projects: StatementProject[];
+   outstandingTotal: number;
+ };
+ 
+diff --git a/src/main/java/net/officefloor/hq/app/ClientStatementGetLogic.java b/src/main/java/net/officefloor/hq/app/ClientStatementGetLogic.java
+index 7693324..c3ed035 100644
+--- a/src/main/java/net/officefloor/hq/app/ClientStatementGetLogic.java
++++ b/src/main/java/net/officefloor/hq/app/ClientStatementGetLogic.java
+@@ -1,8 +1,11 @@
+ package net.officefloor.hq.app;
+ 
+ import java.math.BigDecimal;
++import java.util.ArrayList;
+ import java.util.Comparator;
++import java.util.LinkedHashMap;
+ import java.util.List;
++import java.util.Map;
+ import java.util.Set;
+ import java.util.stream.Collectors;
+ import org.springframework.web.bind.annotation.RequestParam;
+@@ -21,10 +24,12 @@ public class ClientStatementGetLogic {
+             InvoiceRepository invoices, PaymentRepository payments,
+             ObjectResponse<ClientStatementView> response) {
+         // The client's projects are the ones its invoices hang off (invoice -> project -> client).
+-        Set<Long> projectIds = projects.findAll().stream()
++        List<Project> clientProjects = projects.findAll().stream()
+                 .filter(p -> clientId.equals(p.getClientId()))
+-                .map(Project::getId)
+-                .collect(Collectors.toSet());
++                .collect(Collectors.toList());
++        Set<Long> projectIds = clientProjects.stream().map(Project::getId).collect(Collectors.toSet());
++        Map<Long, String> projectNames = clientProjects.stream()
++                .collect(Collectors.toMap(Project::getId, Project::getName));
+         List<StatementInvoiceView> rows = invoices.findAll().stream()
+                 .filter(i -> projectIds.contains(i.getProjectId()))
+                 .sorted(Comparator.comparing(Invoice::getId))
+@@ -44,19 +49,30 @@ public class ClientStatementGetLogic {
+                 .collect(Collectors.toList());
+         BigDecimal outstanding = rows.stream().map(StatementInvoiceView::getDue)
+                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+-        response.send(new ClientStatementView(clientId, rows, outstanding));
++        // Group the invoices under the job (project) they belong to, preserving invoice order within
++        // each group and group order by first appearance, and carry each job's subtotal (the sum of
++        // its invoices' dues). The subtotals sum back to the same outstanding total.
++        Map<Long, StatementProjectView> byProject = new LinkedHashMap<>();
++        for (StatementInvoiceView row : rows) {
++            byProject.computeIfAbsent(row.getProjectId(), id -> new StatementProjectView(id,
++                    projectNames.getOrDefault(id, ""))).add(row);
++        }
++        List<StatementProjectView> groups = new ArrayList<>(byProject.values());
++        response.send(new ClientStatementView(clientId, rows, groups, outstanding));
+     }
+ 
+-    /** A client's statement: its invoices, each with its due, and the total still owed across them. */
++    /** A client's statement: its invoices, grouped by job with subtotals, and the total still owed. */
+     public static class ClientStatementView {
+         private final long clientId;
+         private final List<StatementInvoiceView> invoices;
++        private final List<StatementProjectView> projects;
+         private final BigDecimal outstandingTotal;
+ 
+         public ClientStatementView(long clientId, List<StatementInvoiceView> invoices,
+-                BigDecimal outstandingTotal) {
++                List<StatementProjectView> projects, BigDecimal outstandingTotal) {
+             this.clientId = clientId;
+             this.invoices = invoices;
++            this.projects = projects;
+             this.outstandingTotal = outstandingTotal;
+         }
+ 
+@@ -68,11 +84,49 @@ public class ClientStatementGetLogic {
+             return invoices;
+         }
+ 
++        public List<StatementProjectView> getProjects() {
++            return projects;
++        }
++
+         public BigDecimal getOutstandingTotal() {
+             return outstandingTotal;
+         }
+     }
+ 
++    /** One job (project) on the statement: its invoices and the subtotal still due across them. */
++    public static class StatementProjectView {
++        private final long projectId;
++        private final String name;
++        private final List<StatementInvoiceView> invoices = new ArrayList<>();
++        private BigDecimal subtotal = BigDecimal.ZERO;
++
++        public StatementProjectView(long projectId, String name) {
++            this.projectId = projectId;
++            this.name = name;
++        }
++
++        void add(StatementInvoiceView invoice) {
++            this.invoices.add(invoice);
++            this.subtotal = this.subtotal.add(invoice.getDue());
++        }
++
++        public long getProjectId() {
++            return projectId;
++        }
++
++        public String getName() {
++            return name;
++        }
++
++        public List<StatementInvoiceView> getInvoices() {
++            return invoices;
++        }
++
++        public BigDecimal getSubtotal() {
++            return subtotal;
++        }
++    }
++
+     /** One invoice on the statement: its amount, what has been paid, what is still due, and status. */
+     public static class StatementInvoiceView {
+         private final long id;

@@ -1,0 +1,144 @@
+diff --git a/src/main/frontend/features/invoices/InvoiceList.tsx b/src/main/frontend/features/invoices/InvoiceList.tsx
+index 8edee4e..caab921 100644
+--- a/src/main/frontend/features/invoices/InvoiceList.tsx
++++ b/src/main/frontend/features/invoices/InvoiceList.tsx
+@@ -19,6 +19,8 @@ export function InvoiceList({ projectId }: { projectId: number }) {
+       <thead>
+         <tr>
+           <th>Amount</th>
++          <th>Issued</th>
++          <th>Due</th>
+           <th>Status</th>
+           <th></th>
+         </tr>
+@@ -27,6 +29,8 @@ export function InvoiceList({ projectId }: { projectId: number }) {
+         {invoices.map((invoice) => (
+           <tr key={invoice.id} data-testid={`invoice-row-${invoice.id}`}>
+             <td data-testid="invoice-amount">{formatMoney(invoice.amount)}</td>
++            <td data-testid="invoice-issued">{invoice.issuedDate}</td>
++            <td data-testid="invoice-due">{invoice.dueDate}</td>
+             <td data-testid="invoice-status">{invoice.status}</td>
+             <td>
+               {invoice.status !== 'PAID' && (
+diff --git a/src/main/frontend/features/invoices/invoices.ts b/src/main/frontend/features/invoices/invoices.ts
+index 31e0288..22a1f80 100644
+--- a/src/main/frontend/features/invoices/invoices.ts
++++ b/src/main/frontend/features/invoices/invoices.ts
+@@ -3,7 +3,14 @@ import { getJson, postJson } from '../../api/http';
+ 
+ // An invoice raised on a project. Everything that shows a project's invoices shares the key
+ // ['invoices', projectId]; invalidating it after a write refreshes the list and its total together.
+-export type Invoice = { id: number; projectId: number; amount: number; status: string };
++export type Invoice = {
++  id: number;
++  projectId: number;
++  amount: number;
++  status: string;
++  issuedDate: string;
++  dueDate: string;
++};
+ 
+ export const invoicesKey = (projectId: number) => ['invoices', projectId] as const;
+ 
+diff --git a/src/main/java/net/officefloor/hq/app/Invoice.java b/src/main/java/net/officefloor/hq/app/Invoice.java
+index f90cbdc..43fa1d5 100644
+--- a/src/main/java/net/officefloor/hq/app/Invoice.java
++++ b/src/main/java/net/officefloor/hq/app/Invoice.java
+@@ -1,6 +1,7 @@
+ package net.officefloor.hq.app;
+ 
+ import java.math.BigDecimal;
++import java.time.LocalDate;
+ import jakarta.persistence.Column;
+ import jakarta.persistence.Entity;
+ import jakarta.persistence.GeneratedValue;
+@@ -29,6 +30,14 @@ public class Invoice {
+     /** Payment status: UNPAID (default, matching Flyway V5) until the invoice is marked paid. */
+     private String status = "UNPAID";
+ 
++    /** The date the invoice went out (Flyway V7). Serialized as an ISO date, e.g. "2026-01-05". */
++    @Column(name = "issued_date")
++    private LocalDate issuedDate;
++
++    /** The date the invoice is due (Flyway V7). Serialized as an ISO date, e.g. "2026-02-04". */
++    @Column(name = "due_date")
++    private LocalDate dueDate;
++
+     public Invoice() {
+     }
+ 
+@@ -68,4 +77,20 @@ public class Invoice {
+     public void setStatus(String status) {
+         this.status = status;
+     }
++
++    public LocalDate getIssuedDate() {
++        return issuedDate;
++    }
++
++    public void setIssuedDate(LocalDate issuedDate) {
++        this.issuedDate = issuedDate;
++    }
++
++    public LocalDate getDueDate() {
++        return dueDate;
++    }
++
++    public void setDueDate(LocalDate dueDate) {
++        this.dueDate = dueDate;
++    }
+ }
+diff --git a/src/main/java/net/officefloor/hq/app/InvoicesPostLogic.java b/src/main/java/net/officefloor/hq/app/InvoicesPostLogic.java
+index bafbe2b..9c639a6 100644
+--- a/src/main/java/net/officefloor/hq/app/InvoicesPostLogic.java
++++ b/src/main/java/net/officefloor/hq/app/InvoicesPostLogic.java
+@@ -24,7 +24,12 @@ public class InvoicesPostLogic {
+         if (amount == null || amount.signum() <= 0) {
+             throw new HttpException(HttpStatus.BAD_REQUEST, "A positive amount is required");
+         }
+-        Invoice saved = invoices.save(new Invoice(projectId, amount));
++        Invoice invoice = new Invoice(projectId, amount);
++        // An invoice goes out today and is due 30 days later; the dates are shown on each row.
++        java.time.LocalDate issued = java.time.LocalDate.now();
++        invoice.setIssuedDate(issued);
++        invoice.setDueDate(issued.plusDays(30));
++        Invoice saved = invoices.save(invoice);
+         response.send(saved);
+     }
+ 
+diff --git a/src/main/java/net/officefloor/hq/app/TestSupportController.java b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+index 5eb7c0c..ed92b64 100644
+--- a/src/main/java/net/officefloor/hq/app/TestSupportController.java
++++ b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+@@ -67,11 +67,18 @@ public class TestSupportController {
+             for (Map<String, Object> invoice : invoices) {
+                 // status is optional in a fixture; default to UNPAID (matching Flyway V5) when absent.
+                 Object status = invoice.get("status");
+-                jdbc.update("INSERT INTO invoices (id, project_id, amount, status) VALUES (?, ?, ?, ?)",
++                // issuedDate/dueDate are optional; fall back to the Flyway V7 column defaults when absent.
++                Object issuedDate = invoice.get("issuedDate");
++                Object dueDate = invoice.get("dueDate");
++                jdbc.update("INSERT INTO invoices (id, project_id, amount, status, issued_date, due_date)"
++                        + " VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_DATE),"
++                        + " COALESCE(?, DATEADD('DAY', 30, CURRENT_DATE)))",
+                         ((Number) invoice.get("id")).longValue(),
+                         ((Number) invoice.get("projectId")).longValue(),
+                         new java.math.BigDecimal(invoice.get("amount").toString()),
+-                        status != null ? status.toString() : "UNPAID");
++                        status != null ? status.toString() : "UNPAID",
++                        issuedDate != null ? java.sql.Date.valueOf(issuedDate.toString()) : null,
++                        dueDate != null ? java.sql.Date.valueOf(dueDate.toString()) : null);
+             }
+         }
+     }
+diff --git a/src/main/resources/db/migration/V7__invoices_dates.sql b/src/main/resources/db/migration/V7__invoices_dates.sql
+new file mode 100644
+index 0000000..4c9aec2
+--- /dev/null
++++ b/src/main/resources/db/migration/V7__invoices_dates.sql
+@@ -0,0 +1,5 @@
++-- Invoices now carry two dates: issued_date (when it went out) and due_date (when payment is due),
++-- so a project's detail page can show both on each invoice row. Existing rows adopt today's date as
++-- issued and 30 days later as due via the column defaults; new rows set them explicitly on create.
++ALTER TABLE invoices ADD COLUMN issued_date DATE NOT NULL DEFAULT CURRENT_DATE;
++ALTER TABLE invoices ADD COLUMN due_date DATE NOT NULL DEFAULT DATEADD('DAY', 30, CURRENT_DATE);

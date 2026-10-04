@@ -1,0 +1,115 @@
+diff --git a/src/main/frontend/features/clients/ClientProjects.tsx b/src/main/frontend/features/clients/ClientProjects.tsx
+index 5f6e277..4eb0d5a 100644
+--- a/src/main/frontend/features/clients/ClientProjects.tsx
++++ b/src/main/frontend/features/clients/ClientProjects.tsx
+@@ -1,5 +1,6 @@
+ import { useQuery } from '@tanstack/react-query';
+ import { getJson } from '../../api/http';
++import { useSearchParam, asFlag } from '../../url/useSearchParam';
+ 
+ // The projects a client is doing work on, shown in the client's detail. Server data is read straight
+ // from the SHARED ['projects'] query key (CLAUDE.md rule 5) — the same key the Projects page uses —
+@@ -11,9 +12,14 @@ type Project = {
+   clientId: number;
+   clientName: string;
+   archived: boolean;
++  status: string;
+ };
+ 
+ export function ClientProjects({ clientId }: { clientId: number }) {
++  // Only the client's ACTIVE work shows by default; a toggle (owning the `clientProjectsShowAll`
++  // URL key, CLAUDE.md rule 4) reveals the finished and hidden (archived) ones too. The flag lives
++  // in the URL so the revealed view outlives the click and is shareable.
++  const [showAll, setShowAll] = useSearchParam('clientProjectsShowAll', asFlag);
+   const { data: projects } = useQuery({
+     queryKey: ['projects'] as const,
+     queryFn: () => getJson<Project[]>('/api/projects'),
+@@ -23,30 +29,44 @@ export function ClientProjects({ clientId }: { clientId: number }) {
+     return null;
+   }
+ 
+-  // Archived projects are tucked away: they drop off the client's page too (never lost, just hidden).
+-  const owned = projects.filter(
+-    (project) => project.clientId === clientId && !project.archived,
+-  );
+-
+-  if (owned.length === 0) {
+-    return <p data-testid="client-projects-empty">No projects for this client yet.</p>;
+-  }
++  // Active = being worked on (status ACTIVE) and not tucked away (archived). By default only those
++  // show; "Show all" widens to every project the client owns, finished and archived included.
++  const owned = projects.filter((project) => {
++    if (project.clientId !== clientId) {
++      return false;
++    }
++    return showAll || (project.status === 'ACTIVE' && !project.archived);
++  });
+ 
+-  // Reuse the project-row-<id>/project-name anchors inside the client-context table.
+   return (
+-    <table data-testid="client-projects-table">
+-      <thead>
+-        <tr>
+-          <th>Name</th>
+-        </tr>
+-      </thead>
+-      <tbody>
+-        {owned.map((project) => (
+-          <tr key={project.id} data-testid={`project-row-${project.id}`}>
+-            <td data-testid="project-name">{project.name}</td>
+-          </tr>
+-        ))}
+-      </tbody>
+-    </table>
++    <>
++      <button
++        type="button"
++        data-testid="client-projects-show-all"
++        aria-pressed={showAll}
++        onClick={() => setShowAll(showAll ? undefined : true)}
++      >
++        {showAll ? 'Show active only' : 'Show all projects'}
++      </button>
++      {owned.length === 0 ? (
++        <p data-testid="client-projects-empty">No projects for this client yet.</p>
++      ) : (
++        // Reuse the project-row-<id>/project-name anchors inside the client-context table.
++        <table data-testid="client-projects-table">
++          <thead>
++            <tr>
++              <th>Name</th>
++            </tr>
++          </thead>
++          <tbody>
++            {owned.map((project) => (
++              <tr key={project.id} data-testid={`project-row-${project.id}`}>
++                <td data-testid="project-name">{project.name}</td>
++              </tr>
++            ))}
++          </tbody>
++        </table>
++      )}
++    </>
+   );
+ }
+diff --git a/src/main/java/net/officefloor/hq/app/TestSupportController.java b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+index 2b62391..e55aa34 100644
+--- a/src/main/java/net/officefloor/hq/app/TestSupportController.java
++++ b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+@@ -66,10 +66,14 @@ public class TestSupportController {
+             for (Map<String, Object> project : projects) {
+                 // status is optional in a fixture; default to ACTIVE (matching Flyway V21) when absent.
+                 Object status = project.get("status");
+-                jdbc.update("INSERT INTO projects (id, name, client_id, status) VALUES (?, ?, ?, ?)",
++                // archived is optional; default to false (matching Flyway V15) when absent.
++                Object archived = project.get("archived");
++                jdbc.update("INSERT INTO projects (id, name, client_id, status, archived)"
++                        + " VALUES (?, ?, ?, ?, ?)",
+                         ((Number) project.get("id")).longValue(), project.get("name"),
+                         ((Number) project.get("clientId")).longValue(),
+-                        status != null ? status.toString() : "ACTIVE");
++                        status != null ? status.toString() : "ACTIVE",
++                        archived != null && Boolean.parseBoolean(archived.toString()));
+             }
+         }
+         List<Map<String, Object>> contacts = (List<Map<String, Object>>) fixture.get("contacts");

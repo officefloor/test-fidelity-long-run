@@ -1,0 +1,222 @@
+diff --git a/src/main/frontend/features/clients/clients.ts b/src/main/frontend/features/clients/clients.ts
+index dfefa0c..81cfc47 100644
+--- a/src/main/frontend/features/clients/clients.ts
++++ b/src/main/frontend/features/clients/clients.ts
+@@ -23,6 +23,19 @@ export function useCreateClient() {
+   });
+ }
+ 
++// Correct a client's name and email: POSTs {id, name, email} and returns the saved row. The server
++// (ClientsUpdateLogic) holds the email to the same rules as creation and keeps the row's id;
++// invalidating ['clients'] re-reads every view so the corrected name/email show with no
++// hand-maintained list (CLAUDE.md rule 5). The correction is recorded to the audit file server-side.
++export function useUpdateClient() {
++  const queryClient = useQueryClient();
++  return useMutation({
++    mutationFn: (input: { id: number; name: string; email: string }) =>
++      postJson<Client>('/api/clients/update', input),
++    onSuccess: () => queryClient.invalidateQueries({ queryKey: clientsKey }),
++  });
++}
++
+ // Archive a client instead of deleting it: POSTs {id} and returns the id archived. The client is
+ // kept server-side with its archived flag set; invalidating ['clients'] re-reads every view so the
+ // row drops off the list and search with no hand-maintained list (CLAUDE.md rule 5). The audit
+diff --git a/src/main/frontend/features/clients/editClient.slot.tsx b/src/main/frontend/features/clients/editClient.slot.tsx
+new file mode 100644
+index 0000000..e9c5be5
+--- /dev/null
++++ b/src/main/frontend/features/clients/editClient.slot.tsx
+@@ -0,0 +1,89 @@
++import { useState } from 'react';
++import { ClientRow } from '../../slots/defs/clientRow';
++import { asNumber, useSearchParam } from '../../url/useSearchParam';
++import { isValidEmail } from './email';
++import type { Client } from './clients';
++import { useUpdateClient } from './clients';
++
++// "Correct this client" — a self-contained row action filling the client-row region. Which row is
++// open for editing outlives the click, so it lives in the URL (`editClient` holds the client id),
++// not in a parent: each row reads the same key and only the matching row swaps its Edit button for
++// an inline form. useState holds only what is being typed into the form (seeded from the current
++// values); on submit a well-formed email POSTs through the shared mutation, which invalidates
++// ['clients'] so the list re-reads and the corrected name/email show. A blank or malformed email
++// surfaces client-edit-form-email-error and never saves; an email already in use by another client
++// is rejected by the server and shows the same error. No feature is edited to add this — one file.
++function EditClient({ client }: { client: Client }) {
++  const [editingId, setEditingId] = useSearchParam('editClient', asNumber);
++
++  if (editingId === client.id) {
++    return <EditForm client={client} onDone={() => setEditingId(undefined)} />;
++  }
++
++  return (
++    <button
++      type="button"
++      data-testid={`client-edit-${client.id}`}
++      onClick={() => setEditingId(client.id)}
++    >
++      Edit
++    </button>
++  );
++}
++
++function EditForm({ client, onDone }: { client: Client; onDone: () => void }) {
++  const [name, setName] = useState(client.name);
++  const [email, setEmail] = useState(client.email);
++  const [emailError, setEmailError] = useState<string | null>(null);
++  const update = useUpdateClient();
++
++  return (
++    <form
++      data-testid="client-edit-form"
++      onSubmit={(event) => {
++        event.preventDefault();
++        if (!isValidEmail(email)) {
++          setEmailError('Enter a valid email address.');
++          return;
++        }
++        setEmailError(null);
++        update.mutate(
++          { id: client.id, name, email },
++          {
++            onSuccess: () => onDone(),
++            onError: () => setEmailError('That email is already in use.'),
++          },
++        );
++      }}
++    >
++      <input
++        data-testid="client-edit-form-name"
++        value={name}
++        onChange={(event) => setName(event.target.value)}
++      />
++      <input
++        data-testid="client-edit-form-email"
++        value={email}
++        onChange={(event) => {
++          setEmail(event.target.value);
++          if (emailError) {
++            setEmailError(null);
++          }
++        }}
++      />
++      {emailError && (
++        <span data-testid="client-edit-form-email-error" role="alert">
++          {emailError}
++        </span>
++      )}
++      <button data-testid="client-edit-form-submit" type="submit" disabled={update.isPending}>
++        Save
++      </button>
++      <button type="button" data-testid={`client-edit-cancel-${client.id}`} onClick={onDone}>
++        Cancel
++      </button>
++    </form>
++  );
++}
++
++export const contribution = ClientRow.fill({ order: 10, Component: EditClient });
+diff --git a/src/main/java/net/officefloor/hq/app/ClientRepository.java b/src/main/java/net/officefloor/hq/app/ClientRepository.java
+index 55162d4..a807c27 100644
+--- a/src/main/java/net/officefloor/hq/app/ClientRepository.java
++++ b/src/main/java/net/officefloor/hq/app/ClientRepository.java
+@@ -7,4 +7,7 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
+ 
+     /** Whether any client (active or archived) already uses this email — the uniqueness check. */
+     boolean existsByEmail(String email);
++
++    /** Whether any OTHER client already uses this email — the uniqueness check when editing a row. */
++    boolean existsByEmailAndIdNot(String email, Long id);
+ }
+diff --git a/src/main/java/net/officefloor/hq/app/ClientsUpdateLogic.java b/src/main/java/net/officefloor/hq/app/ClientsUpdateLogic.java
+new file mode 100644
+index 0000000..f730b5b
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/ClientsUpdateLogic.java
+@@ -0,0 +1,77 @@
++package net.officefloor.hq.app;
++
++import java.util.regex.Pattern;
++import org.springframework.web.bind.annotation.RequestBody;
++import net.officefloor.server.http.HttpException;
++import net.officefloor.server.http.HttpStatus;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code POST /api/clients/update} — correct a client's name and email from an {id, name, email}
++ * body and return the saved row. Wired by {@code officefloor/rest/api/clients/update.POST.yml}.
++ * The client must exist (404 otherwise). The email is held to the same proper-address rule as
++ * creation ({@link ClientsPostLogic}) and rejected with 400 before saving (the DB CHECK in Flyway
++ * V2 is the matching last line of defence). An email already in use by ANOTHER client (active or
++ * archived) is rejected with 400, matching the UNIQUE constraint in Flyway V25 — but keeping a
++ * client's own email unchanged is allowed. One {@code CLIENT_UPDATED} audit record is appended so
++ * the correction can be checked back later through the audit file.
++ */
++public class ClientsUpdateLogic {
++
++    /** A proper email address: local part, @, and a domain with a dot — no whitespace. */
++    private static final Pattern EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
++
++    public void service(@RequestBody EditClient body, ClientRepository clients, Audit audit,
++            ObjectResponse<Client> response) {
++        Long id = body.getId();
++        if (id == null) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A client id is required");
++        }
++        String email = body.getEmail();
++        if (email == null || !EMAIL.matcher(email.trim()).matches()) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A proper email address is required");
++        }
++        String normalised = email.trim();
++        Client client = clients.findById(id)
++                .orElseThrow(() -> new HttpException(HttpStatus.NOT_FOUND, "No such client"));
++        if (clients.existsByEmailAndIdNot(normalised, id)) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "That email is already in use");
++        }
++        client.setName(body.getName());
++        client.setEmail(normalised);
++        Client saved = clients.save(client);
++        audit.record("CLIENT_UPDATED id=" + id);
++        response.send(saved);
++    }
++
++    /** Request body for correcting a client. */
++    public static class EditClient {
++        private Long id;
++        private String name;
++        private String email;
++
++        public Long getId() {
++            return id;
++        }
++
++        public void setId(Long id) {
++            this.id = id;
++        }
++
++        public String getName() {
++            return name;
++        }
++
++        public void setName(String name) {
++            this.name = name;
++        }
++
++        public String getEmail() {
++            return email;
++        }
++
++        public void setEmail(String email) {
++            this.email = email;
++        }
++    }
++}
+diff --git a/src/main/resources/officefloor/rest/api/clients/update.POST.yml b/src/main/resources/officefloor/rest/api/clients/update.POST.yml
+new file mode 100644
+index 0000000..69dc68f
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/clients/update.POST.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.ClientsUpdateLogic

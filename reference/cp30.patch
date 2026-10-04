@@ -1,0 +1,487 @@
+diff --git a/src/main/frontend/features/invoices/PaymentForm.tsx b/src/main/frontend/features/invoices/PaymentForm.tsx
+new file mode 100644
+index 0000000..89e9a9b
+--- /dev/null
++++ b/src/main/frontend/features/invoices/PaymentForm.tsx
+@@ -0,0 +1,70 @@
++import { useState } from 'react';
++import { useAddPayment } from './payments';
++
++// Record-a-payment form. useState holds only what the user is currently typing (the amount and the
++// date) and the validation error for the current attempt. A payment needs a positive amount and a
++// date — otherwise a visible error is shown and no row is added (the server + DB enforce the same).
++// On a valid submit it POSTs the payment and invalidates ['payments', invoiceId]; the list refreshes
++// from the server — nothing is hand-maintained here.
++export function PaymentForm({ invoiceId }: { invoiceId: number }) {
++  const [amount, setAmount] = useState('');
++  const [date, setDate] = useState('');
++  const [error, setError] = useState('');
++  const add = useAddPayment(invoiceId);
++
++  return (
++    <form
++      data-testid="payment-form"
++      onSubmit={(event) => {
++        event.preventDefault();
++        const amountValue = Number(amount);
++        if (!amount.trim() || Number.isNaN(amountValue) || amountValue <= 0) {
++          setError('Amount must be more than zero');
++          return;
++        }
++        if (!date.trim()) {
++          setError('A date is required');
++          return;
++        }
++        setError('');
++        add.mutate(
++          { amount: amountValue, date: date.trim() },
++          {
++            onSuccess: () => {
++              setAmount('');
++              setDate('');
++            },
++          },
++        );
++      }}
++    >
++      <input
++        data-testid="payment-form-amount"
++        placeholder="Amount"
++        value={amount}
++        onChange={(event) => {
++          setAmount(event.target.value);
++          setError('');
++        }}
++      />
++      <input
++        data-testid="payment-form-date"
++        type="date"
++        placeholder="Date"
++        value={date}
++        onChange={(event) => {
++          setDate(event.target.value);
++          setError('');
++        }}
++      />
++      <button data-testid="payment-form-submit" type="submit">
++        Record payment
++      </button>
++      {error && (
++        <p data-testid="payment-form-error" role="alert">
++          {error}
++        </p>
++      )}
++    </form>
++  );
++}
+diff --git a/src/main/frontend/features/invoices/PaymentList.tsx b/src/main/frontend/features/invoices/PaymentList.tsx
+new file mode 100644
+index 0000000..c4d0e56
+--- /dev/null
++++ b/src/main/frontend/features/invoices/PaymentList.tsx
+@@ -0,0 +1,32 @@
++import { formatMoney } from '../../ui/money';
++import { usePayments } from './payments';
++
++// An invoice's recorded payments — what a client has paid, and when. Reads its own query key
++// (scoped to the invoice). The table is always rendered, so an invoice with no payments yet still
++// shows the region ready for the first payment to be recorded.
++export function PaymentList({ invoiceId }: { invoiceId: number }) {
++  const { data: payments } = usePayments(invoiceId);
++
++  if (!payments) {
++    return null;
++  }
++
++  return (
++    <table data-testid="invoice-payments-table">
++      <thead>
++        <tr>
++          <th>Amount</th>
++          <th>Date</th>
++        </tr>
++      </thead>
++      <tbody>
++        {payments.map((payment) => (
++          <tr key={payment.id} data-testid={`payment-row-${payment.id}`}>
++            <td data-testid="payment-amount">{formatMoney(payment.amount)}</td>
++            <td data-testid="payment-date">{payment.date}</td>
++          </tr>
++        ))}
++      </tbody>
++    </table>
++  );
++}
+diff --git a/src/main/frontend/features/invoices/payments.slot.tsx b/src/main/frontend/features/invoices/payments.slot.tsx
+new file mode 100644
+index 0000000..9134531
+--- /dev/null
++++ b/src/main/frontend/features/invoices/payments.slot.tsx
+@@ -0,0 +1,18 @@
++import { InvoiceDetail } from '../../slots/defs/invoiceDetail';
++import { PaymentList } from './PaymentList';
++import { PaymentForm } from './PaymentForm';
++
++// The payments panel on the invoice detail page — its own file, filling the shared invoice.detail
++// region. The detail route is not touched to add it beyond rendering the region (CLAUDE.md rule 3):
++// it lists what a client has paid and offers a form to record another.
++function InvoicePayments({ invoiceId }: { invoiceId: number }) {
++  return (
++    <section data-testid="invoice-payments">
++      <h2>Payments</h2>
++      <PaymentList invoiceId={invoiceId} />
++      <PaymentForm invoiceId={invoiceId} />
++    </section>
++  );
++}
++
++export const contribution = InvoiceDetail.fill({ order: 10, Component: InvoicePayments });
+diff --git a/src/main/frontend/features/invoices/payments.ts b/src/main/frontend/features/invoices/payments.ts
+new file mode 100644
+index 0000000..6219291
+--- /dev/null
++++ b/src/main/frontend/features/invoices/payments.ts
+@@ -0,0 +1,37 @@
++import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
++import { getJson, postJson } from '../../api/http';
++
++// A payment recorded against an invoice: what a client has paid (amount) and when (date, an ISO
++// string e.g. "2026-02-01"). Everything that shows an invoice's payments shares the key
++// ['payments', invoiceId]; invalidating it after a write refreshes the list.
++export type Payment = {
++  id: number;
++  invoiceId: number;
++  amount: number;
++  date: string;
++};
++
++export const paymentsKey = (invoiceId: number) => ['payments', invoiceId] as const;
++
++export function usePayments(invoiceId: number) {
++  return useQuery({
++    queryKey: paymentsKey(invoiceId),
++    queryFn: () => getJson<Payment[]>(`/api/payments?invoiceId=${invoiceId}`),
++  });
++}
++
++// Record a payment on an invoice: POSTs {invoiceId, amount, date} and returns the saved row.
++// Invalidates ['payments', invoiceId] so the payment list re-reads from the server, and the
++// ['invoices'] prefix so anything showing invoices refreshes too — the two stay in step by sharing
++// the key, with no import between them.
++export function useAddPayment(invoiceId: number) {
++  const queryClient = useQueryClient();
++  return useMutation({
++    mutationFn: (input: { amount: number; date: string }) =>
++      postJson<Payment>('/api/payments', { invoiceId, ...input }),
++    onSuccess: () => {
++      void queryClient.invalidateQueries({ queryKey: paymentsKey(invoiceId) });
++      void queryClient.invalidateQueries({ queryKey: ['invoices'] });
++    },
++  });
++}
+diff --git a/src/main/frontend/routes/invoices.$invoiceId.tsx b/src/main/frontend/routes/invoices.$invoiceId.tsx
+index b2e561e..605f16a 100644
+--- a/src/main/frontend/routes/invoices.$invoiceId.tsx
++++ b/src/main/frontend/routes/invoices.$invoiceId.tsx
+@@ -1,6 +1,7 @@
+ import { createFileRoute } from '@tanstack/react-router';
+ import { LineItemForm } from '../features/invoices/LineItemForm';
+ import { LineItemList } from '../features/invoices/LineItemList';
++import { InvoiceDetail } from '../slots/defs/invoiceDetail';
+ 
+ // Drilling into an invoice is its own route — a new file, not a flag on the list (CLAUDE.md rule 2).
+ // The detail page lists the invoice's line items (what is being charged for), their worked-out
+@@ -19,6 +20,7 @@ function InvoiceDetailPage() {
+       <h1>Invoice</h1>
+       <LineItemList invoiceId={id} />
+       <LineItemForm invoiceId={id} />
++      <InvoiceDetail.Slot invoiceId={id} />
+     </section>
+   );
+ }
+diff --git a/src/main/frontend/slots/defs/invoiceDetail.ts b/src/main/frontend/slots/defs/invoiceDetail.ts
+new file mode 100644
+index 0000000..b8a395c
+--- /dev/null
++++ b/src/main/frontend/slots/defs/invoiceDetail.ts
+@@ -0,0 +1,8 @@
++import { defineSlot } from '../Slot';
++
++/**
++ * An invoice's detail page — panels about one invoice (its recorded payments, and more over time).
++ * The detail route renders this region and never lists what fills it; each panel is its own
++ * `*.slot.tsx` file under `features/invoices/`. Handed the invoice id as context.
++ */
++export const InvoiceDetail = defineSlot<{ invoiceId: number }>('invoice.detail');
+diff --git a/src/main/java/net/officefloor/hq/app/Payment.java b/src/main/java/net/officefloor/hq/app/Payment.java
+new file mode 100644
+index 0000000..5087e05
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/Payment.java
+@@ -0,0 +1,76 @@
++package net.officefloor.hq.app;
++
++import java.math.BigDecimal;
++import java.time.LocalDate;
++import jakarta.persistence.Column;
++import jakarta.persistence.Entity;
++import jakarta.persistence.GeneratedValue;
++import jakarta.persistence.GenerationType;
++import jakarta.persistence.Id;
++import jakarta.persistence.Table;
++
++/**
++ * A payment a client has made against an invoice: an {@code amount} and the {@code date} it was
++ * paid. Persisted to the {@code payments} table (Flyway V19) and belonging to one invoice
++ * ({@code invoiceId} -&gt; invoices.id), so an invoice's detail page lists only its own payments.
++ * The id is database-generated (IDENTITY) on create; the seed path inserts explicit ids directly
++ * via JdbcTemplate (see {@link TestSupportController}).
++ */
++@Entity
++@Table(name = "payments")
++public class Payment {
++
++    @Id
++    @GeneratedValue(strategy = GenerationType.IDENTITY)
++    private Long id;
++
++    @Column(name = "invoice_id")
++    private Long invoiceId;
++
++    private BigDecimal amount;
++
++    /** The date the payment was made. Serialized as an ISO date, e.g. "2026-02-01". */
++    @Column(name = "paid_date")
++    private LocalDate date;
++
++    public Payment() {
++    }
++
++    public Payment(Long invoiceId, BigDecimal amount, LocalDate date) {
++        this.invoiceId = invoiceId;
++        this.amount = amount;
++        this.date = date;
++    }
++
++    public Long getId() {
++        return id;
++    }
++
++    public void setId(Long id) {
++        this.id = id;
++    }
++
++    public Long getInvoiceId() {
++        return invoiceId;
++    }
++
++    public void setInvoiceId(Long invoiceId) {
++        this.invoiceId = invoiceId;
++    }
++
++    public BigDecimal getAmount() {
++        return amount;
++    }
++
++    public void setAmount(BigDecimal amount) {
++        this.amount = amount;
++    }
++
++    public LocalDate getDate() {
++        return date;
++    }
++
++    public void setDate(LocalDate date) {
++        this.date = date;
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/PaymentRepository.java b/src/main/java/net/officefloor/hq/app/PaymentRepository.java
+new file mode 100644
+index 0000000..021a9aa
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/PaymentRepository.java
+@@ -0,0 +1,11 @@
++package net.officefloor.hq.app;
++
++import java.util.List;
++import org.springframework.data.jpa.repository.JpaRepository;
++
++/** Data access for {@link Payment}. Injected into the OfficeFloor REST logic classes. */
++public interface PaymentRepository extends JpaRepository<Payment, Long> {
++
++    /** The payments on one invoice, oldest first, so an invoice's detail shows only its own. */
++    List<Payment> findByInvoiceIdOrderByIdAsc(Long invoiceId);
++}
+diff --git a/src/main/java/net/officefloor/hq/app/PaymentsGetLogic.java b/src/main/java/net/officefloor/hq/app/PaymentsGetLogic.java
+new file mode 100644
+index 0000000..3b31318
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/PaymentsGetLogic.java
+@@ -0,0 +1,18 @@
++package net.officefloor.hq.app;
++
++import java.util.List;
++import org.springframework.web.bind.annotation.RequestParam;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code GET /api/payments?invoiceId=<id>} — list the payments recorded against one invoice, oldest
++ * first, so an invoice's detail page shows only its own payments (amount and date). Wired by
++ * {@code officefloor/rest/api/payments.GET.yml}.
++ */
++public class PaymentsGetLogic {
++
++    public void service(@RequestParam("invoiceId") Long invoiceId, PaymentRepository payments,
++            ObjectResponse<List<Payment>> response) {
++        response.send(payments.findByInvoiceIdOrderByIdAsc(invoiceId));
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/PaymentsPostLogic.java b/src/main/java/net/officefloor/hq/app/PaymentsPostLogic.java
+new file mode 100644
+index 0000000..53a07d5
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/PaymentsPostLogic.java
+@@ -0,0 +1,74 @@
++package net.officefloor.hq.app;
++
++import java.math.BigDecimal;
++import java.time.LocalDate;
++import java.time.format.DateTimeParseException;
++import org.springframework.web.bind.annotation.RequestBody;
++import net.officefloor.server.http.HttpException;
++import net.officefloor.server.http.HttpStatus;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code POST /api/payments} — record a payment against an invoice from a {invoiceId, amount, date}
++ * body and return the saved row (with its generated id). Wired by
++ * {@code officefloor/rest/api/payments.POST.yml}. A payment must belong to an existing invoice,
++ * carry a positive amount and an ISO date; all are validated here and rejected with 400.
++ */
++public class PaymentsPostLogic {
++
++    public void service(@RequestBody NewPayment body, PaymentRepository payments,
++            InvoiceRepository invoices, ObjectResponse<Payment> response) {
++        Long invoiceId = body.getInvoiceId();
++        if (invoiceId == null || !invoices.existsById(invoiceId)) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A valid invoice is required");
++        }
++        BigDecimal amount = body.getAmount();
++        if (amount == null || amount.signum() <= 0) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A positive amount is required");
++        }
++        String dateText = body.getDate();
++        if (dateText == null || dateText.isBlank()) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A date is required");
++        }
++        LocalDate date;
++        try {
++            date = LocalDate.parse(dateText.trim());
++        } catch (DateTimeParseException e) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A valid date is required");
++        }
++
++        Payment saved = payments.save(new Payment(invoiceId, amount, date));
++        response.send(saved);
++    }
++
++    /** Request body for recording a payment against an invoice. */
++    public static class NewPayment {
++        private Long invoiceId;
++        private BigDecimal amount;
++        private String date;
++
++        public Long getInvoiceId() {
++            return invoiceId;
++        }
++
++        public void setInvoiceId(Long invoiceId) {
++            this.invoiceId = invoiceId;
++        }
++
++        public BigDecimal getAmount() {
++            return amount;
++        }
++
++        public void setAmount(BigDecimal amount) {
++            this.amount = amount;
++        }
++
++        public String getDate() {
++            return date;
++        }
++
++        public void setDate(String date) {
++            this.date = date;
++        }
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/TestSupportController.java b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+index 2274a4d..c3741a4 100644
+--- a/src/main/java/net/officefloor/hq/app/TestSupportController.java
++++ b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+@@ -39,6 +39,7 @@ public class TestSupportController {
+         jdbc.execute("TRUNCATE TABLE tags RESTART IDENTITY");
+         jdbc.execute("TRUNCATE TABLE notes RESTART IDENTITY");
+         jdbc.execute("TRUNCATE TABLE tasks RESTART IDENTITY");
++        jdbc.execute("TRUNCATE TABLE payments RESTART IDENTITY");
+         jdbc.execute("TRUNCATE TABLE invoice_line_items RESTART IDENTITY");
+         jdbc.execute("TRUNCATE TABLE invoices RESTART IDENTITY");
+         jdbc.execute("TRUNCATE TABLE contacts RESTART IDENTITY");
+@@ -176,5 +177,25 @@ public class TestSupportController {
+                 }
+             }
+         }
++        List<Map<String, Object>> payments = (List<Map<String, Object>>) fixture.get("payments");
++        if (payments != null) {
++            long maxId = 0;
++            for (Map<String, Object> payment : payments) {
++                long id = ((Number) payment.get("id")).longValue();
++                maxId = Math.max(maxId, id);
++                // Explicit fixture id (JPA save() would ignore it on an IDENTITY column).
++                jdbc.update("INSERT INTO payments (id, invoice_id, amount, paid_date)"
++                        + " VALUES (?, ?, ?, ?)",
++                        id,
++                        ((Number) payment.get("invoiceId")).longValue(),
++                        new java.math.BigDecimal(payment.get("amount").toString()),
++                        java.sql.Date.valueOf(payment.get("date").toString()));
++            }
++            // Explicit-id inserts don't advance H2's IDENTITY counter, so a later JPA save() would
++            // regenerate a seeded id and collide. Restart the counter past the seeded ids.
++            if (maxId > 0) {
++                jdbc.execute("ALTER TABLE payments ALTER COLUMN id RESTART WITH " + (maxId + 1));
++            }
++        }
+     }
+ }
+diff --git a/src/main/resources/db/migration/V19__payments.sql b/src/main/resources/db/migration/V19__payments.sql
+new file mode 100644
+index 0000000..c2faab5
+--- /dev/null
++++ b/src/main/resources/db/migration/V19__payments.sql
+@@ -0,0 +1,9 @@
++-- A payment recorded against an invoice: what a client has paid, and when. One row per payment —
++-- an amount and a date — belonging to one invoice (invoice_id -> invoices.id), so an invoice's
++-- detail page lists only its own payments.
++CREATE TABLE payments (
++    id          BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
++    invoice_id  BIGINT NOT NULL REFERENCES invoices(id),
++    amount      NUMERIC(12, 2) NOT NULL,
++    paid_date   DATE NOT NULL
++);
+diff --git a/src/main/resources/officefloor/rest/api/payments.GET.yml b/src/main/resources/officefloor/rest/api/payments.GET.yml
+new file mode 100644
+index 0000000..a26dbd9
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/payments.GET.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.PaymentsGetLogic
+diff --git a/src/main/resources/officefloor/rest/api/payments.POST.yml b/src/main/resources/officefloor/rest/api/payments.POST.yml
+new file mode 100644
+index 0000000..065353d
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/payments.POST.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.PaymentsPostLogic

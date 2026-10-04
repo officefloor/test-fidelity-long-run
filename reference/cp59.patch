@@ -1,0 +1,63 @@
+diff --git a/src/main/frontend/features/clients/ClientStatement.tsx b/src/main/frontend/features/clients/ClientStatement.tsx
+index 9e59ff0..887d7ba 100644
+--- a/src/main/frontend/features/clients/ClientStatement.tsx
++++ b/src/main/frontend/features/clients/ClientStatement.tsx
+@@ -1,13 +1,16 @@
+ import { useSearchParam, asFlag } from '../../url/useSearchParam';
+ import { formatMoney } from '../../ui/money';
++import { useClients } from './clients';
+ import { useClientStatement } from './statement';
+ 
+ // A client's statement: all of their invoices gathered in one place, each with what is still due,
+-// and the total they still owe. Whether the statement is open lives in the URL (`statement` key,
+-// CLAUDE.md rule 4), so it outlives the click and is shareable; the open control owns that key.
++// and the grand total they still owe — presented as a clean, printable summary. Whether the
++// statement is open lives in the URL (`statement` key, CLAUDE.md rule 4), so it outlives the click
++// and is shareable; the open control owns that key.
+ export function ClientStatement({ clientId }: { clientId: number }) {
+   const [open, setOpen] = useSearchParam('statement', asFlag);
+   const { data } = useClientStatement(clientId);
++  const { data: clients } = useClients();
+ 
+   if (!open) {
+     return (
+@@ -21,8 +24,21 @@ export function ClientStatement({ clientId }: { clientId: number }) {
+     return null;
+   }
+ 
++  const client = clients?.find((c) => c.id === clientId);
++
+   return (
+-    <section data-testid="client-statement">
++    <article data-testid="statement-print-view" className="statement-print-view">
++      <header>
++        <h2>Statement</h2>
++        {client ? (
++          <p>
++            <span data-testid="statement-client-name">{client.name}</span>
++            {' — '}
++            <span data-testid="statement-client-email">{client.email}</span>
++          </p>
++        ) : null}
++      </header>
++      <section data-testid="client-statement">
+       {data.projects.map((project) => (
+         <div key={project.projectId} data-testid={`statement-project-${project.projectId}`}>
+           <h3 data-testid="statement-project-name">{project.name}</h3>
+@@ -60,6 +76,15 @@ export function ClientStatement({ clientId }: { clientId: number }) {
+           {formatMoney(data.outstandingTotal)}
+         </strong>
+       </p>
+-    </section>
++      </section>
++      <footer>
++        <p className="statement-grand-total-line">
++          Grand total owed:{' '}
++          <strong data-testid="statement-grand-total">
++            {formatMoney(data.outstandingTotal)}
++          </strong>
++        </p>
++      </footer>
++    </article>
+   );
+ }

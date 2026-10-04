@@ -1,0 +1,235 @@
+diff --git a/src/main/frontend/features/clients/ClientStatement.tsx b/src/main/frontend/features/clients/ClientStatement.tsx
+new file mode 100644
+index 0000000..06fc93e
+--- /dev/null
++++ b/src/main/frontend/features/clients/ClientStatement.tsx
+@@ -0,0 +1,56 @@
++import { useSearchParam, asFlag } from '../../url/useSearchParam';
++import { formatMoney } from '../../ui/money';
++import { useClientStatement } from './statement';
++
++// A client's statement: all of their invoices gathered in one place, each with what is still due,
++// and the total they still owe. Whether the statement is open lives in the URL (`statement` key,
++// CLAUDE.md rule 4), so it outlives the click and is shareable; the open control owns that key.
++export function ClientStatement({ clientId }: { clientId: number }) {
++  const [open, setOpen] = useSearchParam('statement', asFlag);
++  const { data } = useClientStatement(clientId);
++
++  if (!open) {
++    return (
++      <button type="button" data-testid="client-statement-open" onClick={() => setOpen(true)}>
++        Statement
++      </button>
++    );
++  }
++
++  if (!data) {
++    return null;
++  }
++
++  return (
++    <section data-testid="client-statement">
++      <table data-testid="client-statement-table">
++        <thead>
++          <tr>
++            <th>Invoice</th>
++            <th>Amount</th>
++            <th>Paid</th>
++            <th>Due</th>
++            <th>Status</th>
++          </tr>
++        </thead>
++        <tbody>
++          {data.invoices.map((invoice) => (
++            <tr key={invoice.id} data-testid={`statement-invoice-row-${invoice.id}`}>
++              <td data-testid="statement-invoice-id">{invoice.id}</td>
++              <td data-testid="statement-invoice-amount">{formatMoney(invoice.amount)}</td>
++              <td data-testid="statement-invoice-paid">{formatMoney(invoice.paid)}</td>
++              <td data-testid="statement-invoice-due">{formatMoney(invoice.due)}</td>
++              <td data-testid="statement-invoice-status">{invoice.status}</td>
++            </tr>
++          ))}
++        </tbody>
++      </table>
++      <p>
++        Total owed:{' '}
++        <strong data-testid="client-outstanding-total">
++          {formatMoney(data.outstandingTotal)}
++        </strong>
++      </p>
++    </section>
++  );
++}
+diff --git a/src/main/frontend/features/clients/statement.slot.tsx b/src/main/frontend/features/clients/statement.slot.tsx
+new file mode 100644
+index 0000000..0631468
+--- /dev/null
++++ b/src/main/frontend/features/clients/statement.slot.tsx
+@@ -0,0 +1,6 @@
++import { ClientDetail } from '../../slots/defs/clientDetail';
++import { ClientStatement } from './ClientStatement';
++
++// The statement's presence on the client detail page — its own file filling the shared client.detail
++// region (CLAUDE.md rule 3). The detail route is not touched to add it.
++export const contribution = ClientDetail.fill({ order: 20, Component: ClientStatement });
+diff --git a/src/main/frontend/features/clients/statement.ts b/src/main/frontend/features/clients/statement.ts
+new file mode 100644
+index 0000000..38b1edb
+--- /dev/null
++++ b/src/main/frontend/features/clients/statement.ts
+@@ -0,0 +1,27 @@
++import { useQuery } from '@tanstack/react-query';
++import { getJson } from '../../api/http';
++
++// A client's statement, read from GET /api/clients/statement: every invoice across the client's
++// projects in one place, each with how much is still due, plus the outstanding total still owed.
++// Its own query key, scoped to the one client.
++export type StatementInvoice = {
++  id: number;
++  projectId: number;
++  amount: number;
++  paid: number;
++  due: number;
++  status: string;
++};
++
++export type ClientStatement = {
++  clientId: number;
++  invoices: StatementInvoice[];
++  outstandingTotal: number;
++};
++
++export function useClientStatement(clientId: number) {
++  return useQuery({
++    queryKey: ['clients', clientId, 'statement'] as const,
++    queryFn: () => getJson<ClientStatement>(`/api/clients/statement?clientId=${clientId}`),
++  });
++}
+diff --git a/src/main/java/net/officefloor/hq/app/ClientStatementGetLogic.java b/src/main/java/net/officefloor/hq/app/ClientStatementGetLogic.java
+new file mode 100644
+index 0000000..57ea303
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/ClientStatementGetLogic.java
+@@ -0,0 +1,114 @@
++package net.officefloor.hq.app;
++
++import java.math.BigDecimal;
++import java.util.Comparator;
++import java.util.List;
++import java.util.Set;
++import java.util.stream.Collectors;
++import org.springframework.web.bind.annotation.RequestParam;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code GET /api/clients/statement?clientId=<id>} — a client's statement: every invoice across ALL
++ * of that client's projects gathered in one place, each carrying how much is still due on it (its
++ * amount minus what has been paid against it — the same money rule as {@link InvoiceDueGetLogic}),
++ * and the OUTSTANDING TOTAL the client still owes (the sum of those dues). Derived on the server so
++ * the money math lives in one place. Wired by {@code officefloor/rest/api/clients/statement.GET.yml}.
++ */
++public class ClientStatementGetLogic {
++
++    public void service(@RequestParam("clientId") Long clientId, ProjectRepository projects,
++            InvoiceRepository invoices, PaymentRepository payments,
++            ObjectResponse<ClientStatementView> response) {
++        // The client's projects are the ones its invoices hang off (invoice -> project -> client).
++        Set<Long> projectIds = projects.findAll().stream()
++                .filter(p -> clientId.equals(p.getClientId()))
++                .map(Project::getId)
++                .collect(Collectors.toSet());
++        List<StatementInvoiceView> rows = invoices.findAll().stream()
++                .filter(i -> projectIds.contains(i.getProjectId()))
++                .sorted(Comparator.comparing(Invoice::getId))
++                .map(i -> {
++                    BigDecimal paid = payments.findByInvoiceIdOrderByIdAsc(i.getId()).stream()
++                            .map(Payment::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
++                    BigDecimal due = i.getAmount().subtract(paid);
++                    String status = InvoiceStatus.derive(i.getStatus(), i.getAmount(), paid);
++                    return new StatementInvoiceView(i.getId(), i.getProjectId(), i.getAmount(),
++                            paid, due, status);
++                })
++                .collect(Collectors.toList());
++        BigDecimal outstanding = rows.stream().map(StatementInvoiceView::getDue)
++                .reduce(BigDecimal.ZERO, BigDecimal::add);
++        response.send(new ClientStatementView(clientId, rows, outstanding));
++    }
++
++    /** A client's statement: its invoices, each with its due, and the total still owed across them. */
++    public static class ClientStatementView {
++        private final long clientId;
++        private final List<StatementInvoiceView> invoices;
++        private final BigDecimal outstandingTotal;
++
++        public ClientStatementView(long clientId, List<StatementInvoiceView> invoices,
++                BigDecimal outstandingTotal) {
++            this.clientId = clientId;
++            this.invoices = invoices;
++            this.outstandingTotal = outstandingTotal;
++        }
++
++        public long getClientId() {
++            return clientId;
++        }
++
++        public List<StatementInvoiceView> getInvoices() {
++            return invoices;
++        }
++
++        public BigDecimal getOutstandingTotal() {
++            return outstandingTotal;
++        }
++    }
++
++    /** One invoice on the statement: its amount, what has been paid, what is still due, and status. */
++    public static class StatementInvoiceView {
++        private final long id;
++        private final long projectId;
++        private final BigDecimal amount;
++        private final BigDecimal paid;
++        private final BigDecimal due;
++        private final String status;
++
++        public StatementInvoiceView(long id, long projectId, BigDecimal amount, BigDecimal paid,
++                BigDecimal due, String status) {
++            this.id = id;
++            this.projectId = projectId;
++            this.amount = amount;
++            this.paid = paid;
++            this.due = due;
++            this.status = status;
++        }
++
++        public long getId() {
++            return id;
++        }
++
++        public long getProjectId() {
++            return projectId;
++        }
++
++        public BigDecimal getAmount() {
++            return amount;
++        }
++
++        public BigDecimal getPaid() {
++            return paid;
++        }
++
++        public BigDecimal getDue() {
++            return due;
++        }
++
++        public String getStatus() {
++            return status;
++        }
++    }
++}
+diff --git a/src/main/resources/officefloor/rest/api/clients/statement.GET.yml b/src/main/resources/officefloor/rest/api/clients/statement.GET.yml
+new file mode 100644
+index 0000000..e8d81d2
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/clients/statement.GET.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.ClientStatementGetLogic

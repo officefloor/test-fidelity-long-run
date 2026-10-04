@@ -1,0 +1,161 @@
+diff --git a/src/main/frontend/features/dashboard/DashboardTopClients.tsx b/src/main/frontend/features/dashboard/DashboardTopClients.tsx
+new file mode 100644
+index 0000000..d231cc6
+--- /dev/null
++++ b/src/main/frontend/features/dashboard/DashboardTopClients.tsx
+@@ -0,0 +1,29 @@
++import { formatMoney } from '../../ui/money';
++import { useTopClients } from './topClients';
++
++// A dashboard tile: the top five clients ranked by how much they still owe, highest first. Each row
++// carries the data-testids the test reads; the owed amount is a money amount.
++export function DashboardTopClients() {
++  const { data, isPending, isError } = useTopClients();
++
++  if (isPending) {
++    return <p data-testid="dashboard-top-clients-loading">Loading…</p>;
++  }
++  if (isError) {
++    return <p data-testid="dashboard-top-clients-error">Could not load the top clients.</p>;
++  }
++
++  return (
++    <section data-testid="dashboard-top-clients">
++      <h2>Top clients</h2>
++      <ol>
++        {data.map((client) => (
++          <li key={client.clientId} data-testid={`top-client-row-${client.clientId}`}>
++            <span data-testid="top-client-name">{client.name}</span>
++            <span data-testid="top-client-amount">{formatMoney(client.outstanding)}</span>
++          </li>
++        ))}
++      </ol>
++    </section>
++  );
++}
+diff --git a/src/main/frontend/features/dashboard/topClients.slot.tsx b/src/main/frontend/features/dashboard/topClients.slot.tsx
+new file mode 100644
+index 0000000..662f103
+--- /dev/null
++++ b/src/main/frontend/features/dashboard/topClients.slot.tsx
+@@ -0,0 +1,6 @@
++import { DashboardSummary } from '../../slots/defs/dashboardSummary';
++import { DashboardTopClients } from './DashboardTopClients';
++
++// The top-clients tile's presence on the home dashboard — its own file filling the shared
++// dashboard.summary region (CLAUDE.md rule 3). The dashboard page is not touched to add it.
++export const contribution = DashboardSummary.fill({ order: 20, Component: DashboardTopClients });
+diff --git a/src/main/frontend/features/dashboard/topClients.ts b/src/main/frontend/features/dashboard/topClients.ts
+new file mode 100644
+index 0000000..0f55a9e
+--- /dev/null
++++ b/src/main/frontend/features/dashboard/topClients.ts
+@@ -0,0 +1,16 @@
++import { useQuery } from '@tanstack/react-query';
++import { getJson } from '../../api/http';
++
++// The home dashboard's top-clients ranking: the five clients who owe the most, highest first. The
++// money math lives on the server (same rule as the statement and the outstanding list). Shares the
++// ['dashboard'] key prefix so it re-reads whenever the dashboard's data changes.
++export type TopClient = { clientId: number; name: string; outstanding: number };
++
++export const topClientsKey = ['dashboard', 'topClients'] as const;
++
++export function useTopClients() {
++  return useQuery({
++    queryKey: topClientsKey,
++    queryFn: () => getJson<TopClient[]>('/api/dashboard/top-clients'),
++  });
++}
+diff --git a/src/main/java/net/officefloor/hq/app/DashboardTopClientsGetLogic.java b/src/main/java/net/officefloor/hq/app/DashboardTopClientsGetLogic.java
+new file mode 100644
+index 0000000..a2a5d2e
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/DashboardTopClientsGetLogic.java
+@@ -0,0 +1,78 @@
++package net.officefloor.hq.app;
++
++import java.math.BigDecimal;
++import java.util.Comparator;
++import java.util.List;
++import java.util.Map;
++import java.util.stream.Collectors;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code GET /api/dashboard/top-clients} — the home dashboard's "top clients" tile: the five clients
++ * who owe the most, ranked by what they still owe. For each client it sums the due across ALL of that
++ * client's invoices (invoice -&gt; project -&gt; client), each invoice's due being its net total after
++ * any discount/tax (the one-place {@link InvoiceMoney} rule) minus what has been paid against it — the
++ * same money math as {@link ClientsOutstandingGetLogic}, worked out on the server so every surface
++ * agrees. Only clients that owe something appear; the list is ordered by outstanding descending (ties
++ * broken by client id for a stable order) and capped at five. Wired by
++ * {@code officefloor/rest/api/dashboard/top-clients.GET.yml}.
++ */
++public class DashboardTopClientsGetLogic {
++
++    private static final int TOP_N = 5;
++
++    public void service(ClientRepository clients, ProjectRepository projects,
++            InvoiceRepository invoices, PaymentRepository payments,
++            ObjectResponse<List<TopClientView>> response) {
++        // invoice -> project -> client: map each project to the client it belongs to.
++        Map<Long, Long> projectToClient = projects.findAll().stream()
++                .collect(Collectors.toMap(Project::getId, Project::getClientId));
++        List<TopClientView> rows = clients.findAll().stream()
++                .map(client -> {
++                    BigDecimal outstanding = invoices.findAll().stream()
++                            .filter(i -> client.getId().equals(projectToClient.get(i.getProjectId())))
++                            .map(i -> {
++                                BigDecimal paid = payments.findByInvoiceIdOrderByIdAsc(i.getId())
++                                        .stream().map(Payment::getAmount)
++                                        .reduce(BigDecimal.ZERO, BigDecimal::add);
++                                BigDecimal netTotal = InvoiceMoney.netTotal(i.getAmount(),
++                                        i.getDiscountPct(), i.getTaxPct());
++                                return netTotal.subtract(paid);
++                            })
++                            .reduce(BigDecimal.ZERO, BigDecimal::add);
++                    return new TopClientView(client.getId(), client.getName(), outstanding);
++                })
++                // Only clients that actually owe something are "top clients".
++                .filter(row -> row.getOutstanding().compareTo(BigDecimal.ZERO) > 0)
++                .sorted(Comparator.comparing(TopClientView::getOutstanding).reversed()
++                        .thenComparing(TopClientView::getClientId))
++                .limit(TOP_N)
++                .collect(Collectors.toList());
++        response.send(rows);
++    }
++
++    /** One client in the ranking: who they are and how much they still owe. */
++    public static class TopClientView {
++        private final long clientId;
++        private final String name;
++        private final BigDecimal outstanding;
++
++        public TopClientView(long clientId, String name, BigDecimal outstanding) {
++            this.clientId = clientId;
++            this.name = name;
++            this.outstanding = outstanding;
++        }
++
++        public long getClientId() {
++            return clientId;
++        }
++
++        public String getName() {
++            return name;
++        }
++
++        public BigDecimal getOutstanding() {
++            return outstanding;
++        }
++    }
++}
+diff --git a/src/main/resources/officefloor/rest/api/dashboard/top-clients.GET.yml b/src/main/resources/officefloor/rest/api/dashboard/top-clients.GET.yml
+new file mode 100644
+index 0000000..36a8b27
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/dashboard/top-clients.GET.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.DashboardTopClientsGetLogic

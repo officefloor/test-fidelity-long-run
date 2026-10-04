@@ -1,0 +1,250 @@
+diff --git a/src/main/frontend/features/dashboard/DashboardOverdue.tsx b/src/main/frontend/features/dashboard/DashboardOverdue.tsx
+new file mode 100644
+index 0000000..0b97445
+--- /dev/null
++++ b/src/main/frontend/features/dashboard/DashboardOverdue.tsx
+@@ -0,0 +1,21 @@
++import { useOverdue } from './overdue';
++
++// A dashboard tile: how many sent invoices are overdue (past their due date as of the dashboard's
++// reference date). Carries the data-testid the test reads.
++export function DashboardOverdue() {
++  const { data, isPending, isError } = useOverdue();
++
++  if (isPending) {
++    return <p data-testid="dashboard-overdue-loading">Loading…</p>;
++  }
++  if (isError) {
++    return <p data-testid="dashboard-overdue-error">Could not load overdue invoices.</p>;
++  }
++
++  return (
++    <dl data-testid="dashboard-overdue">
++      <dt>Overdue invoices</dt>
++      <dd data-testid="dashboard-overdue-count">{data.overdueCount}</dd>
++    </dl>
++  );
++}
+diff --git a/src/main/frontend/features/dashboard/overdue.slot.tsx b/src/main/frontend/features/dashboard/overdue.slot.tsx
+new file mode 100644
+index 0000000..976054f
+--- /dev/null
++++ b/src/main/frontend/features/dashboard/overdue.slot.tsx
+@@ -0,0 +1,6 @@
++import { DashboardSummary } from '../../slots/defs/dashboardSummary';
++import { DashboardOverdue } from './DashboardOverdue';
++
++// The overdue-invoices tile's presence on the home dashboard — its own file filling the shared
++// dashboard.summary region (CLAUDE.md rule 3). The dashboard page is not touched to add it.
++export const contribution = DashboardSummary.fill({ order: 10, Component: DashboardOverdue });
+diff --git a/src/main/frontend/features/dashboard/overdue.ts b/src/main/frontend/features/dashboard/overdue.ts
+new file mode 100644
+index 0000000..c74d536
+--- /dev/null
++++ b/src/main/frontend/features/dashboard/overdue.ts
+@@ -0,0 +1,18 @@
++import { useQuery } from '@tanstack/react-query';
++import { getJson } from '../../api/http';
++
++// How many SENT invoices are overdue, as measured against the dashboard's fixed reference date. Shares
++// the ['dashboard', 'overdue'] key; any feature that sends or pays an invoice can invalidate it to
++// keep the count in step.
++export type OverdueSummary = {
++  overdueCount: number;
++};
++
++export const overdueKey = ['dashboard', 'overdue'] as const;
++
++export function useOverdue() {
++  return useQuery({
++    queryKey: overdueKey,
++    queryFn: () => getJson<OverdueSummary>('/api/dashboard/overdue'),
++  });
++}
+diff --git a/src/main/frontend/routes/dashboard.tsx b/src/main/frontend/routes/dashboard.tsx
+index ae06422..b47026f 100644
+--- a/src/main/frontend/routes/dashboard.tsx
++++ b/src/main/frontend/routes/dashboard.tsx
+@@ -1,5 +1,6 @@
+ import { createFileRoute } from '@tanstack/react-router';
+ import { Dashboard } from '../features/dashboard/Dashboard';
++import { DashboardSummary } from '../slots/defs/dashboardSummary';
+ 
+ // The Dashboard page: one new file under routes/. The route table is generated from this directory.
+ export const Route = createFileRoute('/dashboard')({
+@@ -11,6 +12,7 @@ function DashboardPage() {
+     <section data-testid="dashboard-page">
+       <h1>Dashboard</h1>
+       <Dashboard />
++      <DashboardSummary.Slot />
+     </section>
+   );
+ }
+diff --git a/src/main/frontend/slots/defs/dashboardSummary.ts b/src/main/frontend/slots/defs/dashboardSummary.ts
+new file mode 100644
+index 0000000..dddb10e
+--- /dev/null
++++ b/src/main/frontend/slots/defs/dashboardSummary.ts
+@@ -0,0 +1,8 @@
++import { defineSlot } from '../Slot';
++
++/**
++ * The home dashboard's summary region — at-a-glance tiles about the business (overdue invoices, and
++ * more over time). The dashboard page renders this region and never lists what fills it; each tile is
++ * its own `*.slot.tsx` file under `features/dashboard/`.
++ */
++export const DashboardSummary = defineSlot('dashboard.summary');
+diff --git a/src/main/java/net/officefloor/hq/app/AppClock.java b/src/main/java/net/officefloor/hq/app/AppClock.java
+new file mode 100644
+index 0000000..eece1f5
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/AppClock.java
+@@ -0,0 +1,43 @@
++package net.officefloor.hq.app;
++
++import java.time.LocalDate;
++import jakarta.persistence.Column;
++import jakarta.persistence.Entity;
++import jakarta.persistence.Id;
++import jakarta.persistence.Table;
++
++/**
++ * The fixed reference date ("as of") the dashboard measures "overdue" against, so the overdue count
++ * is deterministic rather than dependent on the wall clock. Persisted as a single row (id = 1) in the
++ * {@code app_clock} table (Flyway V23). The harness seed sets it (see {@link TestSupportController});
++ * when absent the overdue endpoint falls back to the real current date.
++ */
++@Entity
++@Table(name = "app_clock")
++public class AppClock {
++
++    @Id
++    private Long id;
++
++    @Column(name = "as_of")
++    private LocalDate asOf;
++
++    public AppClock() {
++    }
++
++    public Long getId() {
++        return id;
++    }
++
++    public void setId(Long id) {
++        this.id = id;
++    }
++
++    public LocalDate getAsOf() {
++        return asOf;
++    }
++
++    public void setAsOf(LocalDate asOf) {
++        this.asOf = asOf;
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/AppClockRepository.java b/src/main/java/net/officefloor/hq/app/AppClockRepository.java
+new file mode 100644
+index 0000000..60b2a47
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/AppClockRepository.java
+@@ -0,0 +1,7 @@
++package net.officefloor.hq.app;
++
++import org.springframework.data.jpa.repository.JpaRepository;
++
++/** Data access for {@link AppClock} — the dashboard's fixed "as of" reference date (single row). */
++public interface AppClockRepository extends JpaRepository<AppClock, Long> {
++}
+diff --git a/src/main/java/net/officefloor/hq/app/DashboardOverdueGetLogic.java b/src/main/java/net/officefloor/hq/app/DashboardOverdueGetLogic.java
+new file mode 100644
+index 0000000..1f6507f
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/DashboardOverdueGetLogic.java
+@@ -0,0 +1,37 @@
++package net.officefloor.hq.app;
++
++import java.time.LocalDate;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code GET /api/dashboard/overdue} — how many SENT invoices are overdue: those that have been sent
++ * (DRAFT and PAID do not count) and whose due date is before the dashboard's fixed reference date.
++ * "Overdue" is measured against the seeded {@link AppClock} "as of" date so the count is
++ * deterministic; with no clock set it falls back to the real current date. Wired by
++ * {@code officefloor/rest/api/dashboard/overdue.GET.yml}.
++ */
++public class DashboardOverdueGetLogic {
++
++    public void service(InvoiceRepository invoices, AppClockRepository clocks,
++            ObjectResponse<OverdueView> response) {
++        LocalDate asOf = clocks.findById(1L).map(AppClock::getAsOf).orElse(LocalDate.now());
++        long overdueCount = invoices.findAll().stream()
++                .filter(i -> "SENT".equals(i.getStatus()))
++                .filter(i -> i.getDueDate() != null && i.getDueDate().isBefore(asOf))
++                .count();
++        response.send(new OverdueView(overdueCount));
++    }
++
++    /** How many sent invoices are overdue as of the reference date. */
++    public static class OverdueView {
++        private final long overdueCount;
++
++        public OverdueView(long overdueCount) {
++            this.overdueCount = overdueCount;
++        }
++
++        public long getOverdueCount() {
++            return overdueCount;
++        }
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/TestSupportController.java b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+index 978c61c..7bc34f9 100644
+--- a/src/main/java/net/officefloor/hq/app/TestSupportController.java
++++ b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+@@ -46,12 +46,22 @@ public class TestSupportController {
+         jdbc.execute("TRUNCATE TABLE projects RESTART IDENTITY");
+         jdbc.execute("TRUNCATE TABLE clients RESTART IDENTITY");
+         jdbc.execute("SET REFERENTIAL_INTEGRITY TRUE");
++        // The dashboard's fixed "as of" reference date (Flyway V23) — nothing references it, so a
++        // plain truncate clears the single row each spec seeds.
++        jdbc.execute("TRUNCATE TABLE app_clock");
+     }
+ 
+     /** Insert the fixture a spec needs; the payload shape evolves with the schema. */
+     @PostMapping("/seed")
+     @SuppressWarnings("unchecked")
+     public void seed(@RequestBody Map<String, Object> fixture) {
++        // asOf is the fixed reference date the dashboard measures "overdue" against (Flyway V23). A
++        // spec seeds one so the overdue count is deterministic; stored as the single app_clock row.
++        Object asOf = fixture.get("asOf");
++        if (asOf != null) {
++            jdbc.update("INSERT INTO app_clock (id, as_of) VALUES (1, ?)",
++                    java.sql.Date.valueOf(asOf.toString()));
++        }
+         List<Map<String, Object>> clients = (List<Map<String, Object>>) fixture.get("clients");
+         if (clients != null) {
+             for (Map<String, Object> client : clients) {
+diff --git a/src/main/resources/db/migration/V23__app_clock.sql b/src/main/resources/db/migration/V23__app_clock.sql
+new file mode 100644
+index 0000000..95de5e4
+--- /dev/null
++++ b/src/main/resources/db/migration/V23__app_clock.sql
+@@ -0,0 +1,8 @@
++-- The dashboard measures "overdue" against a fixed reference date rather than the wall clock, so the
++-- overdue count is deterministic under test. That reference date ("as of") lives in a single-row
++-- app_clock table: the harness seed sets it, and the dashboard's overdue endpoint reads it (falling
++-- back to the real current date when none is set). A single row is expected, keyed on id = 1.
++CREATE TABLE app_clock (
++    id INT PRIMARY KEY,
++    as_of DATE NOT NULL
++);
+diff --git a/src/main/resources/officefloor/rest/api/dashboard/overdue.GET.yml b/src/main/resources/officefloor/rest/api/dashboard/overdue.GET.yml
+new file mode 100644
+index 0000000..bbb62dc
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/dashboard/overdue.GET.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.DashboardOverdueGetLogic

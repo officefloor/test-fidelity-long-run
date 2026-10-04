@@ -1,0 +1,114 @@
+diff --git a/src/main/frontend/features/clients/ClientForm.tsx b/src/main/frontend/features/clients/ClientForm.tsx
+index e397aa1..15db17b 100644
+--- a/src/main/frontend/features/clients/ClientForm.tsx
++++ b/src/main/frontend/features/clients/ClientForm.tsx
+@@ -1,11 +1,14 @@
+ import { useState } from 'react';
++import { isValidEmail } from './email';
+ import { useCreateClient } from './clients';
+ 
+-// Add-a-client form. useState holds only what the user is currently typing; on submit it POSTs and
+-// invalidates the ['clients'] key, so the list refetches itself.
++// Add-a-client form. useState holds only what the user is currently typing; on submit it validates
++// the email, and only a proper address POSTs and invalidates the ['clients'] key. A blank or
++// malformed email surfaces client-form-email-error and never creates a row.
+ export function ClientForm() {
+   const [name, setName] = useState('');
+   const [email, setEmail] = useState('');
++  const [emailError, setEmailError] = useState(false);
+   const create = useCreateClient();
+ 
+   return (
+@@ -13,6 +16,11 @@ export function ClientForm() {
+       data-testid="client-form"
+       onSubmit={(event) => {
+         event.preventDefault();
++        if (!isValidEmail(email)) {
++          setEmailError(true);
++          return;
++        }
++        setEmailError(false);
+         create.mutate(
+           { name, email },
+           {
+@@ -34,8 +42,18 @@ export function ClientForm() {
+         data-testid="client-form-email"
+         placeholder="Email"
+         value={email}
+-        onChange={(event) => setEmail(event.target.value)}
++        onChange={(event) => {
++          setEmail(event.target.value);
++          if (emailError) {
++            setEmailError(false);
++          }
++        }}
+       />
++      {emailError && (
++        <span data-testid="client-form-email-error" role="alert">
++          Enter a valid email address.
++        </span>
++      )}
+       <button data-testid="client-form-submit" type="submit">
+         Add client
+       </button>
+diff --git a/src/main/frontend/features/clients/email.ts b/src/main/frontend/features/clients/email.ts
+new file mode 100644
+index 0000000..ea004bd
+--- /dev/null
++++ b/src/main/frontend/features/clients/email.ts
+@@ -0,0 +1,8 @@
++// One definition of "a proper email address" for the clients feature: a local part, an @, and a
++// domain with a dot — no surrounding whitespace. The form blocks submit on anything else, and the
++// server (ClientsPostLogic) + DB CHECK enforce the same rule so a client cannot be saved without it.
++const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
++
++export function isValidEmail(email: string): boolean {
++  return EMAIL_PATTERN.test(email.trim());
++}
+diff --git a/src/main/java/net/officefloor/hq/app/ClientsPostLogic.java b/src/main/java/net/officefloor/hq/app/ClientsPostLogic.java
+index d4cfad6..2f7677b 100644
+--- a/src/main/java/net/officefloor/hq/app/ClientsPostLogic.java
++++ b/src/main/java/net/officefloor/hq/app/ClientsPostLogic.java
+@@ -1,17 +1,29 @@
+ package net.officefloor.hq.app;
+ 
++import java.util.regex.Pattern;
+ import org.springframework.web.bind.annotation.RequestBody;
++import net.officefloor.server.http.HttpException;
++import net.officefloor.server.http.HttpStatus;
+ import net.officefloor.web.ObjectResponse;
+ 
+ /**
+  * {@code POST /api/clients} — create a client from a {name, email} body and return the saved row
+- * (with its generated id). Wired by {@code officefloor/rest/api/clients.POST.yml}.
++ * (with its generated id). Wired by {@code officefloor/rest/api/clients.POST.yml}. A client is never
++ * saved without a proper email address: the email is validated here and rejected with 400 before it
++ * reaches the repository (the DB CHECK in Flyway V2 is the matching last line of defence).
+  */
+ public class ClientsPostLogic {
+ 
++    /** A proper email address: local part, @, and a domain with a dot — no whitespace. */
++    private static final Pattern EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
++
+     public void service(@RequestBody NewClient newClient, ClientRepository repository,
+             ObjectResponse<Client> response) {
+-        Client saved = repository.save(new Client(newClient.getName(), newClient.getEmail()));
++        String email = newClient.getEmail();
++        if (email == null || !EMAIL.matcher(email.trim()).matches()) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A proper email address is required");
++        }
++        Client saved = repository.save(new Client(newClient.getName(), email.trim()));
+         response.send(saved);
+     }
+ 
+diff --git a/src/main/resources/db/migration/V2__clients_email_required.sql b/src/main/resources/db/migration/V2__clients_email_required.sql
+new file mode 100644
+index 0000000..7340f49
+--- /dev/null
++++ b/src/main/resources/db/migration/V2__clients_email_required.sql
+@@ -0,0 +1,5 @@
++-- A client must have a proper email address, not just a non-null one. Enforce the shape at the DB
++-- level too (local part, @, a domain with a dot), matching the server + front-end validation:
++-- rejects '' and values with no @/domain, so no bad row can slip in through any path.
++ALTER TABLE clients
++    ADD CONSTRAINT clients_email_format CHECK (email LIKE '%_@_%._%');

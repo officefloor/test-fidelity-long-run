@@ -1,0 +1,260 @@
+diff --git a/src/main/frontend/features/search/GlobalSearch.tsx b/src/main/frontend/features/search/GlobalSearch.tsx
+new file mode 100644
+index 0000000..390c68f
+--- /dev/null
++++ b/src/main/frontend/features/search/GlobalSearch.tsx
+@@ -0,0 +1,74 @@
++import { Link } from '@tanstack/react-router';
++import { asString, useSearchParam } from '../../url/useSearchParam';
++import { useSearchData } from './search';
++
++// One search box that looks across BOTH clients and projects. It OWNS the `q` URL param — a search
++// outlives a click, so it lives in the URL, not a parent's useState (CLAUDE.md rule 4). The matches
++// are read from the shared /api/search collection and filtered by name here, grouped by kind.
++// Archived rows are tucked away, mirroring the per-section lists.
++export function GlobalSearch() {
++  const [query, setQuery] = useSearchParam('q', asString);
++  const { data } = useSearchData();
++
++  const needle = query.trim().toLowerCase();
++  const clients = (data?.clients ?? []).filter(
++    (c) => !c.archived && needle !== '' && c.name.toLowerCase().includes(needle),
++  );
++  const projects = (data?.projects ?? []).filter(
++    (p) => !p.archived && needle !== '' && p.name.toLowerCase().includes(needle),
++  );
++
++  return (
++    <section>
++      <input
++        data-testid="global-search"
++        type="search"
++        placeholder="Search clients and projects"
++        value={query}
++        onChange={(event) => setQuery(event.target.value)}
++      />
++
++      <table data-testid="search-clients">
++        <thead>
++          <tr>
++            <th>Client</th>
++            <th>Email</th>
++          </tr>
++        </thead>
++        <tbody>
++          {clients.map((client) => (
++            <tr key={client.id} data-testid={`client-row-${client.id}`}>
++              <td data-testid="client-name">
++                <Link to="/clients/$clientId" params={{ clientId: String(client.id) }}>
++                  {client.name}
++                </Link>
++              </td>
++              <td data-testid="client-email">{client.email}</td>
++            </tr>
++          ))}
++        </tbody>
++      </table>
++
++      <table data-testid="search-projects">
++        <thead>
++          <tr>
++            <th>Project</th>
++            <th>Client</th>
++          </tr>
++        </thead>
++        <tbody>
++          {projects.map((project) => (
++            <tr key={project.id} data-testid={`project-row-${project.id}`}>
++              <td data-testid="project-name">
++                <Link to="/projects/$projectId" params={{ projectId: String(project.id) }}>
++                  {project.name}
++                </Link>
++              </td>
++              <td data-testid="project-client">{project.clientName}</td>
++            </tr>
++          ))}
++        </tbody>
++      </table>
++    </section>
++  );
++}
+diff --git a/src/main/frontend/features/search/globalSearch.slot.tsx b/src/main/frontend/features/search/globalSearch.slot.tsx
+new file mode 100644
+index 0000000..e8d030f
+--- /dev/null
++++ b/src/main/frontend/features/search/globalSearch.slot.tsx
+@@ -0,0 +1,6 @@
++import { HomeContent } from '../../slots/defs/homeContent';
++import { GlobalSearch } from './GlobalSearch';
++
++// The global search box's presence on the home page — its own file, filling the shared home.content
++// region. The home route is not touched to add it (CLAUDE.md rule 3).
++export const contribution = HomeContent.fill({ order: 0, Component: GlobalSearch });
+diff --git a/src/main/frontend/features/search/search.ts b/src/main/frontend/features/search/search.ts
+new file mode 100644
+index 0000000..bd0d33b
+--- /dev/null
++++ b/src/main/frontend/features/search/search.ts
+@@ -0,0 +1,25 @@
++import { useQuery } from '@tanstack/react-query';
++import { getJson } from '../../api/http';
++
++// The one collection the global search box reads: every client and every project, in a single
++// payload served by GET /api/search. The box filters this by name on the client — a search outlives
++// a click, so the term lives in the URL, read directly by the box (CLAUDE.md rules 4 & 5).
++
++export type SearchClient = { id: number; name: string; email: string; archived: boolean };
++export type SearchProject = {
++  id: number;
++  name: string;
++  clientId: number;
++  clientName: string;
++  archived: boolean;
++};
++export type SearchResult = { clients: SearchClient[]; projects: SearchProject[] };
++
++export const searchKey = ['search'] as const;
++
++export function useSearchData() {
++  return useQuery({
++    queryKey: searchKey,
++    queryFn: () => getJson<SearchResult>('/api/search'),
++  });
++}
+diff --git a/src/main/frontend/routes/index.tsx b/src/main/frontend/routes/index.tsx
+index 1766a8a..e17ce8f 100644
+--- a/src/main/frontend/routes/index.tsx
++++ b/src/main/frontend/routes/index.tsx
+@@ -1,11 +1,18 @@
+ import { createFileRoute } from '@tanstack/react-router';
++import { HomeContent } from '../slots/defs/homeContent';
+ 
+-// The base home page: nothing here until a feature adds itself. A page is ONE new file under
+-// routes/ — `createFileRoute('<its url>')` — plus its nav link under features/.
++// The base home page: its body is the `home.content` region, which features fill — the page never
++// lists what goes in it (CLAUDE.md rule 3). A page is ONE new file under routes/; a thing that
++// lives on home is a `*.slot.tsx` file filling this region.
+ export const Route = createFileRoute('/')({
+   component: Home,
+ });
+ 
+ function Home() {
+-  return <p data-testid="home-empty">Nothing here yet.</p>;
++  return (
++    <>
++      <p data-testid="home-empty">Nothing here yet.</p>
++      <HomeContent.Slot />
++    </>
++  );
+ }
+diff --git a/src/main/frontend/slots/defs/homeContent.ts b/src/main/frontend/slots/defs/homeContent.ts
+new file mode 100644
+index 0000000..8c1ae6e
+--- /dev/null
++++ b/src/main/frontend/slots/defs/homeContent.ts
+@@ -0,0 +1,8 @@
++import { defineSlot } from '../Slot';
++
++/**
++ * The home page's body — the landing region features fill. The home route renders this region and
++ * never lists what goes in it; each thing that lives on home (the global search box, and more over
++ * time) is its own `*.slot.tsx` file under `features/`.
++ */
++export const HomeContent = defineSlot('home.content');
+diff --git a/src/main/java/net/officefloor/hq/app/SearchGetLogic.java b/src/main/java/net/officefloor/hq/app/SearchGetLogic.java
+new file mode 100644
+index 0000000..d7ab825
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/SearchGetLogic.java
+@@ -0,0 +1,83 @@
++package net.officefloor.hq.app;
++
++import java.util.List;
++import java.util.Map;
++import java.util.stream.Collectors;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code GET /api/search} — the one collection the global search box reads: every client and every
++ * project (each project carrying the NAME of its client, like the projects list) in a single
++ * payload. The box filters by name on the client, mirroring how the per-section lists filter their
++ * own shared collection. Wired by {@code officefloor/rest/api/search.GET.yml}.
++ */
++public class SearchGetLogic {
++
++    public void service(ClientRepository clients, ProjectRepository projects,
++            ObjectResponse<SearchResult> response) {
++        Map<Long, String> nameByClient = clients.findAll().stream()
++                .collect(Collectors.toMap(Client::getId, Client::getName));
++        List<ProjectHit> projectHits = projects.findAll().stream()
++                .map(p -> new ProjectHit(p.getId(), p.getName(), p.getClientId(),
++                        nameByClient.get(p.getClientId()), p.isArchived()))
++                .collect(Collectors.toList());
++        response.send(new SearchResult(clients.findAll(), projectHits));
++    }
++
++    /** Everything the global search box looks across: the clients and the projects. */
++    public static class SearchResult {
++        private final List<Client> clients;
++        private final List<ProjectHit> projects;
++
++        public SearchResult(List<Client> clients, List<ProjectHit> projects) {
++            this.clients = clients;
++            this.projects = projects;
++        }
++
++        public List<Client> getClients() {
++            return clients;
++        }
++
++        public List<ProjectHit> getProjects() {
++            return projects;
++        }
++    }
++
++    /** A project as the search box shows it: enough to name it and link to it. */
++    public static class ProjectHit {
++        private final Long id;
++        private final String name;
++        private final Long clientId;
++        private final String clientName;
++        private final boolean archived;
++
++        public ProjectHit(Long id, String name, Long clientId, String clientName,
++                boolean archived) {
++            this.id = id;
++            this.name = name;
++            this.clientId = clientId;
++            this.clientName = clientName;
++            this.archived = archived;
++        }
++
++        public Long getId() {
++            return id;
++        }
++
++        public String getName() {
++            return name;
++        }
++
++        public Long getClientId() {
++            return clientId;
++        }
++
++        public String getClientName() {
++            return clientName;
++        }
++
++        public boolean isArchived() {
++            return archived;
++        }
++    }
++}
+diff --git a/src/main/resources/officefloor/rest/api/search.GET.yml b/src/main/resources/officefloor/rest/api/search.GET.yml
+new file mode 100644
+index 0000000..7893956
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/search.GET.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.SearchGetLogic

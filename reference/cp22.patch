@@ -1,0 +1,173 @@
+diff --git a/src/main/frontend/features/invoices/LineItemList.tsx b/src/main/frontend/features/invoices/LineItemList.tsx
+index 1cc7fbc..b71515a 100644
+--- a/src/main/frontend/features/invoices/LineItemList.tsx
++++ b/src/main/frontend/features/invoices/LineItemList.tsx
+@@ -1,4 +1,5 @@
+ import { formatMoney } from '../../ui/money';
++import { InvoiceLineItemRow } from '../../slots/defs/invoiceLineItemRow';
+ import { useLineItems } from './lineItems';
+ 
+ // An invoice's line items and what they add up to. Reads its own query key (scoped to the invoice)
+@@ -26,6 +27,7 @@ export function LineItemList({ invoiceId }: { invoiceId: number }) {
+           <th>Qty</th>
+           <th>Unit price</th>
+           <th>Amount</th>
++          <th></th>
+         </tr>
+       </thead>
+       <tbody>
+@@ -37,6 +39,9 @@ export function LineItemList({ invoiceId }: { invoiceId: number }) {
+             <td data-testid="lineitem-amount">
+               {formatMoney(Number(line.qty) * Number(line.unitPrice))}
+             </td>
++            <td>
++              <InvoiceLineItemRow.Slot lineItem={line} />
++            </td>
+           </tr>
+         ))}
+       </tbody>
+@@ -46,6 +51,7 @@ export function LineItemList({ invoiceId }: { invoiceId: number }) {
+           <td></td>
+           <td></td>
+           <td data-testid="invoice-amount">{formatMoney(total)}</td>
++          <td></td>
+         </tr>
+       </tfoot>
+     </table>
+diff --git a/src/main/frontend/features/invoices/lineItems.ts b/src/main/frontend/features/invoices/lineItems.ts
+index 68d0040..09c8651 100644
+--- a/src/main/frontend/features/invoices/lineItems.ts
++++ b/src/main/frontend/features/invoices/lineItems.ts
+@@ -36,3 +36,18 @@ export function useAddLineItem(invoiceId: number) {
+     },
+   });
+ }
++
++// Take a line off an invoice: POSTs {id} and returns the updated invoice. Invalidates the same keys
++// as adding — ['lineItems', invoiceId] so the line list and its worked-out total re-read, and the
++// ['invoices'] prefix so every invoice list showing the amount refreshes too. The total is never
++// edited here; it drops because the list re-reads from the server (CLAUDE.md rule 5).
++export function useRemoveLineItem(invoiceId: number) {
++  const queryClient = useQueryClient();
++  return useMutation({
++    mutationFn: (id: number) => postJson<unknown>('/api/lineitems/remove', { id }),
++    onSuccess: () => {
++      void queryClient.invalidateQueries({ queryKey: lineItemsKey(invoiceId) });
++      void queryClient.invalidateQueries({ queryKey: ['invoices'] });
++    },
++  });
++}
+diff --git a/src/main/frontend/features/invoices/removeLineItem.slot.tsx b/src/main/frontend/features/invoices/removeLineItem.slot.tsx
+new file mode 100644
+index 0000000..109078e
+--- /dev/null
++++ b/src/main/frontend/features/invoices/removeLineItem.slot.tsx
+@@ -0,0 +1,23 @@
++import { InvoiceLineItemRow } from '../../slots/defs/invoiceLineItemRow';
++import type { LineItem } from './lineItems';
++import { useRemoveLineItem } from './lineItems';
++
++// "Take this line off the invoice" — a self-contained row action filling the line-item row region.
++// The table is not edited to add it (CLAUDE.md rule 3); it fills the slot the table renders per row.
++// Clicking removes the line through the shared mutation, which invalidates ['lineItems', invoiceId]
++// so the list and its worked-out total re-read from the server — the total drops with no hand-count.
++function RemoveLineItem({ lineItem }: { lineItem: LineItem }) {
++  const remove = useRemoveLineItem(lineItem.invoiceId);
++  return (
++    <button
++      type="button"
++      data-testid={`lineitem-remove-${lineItem.id}`}
++      disabled={remove.isPending}
++      onClick={() => remove.mutate(lineItem.id)}
++    >
++      Remove
++    </button>
++  );
++}
++
++export const contribution = InvoiceLineItemRow.fill({ order: 10, Component: RemoveLineItem });
+diff --git a/src/main/frontend/slots/defs/invoiceLineItemRow.ts b/src/main/frontend/slots/defs/invoiceLineItemRow.ts
+new file mode 100644
+index 0000000..627d481
+--- /dev/null
++++ b/src/main/frontend/slots/defs/invoiceLineItemRow.ts
+@@ -0,0 +1,10 @@
++import { defineSlot } from '../Slot';
++import type { LineItem } from '../../features/invoices/lineItems';
++
++/**
++ * The actions cell of one line-item row on an invoice — per-row controls that act on a single charge
++ * line (removing it, and more over time). The line-item table renders this region once per row and
++ * never lists what fills it; each action is its own `*.slot.tsx` file under `features/invoices/`.
++ * Handed the whole line item as context, so an action has its id and invoice to work with.
++ */
++export const InvoiceLineItemRow = defineSlot<{ lineItem: LineItem }>('invoice.lineItem.row');
+diff --git a/src/main/java/net/officefloor/hq/app/LineItemsRemoveLogic.java b/src/main/java/net/officefloor/hq/app/LineItemsRemoveLogic.java
+new file mode 100644
+index 0000000..6220212
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/LineItemsRemoveLogic.java
+@@ -0,0 +1,55 @@
++package net.officefloor.hq.app;
++
++import java.math.BigDecimal;
++import java.util.List;
++import org.springframework.web.bind.annotation.RequestBody;
++import net.officefloor.server.http.HttpException;
++import net.officefloor.server.http.HttpStatus;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code POST /api/lineitems/remove} — take a charge line off an invoice from an {id} body and return
++ * the updated invoice. Wired by {@code officefloor/rest/api/lineitems/remove.POST.yml}. The line must
++ * exist (404 otherwise). Removing a line re-works the invoice's amount (the sum of qty * unitPrice
++ * across the lines that remain, zero when none are left) and stores it, so the total the UI shows is
++ * always worked out from the lines, never typed — the mirror of {@link LineItemsPostLogic}.
++ */
++public class LineItemsRemoveLogic {
++
++    public void service(@RequestBody RemoveLineItem body, LineItemRepository lineItems,
++            InvoiceRepository invoices, ObjectResponse<Invoice> response) {
++        Long id = body.getId();
++        if (id == null) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A line item id is required");
++        }
++        LineItem line = lineItems.findById(id)
++                .orElseThrow(() -> new HttpException(HttpStatus.NOT_FOUND, "No such line item"));
++        Long invoiceId = line.getInvoiceId();
++        lineItems.delete(line);
++
++        // Re-work the invoice's amount from the lines that remain and store it, so the figure stays
++        // derived — the sum drops by exactly the removed line's amount.
++        Invoice invoice = invoices.findById(invoiceId)
++                .orElseThrow(() -> new HttpException(HttpStatus.NOT_FOUND, "No such invoice"));
++        List<LineItem> lines = lineItems.findByInvoiceIdOrderByIdAsc(invoiceId);
++        BigDecimal total = lines.stream().map(LineItem::getAmount)
++                .reduce(BigDecimal.ZERO, BigDecimal::add);
++        invoice.setAmount(total);
++        Invoice saved = invoices.save(invoice);
++
++        response.send(saved);
++    }
++
++    /** Request body for removing a line item from an invoice. */
++    public static class RemoveLineItem {
++        private Long id;
++
++        public Long getId() {
++            return id;
++        }
++
++        public void setId(Long id) {
++            this.id = id;
++        }
++    }
++}
+diff --git a/src/main/resources/officefloor/rest/api/lineitems/remove.POST.yml b/src/main/resources/officefloor/rest/api/lineitems/remove.POST.yml
+new file mode 100644
+index 0000000..f7d0352
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/lineitems/remove.POST.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.LineItemsRemoveLogic

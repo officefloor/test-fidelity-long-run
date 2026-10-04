@@ -1,0 +1,182 @@
+diff --git a/src/main/frontend/features/clients/ClientList.tsx b/src/main/frontend/features/clients/ClientList.tsx
+index 50c7261..ada6d9b 100644
+--- a/src/main/frontend/features/clients/ClientList.tsx
++++ b/src/main/frontend/features/clients/ClientList.tsx
+@@ -2,7 +2,9 @@ import { Link } from '@tanstack/react-router';
+ import { ClientRow } from '../../slots/defs/clientRow';
+ import { asString, useSearchParam } from '../../url/useSearchParam';
+ import { ClientSearch } from './ClientSearch';
++import { ClientSort } from './ClientSort';
+ import { useClients } from './clients';
++import { useClientOutstanding } from './outstanding';
+ 
+ // The clients list. Reads server data straight from its query key — never copied into state, never
+ // handed down from a parent. The name filter lives in the URL (`clientSearch`), read directly here;
+@@ -10,7 +12,9 @@ import { useClients } from './clients';
+ // Archived clients are tucked away: they drop off the list and search but are retained server-side.
+ export function ClientList() {
+   const { data: clients } = useClients();
++  const { data: outstanding } = useClientOutstanding();
+   const [query] = useSearchParam('clientSearch', asString);
++  const [sort] = useSearchParam('clientSort', asString);
+ 
+   if (!clients) {
+     return null;
+@@ -20,6 +24,7 @@ export function ClientList() {
+     return (
+       <>
+         <ClientSearch />
++        <ClientSort />
+         <p data-testid="clients-empty">No clients yet.</p>
+       </>
+     );
+@@ -27,13 +32,23 @@ export function ClientList() {
+ 
+   const active = clients.filter((client) => !client.archived);
+   const needle = query.trim().toLowerCase();
+-  const visible = needle
++  const filtered = needle
+     ? active.filter((client) => client.name.toLowerCase().includes(needle))
+     : active;
+ 
++  // Sort by how much each client owes (most first) when asked; otherwise by name. The owed figures
++  // come from the shared outstanding query; a client with no figure yet sorts as owing nothing.
++  const owed = new Map((outstanding ?? []).map((o) => [o.clientId, o.outstanding]));
++  const visible = [...filtered].sort((a, b) =>
++    sort === 'outstanding'
++      ? (owed.get(b.id) ?? 0) - (owed.get(a.id) ?? 0)
++      : a.name.localeCompare(b.name),
++  );
++
+   return (
+     <>
+       <ClientSearch />
++      <ClientSort />
+       <table data-testid="clients-table">
+       <thead>
+         <tr>
+diff --git a/src/main/frontend/features/clients/ClientSort.tsx b/src/main/frontend/features/clients/ClientSort.tsx
+new file mode 100644
+index 0000000..a497aef
+--- /dev/null
++++ b/src/main/frontend/features/clients/ClientSort.tsx
+@@ -0,0 +1,22 @@
++import { asString, useSearchParam } from '../../url/useSearchParam';
++
++// The clients-list sort control. It OWNS the `clientSort` URL param — a sort outlives a click, so it
++// lives in the URL, not a parent's useState (CLAUDE.md rule 4). The list reads the same key and
++// orders itself; nothing is passed between them. Default (empty) sorts by name.
++export function ClientSort() {
++  const [sort, setSort] = useSearchParam('clientSort', asString);
++
++  return (
++    <label>
++      Sort
++      <select
++        data-testid="client-sort"
++        value={sort || 'name'}
++        onChange={(event) => setSort(event.target.value === 'name' ? undefined : event.target.value)}
++      >
++        <option value="name">Name</option>
++        <option value="outstanding">Amount owed</option>
++      </select>
++    </label>
++  );
++}
+diff --git a/src/main/frontend/features/clients/outstanding.ts b/src/main/frontend/features/clients/outstanding.ts
+new file mode 100644
+index 0000000..f948e4b
+--- /dev/null
++++ b/src/main/frontend/features/clients/outstanding.ts
+@@ -0,0 +1,14 @@
++import { useQuery } from '@tanstack/react-query';
++import { getJson } from '../../api/http';
++
++// How much each client still owes, read from GET /api/clients/outstanding. The money math lives on
++// the server (same rule as the statement); the list reads this to order clients by what they owe.
++// Shares the ['clients'] key prefix so it re-reads whenever clients or their invoices change.
++export type ClientOutstanding = { clientId: number; outstanding: number };
++
++export function useClientOutstanding() {
++  return useQuery({
++    queryKey: ['clients', 'outstanding'] as const,
++    queryFn: () => getJson<ClientOutstanding[]>('/api/clients/outstanding'),
++  });
++}
+diff --git a/src/main/java/net/officefloor/hq/app/ClientsOutstandingGetLogic.java b/src/main/java/net/officefloor/hq/app/ClientsOutstandingGetLogic.java
+new file mode 100644
+index 0000000..5eff2aa
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/ClientsOutstandingGetLogic.java
+@@ -0,0 +1,63 @@
++package net.officefloor.hq.app;
++
++import java.math.BigDecimal;
++import java.util.List;
++import java.util.Map;
++import java.util.stream.Collectors;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code GET /api/clients/outstanding} — how much every client still owes, in one place, so the
++ * clients list can be ordered by it. For each client it sums the due across ALL of that client's
++ * invoices (invoice -&gt; project -&gt; client), each invoice's due being its net total after any
++ * discount/tax (the one-place {@link InvoiceMoney} rule) minus what has been paid against it — the
++ * same money math as {@link ClientStatementGetLogic}, worked out on the server so every surface
++ * agrees. Every client gets a row, zero when nothing is owed. Wired by
++ * {@code officefloor/rest/api/clients/outstanding.GET.yml}.
++ */
++public class ClientsOutstandingGetLogic {
++
++    public void service(ClientRepository clients, ProjectRepository projects,
++            InvoiceRepository invoices, PaymentRepository payments,
++            ObjectResponse<List<ClientOutstandingView>> response) {
++        // invoice -> project -> client: map each project to the client it belongs to.
++        Map<Long, Long> projectToClient = projects.findAll().stream()
++                .collect(Collectors.toMap(Project::getId, Project::getClientId));
++        List<ClientOutstandingView> rows = clients.findAll().stream()
++                .map(client -> {
++                    BigDecimal outstanding = invoices.findAll().stream()
++                            .filter(i -> client.getId().equals(projectToClient.get(i.getProjectId())))
++                            .map(i -> {
++                                BigDecimal paid = payments.findByInvoiceIdOrderByIdAsc(i.getId())
++                                        .stream().map(Payment::getAmount)
++                                        .reduce(BigDecimal.ZERO, BigDecimal::add);
++                                BigDecimal netTotal = InvoiceMoney.netTotal(i.getAmount(),
++                                        i.getDiscountPct(), i.getTaxPct());
++                                return netTotal.subtract(paid);
++                            })
++                            .reduce(BigDecimal.ZERO, BigDecimal::add);
++                    return new ClientOutstandingView(client.getId(), outstanding);
++                })
++                .collect(Collectors.toList());
++        response.send(rows);
++    }
++
++    /** How much one client still owes across all of its invoices. */
++    public static class ClientOutstandingView {
++        private final long clientId;
++        private final BigDecimal outstanding;
++
++        public ClientOutstandingView(long clientId, BigDecimal outstanding) {
++            this.clientId = clientId;
++            this.outstanding = outstanding;
++        }
++
++        public long getClientId() {
++            return clientId;
++        }
++
++        public BigDecimal getOutstanding() {
++            return outstanding;
++        }
++    }
++}
+diff --git a/src/main/resources/officefloor/rest/api/clients/outstanding.GET.yml b/src/main/resources/officefloor/rest/api/clients/outstanding.GET.yml
+new file mode 100644
+index 0000000..6190277
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/clients/outstanding.GET.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.ClientsOutstandingGetLogic

@@ -1,0 +1,268 @@
+diff --git a/src/main/frontend/features/invoices/LineItemList.tsx b/src/main/frontend/features/invoices/LineItemList.tsx
+index 8cc335d..f8b72c7 100644
+--- a/src/main/frontend/features/invoices/LineItemList.tsx
++++ b/src/main/frontend/features/invoices/LineItemList.tsx
+@@ -1,6 +1,7 @@
+ import { formatMoney } from '../../ui/money';
+ import { InvoiceLineItemRow } from '../../slots/defs/invoiceLineItemRow';
+ import { useLineItems } from './lineItems';
++import { useInvoiceSummary } from './invoiceSummary';
+ 
+ // An invoice's line items and what they add up to. Reads its own query key (scoped to the invoice)
+ // and derives the invoice amount from the rows — the total is never stored on the client, so it
+@@ -9,15 +10,20 @@ import { useLineItems } from './lineItems';
+ // yet still shows the region (and a $0.00 total) ready for the first line to be added.
+ export function LineItemList({ invoiceId }: { invoiceId: number }) {
+   const { data: lineItems } = useLineItems(invoiceId);
++  const { data: summary } = useInvoiceSummary(invoiceId);
+ 
+   if (!lineItems) {
+     return null;
+   }
+ 
+-  const total = lineItems.reduce(
++  // The lines sum to the subtotal; the invoice's amount is that less any discount, worked out on the
++  // server (see the summary panel). Fall back to the subtotal while the summary loads — an invoice
++  // with no discount bills its full subtotal.
++  const subtotal = lineItems.reduce(
+     (sum, line) => sum + Number(line.qty) * Number(line.unitPrice),
+     0,
+   );
++  const total = summary ? Number(summary.total) : subtotal;
+ 
+   return (
+     <table data-testid="invoice-lineitems-table">
+diff --git a/src/main/frontend/features/invoices/invoiceSummary.ts b/src/main/frontend/features/invoices/invoiceSummary.ts
+new file mode 100644
+index 0000000..255977c
+--- /dev/null
++++ b/src/main/frontend/features/invoices/invoiceSummary.ts
+@@ -0,0 +1,25 @@
++import { useQuery } from '@tanstack/react-query';
++import { getJson } from '../../api/http';
++
++// One invoice's money breakdown, worked out on the server (see InvoiceSummaryGetLogic): its subtotal
++// (the sum of its line items), the percentage discount taken off it, that discount in money, and the
++// final total (subtotal minus the discount). Keyed under the shared ['invoices'] prefix so adding or
++// removing a line — which invalidates ['invoices'] — also refreshes the breakdown, with no import
++// between the two.
++export type InvoiceSummary = {
++  invoiceId: number;
++  subtotal: number;
++  discountPct: number;
++  discount: number;
++  total: number;
++};
++
++export const invoiceSummaryKey = (invoiceId: number) =>
++  ['invoices', 'summary', invoiceId] as const;
++
++export function useInvoiceSummary(invoiceId: number) {
++  return useQuery({
++    queryKey: invoiceSummaryKey(invoiceId),
++    queryFn: () => getJson<InvoiceSummary>(`/api/invoices/summary?invoiceId=${invoiceId}`),
++  });
++}
+diff --git a/src/main/frontend/features/invoices/summary.slot.tsx b/src/main/frontend/features/invoices/summary.slot.tsx
+new file mode 100644
+index 0000000..cc55add
+--- /dev/null
++++ b/src/main/frontend/features/invoices/summary.slot.tsx
+@@ -0,0 +1,33 @@
++import { InvoiceDetail } from '../../slots/defs/invoiceDetail';
++import { formatMoney } from '../../ui/money';
++import { useInvoiceSummary } from './invoiceSummary';
++
++// The money breakdown panel on the invoice detail page — its own file, filling the shared
++// invoice.detail region (CLAUDE.md rule 3). It reads the server-worked-out summary for its own
++// invoice and shows the subtotal (the sum of the lines), the discount taken off it, and the final
++// total. Sharing the ['invoices'] query key, it stays in step with the line items: adding a line
++// re-reads it. The final total is the invoice's amount, shown under the line items table as
++// `invoice-amount`; this panel surfaces the two figures that make it up.
++function InvoiceSummary({ invoiceId }: { invoiceId: number }) {
++  const { data: summary } = useInvoiceSummary(invoiceId);
++
++  if (!summary) {
++    return null;
++  }
++
++  return (
++    <section data-testid="invoice-summary">
++      <h2>Summary</h2>
++      <dl>
++        <dt>Subtotal</dt>
++        <dd data-testid="invoice-subtotal">{formatMoney(summary.subtotal)}</dd>
++        <dt>Discount ({Number(summary.discountPct)}%)</dt>
++        <dd data-testid="invoice-discount">{formatMoney(summary.discount)}</dd>
++        <dt>Total</dt>
++        <dd data-testid="invoice-total">{formatMoney(summary.total)}</dd>
++      </dl>
++    </section>
++  );
++}
++
++export const contribution = InvoiceDetail.fill({ order: 20, Component: InvoiceSummary });
+diff --git a/src/main/java/net/officefloor/hq/app/Invoice.java b/src/main/java/net/officefloor/hq/app/Invoice.java
+index 0347ed0..2d1845f 100644
+--- a/src/main/java/net/officefloor/hq/app/Invoice.java
++++ b/src/main/java/net/officefloor/hq/app/Invoice.java
+@@ -27,6 +27,14 @@ public class Invoice {
+ 
+     private BigDecimal amount;
+ 
++    /**
++     * Percentage taken off the subtotal as a discount (Flyway V27), 0-100. Defaults to zero, so an
++     * invoice with no discount set bills its full subtotal. The final total is worked out from this
++     * and the amount on the server (see {@link InvoiceSummaryGetLogic}), never typed.
++     */
++    @Column(name = "discount_pct")
++    private BigDecimal discountPct = BigDecimal.ZERO;
++
+     /** Lifecycle status: DRAFT (default, matching Flyway V9) -> SENT (once sent) -> PAID (once paid). */
+     private String status = "DRAFT";
+ 
+@@ -70,6 +78,14 @@ public class Invoice {
+         this.amount = amount;
+     }
+ 
++    public BigDecimal getDiscountPct() {
++        return discountPct;
++    }
++
++    public void setDiscountPct(BigDecimal discountPct) {
++        this.discountPct = discountPct;
++    }
++
+     public String getStatus() {
+         return status;
+     }
+diff --git a/src/main/java/net/officefloor/hq/app/InvoiceSummaryGetLogic.java b/src/main/java/net/officefloor/hq/app/InvoiceSummaryGetLogic.java
+new file mode 100644
+index 0000000..6a02ce2
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/InvoiceSummaryGetLogic.java
+@@ -0,0 +1,70 @@
++package net.officefloor.hq.app;
++
++import java.math.BigDecimal;
++import java.math.RoundingMode;
++import org.springframework.web.bind.annotation.RequestParam;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code GET /api/invoices/summary?invoiceId=<id>} — the money breakdown for one invoice: its
++ * subtotal (the worked-out sum of its line items, Flyway V13/V14, kept in the amount column), the
++ * percentage discount taken off it (Flyway V27), the discount in money, and the final total
++ * (subtotal minus discount). The figures are worked out on the server so the money math lives in one
++ * place; an invoice with no discount simply bills its full subtotal. Wired by
++ * {@code officefloor/rest/api/invoices/summary.GET.yml}.
++ */
++public class InvoiceSummaryGetLogic {
++
++    public void service(@RequestParam("invoiceId") Long invoiceId, InvoiceRepository invoices,
++            ObjectResponse<InvoiceSummaryView> response) {
++        Invoice invoice = invoices.findById(invoiceId).orElse(null);
++        BigDecimal subtotal = invoice != null ? invoice.getAmount() : BigDecimal.ZERO;
++        BigDecimal discountPct = invoice != null && invoice.getDiscountPct() != null
++                ? invoice.getDiscountPct()
++                : BigDecimal.ZERO;
++        // Discount in money, rounded to whole cents; the final total is the subtotal less that.
++        BigDecimal discount = subtotal.multiply(discountPct)
++                .divide(BigDecimal.valueOf(100))
++                .setScale(2, RoundingMode.HALF_UP);
++        BigDecimal total = subtotal.subtract(discount);
++        response.send(new InvoiceSummaryView(invoiceId, subtotal, discountPct, discount, total));
++    }
++
++    /** One invoice's money breakdown: subtotal, the discount percentage, the discount, the total. */
++    public static class InvoiceSummaryView {
++        private final long invoiceId;
++        private final BigDecimal subtotal;
++        private final BigDecimal discountPct;
++        private final BigDecimal discount;
++        private final BigDecimal total;
++
++        public InvoiceSummaryView(long invoiceId, BigDecimal subtotal, BigDecimal discountPct,
++                BigDecimal discount, BigDecimal total) {
++            this.invoiceId = invoiceId;
++            this.subtotal = subtotal;
++            this.discountPct = discountPct;
++            this.discount = discount;
++            this.total = total;
++        }
++
++        public long getInvoiceId() {
++            return invoiceId;
++        }
++
++        public BigDecimal getSubtotal() {
++            return subtotal;
++        }
++
++        public BigDecimal getDiscountPct() {
++            return discountPct;
++        }
++
++        public BigDecimal getDiscount() {
++            return discount;
++        }
++
++        public BigDecimal getTotal() {
++            return total;
++        }
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/TestSupportController.java b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+index 3d4859f..2f8ef02 100644
+--- a/src/main/java/net/officefloor/hq/app/TestSupportController.java
++++ b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+@@ -161,6 +161,8 @@ public class TestSupportController {
+                 // issuedDate/dueDate are optional; fall back to the Flyway V7 column defaults when absent.
+                 Object issuedDate = invoice.get("issuedDate");
+                 Object dueDate = invoice.get("dueDate");
++                // discountPct is optional; default to 0 (no discount, matching Flyway V27) when absent.
++                Object discountPct = invoice.get("discountPct");
+                 // An invoice is built from line items (Flyway V13). Its amount is the worked-out sum
+                 // of qty * unitPrice across them (zero when there are none yet) — a fixture no longer
+                 // types a figure, it lists what is charged. (An explicit `amount` still wins if a
+@@ -180,15 +182,18 @@ public class TestSupportController {
+                     amount = new java.math.BigDecimal(invoice.get("amount").toString());
+                 }
+                 long invoiceId = ((Number) invoice.get("id")).longValue();
+-                jdbc.update("INSERT INTO invoices (id, project_id, amount, status, issued_date, due_date)"
++                jdbc.update("INSERT INTO invoices"
++                        + " (id, project_id, amount, status, issued_date, due_date, discount_pct)"
+                         + " VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_DATE),"
+-                        + " COALESCE(?, DATEADD('DAY', 30, CURRENT_DATE)))",
++                        + " COALESCE(?, DATEADD('DAY', 30, CURRENT_DATE)), ?)",
+                         invoiceId,
+                         ((Number) invoice.get("projectId")).longValue(),
+                         amount,
+                         status != null ? status.toString() : "UNPAID",
+                         issuedDate != null ? java.sql.Date.valueOf(issuedDate.toString()) : null,
+-                        dueDate != null ? java.sql.Date.valueOf(dueDate.toString()) : null);
++                        dueDate != null ? java.sql.Date.valueOf(dueDate.toString()) : null,
++                        discountPct != null ? new java.math.BigDecimal(discountPct.toString())
++                                : java.math.BigDecimal.ZERO);
+                 if (lineItems != null) {
+                     for (Map<String, Object> line : lineItems) {
+                         // unit is optional in a fixture; default to "units" (matching Flyway V26).
+diff --git a/src/main/resources/db/migration/V27__invoices_discount_pct.sql b/src/main/resources/db/migration/V27__invoices_discount_pct.sql
+new file mode 100644
+index 0000000..08827a3
+--- /dev/null
++++ b/src/main/resources/db/migration/V27__invoices_discount_pct.sql
+@@ -0,0 +1,5 @@
++-- An invoice can carry a percentage discount taken off its subtotal (the worked-out sum of its line
++-- items). The final total billed is the subtotal less that percentage. A new NUMERIC column holding
++-- the percentage (0-100), defaulting to 0 so every existing invoice has no discount — its final
++-- total equals its subtotal until a discount is set.
++ALTER TABLE invoices ADD COLUMN discount_pct NUMERIC(5, 2) NOT NULL DEFAULT 0;
+diff --git a/src/main/resources/officefloor/rest/api/invoices/summary.GET.yml b/src/main/resources/officefloor/rest/api/invoices/summary.GET.yml
+new file mode 100644
+index 0000000..3db74ab
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/invoices/summary.GET.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.InvoiceSummaryGetLogic

@@ -1,0 +1,147 @@
+diff --git a/src/main/frontend/features/projects/ProjectList.tsx b/src/main/frontend/features/projects/ProjectList.tsx
+index 9c85fc2..0b74803 100644
+--- a/src/main/frontend/features/projects/ProjectList.tsx
++++ b/src/main/frontend/features/projects/ProjectList.tsx
+@@ -1,7 +1,7 @@
+ import { Link } from '@tanstack/react-router';
+ import { ProjectRow } from '../../slots/defs/projectRow';
+ import { ProjectsToolbar } from '../../slots/defs/projectsToolbar';
+-import { useSearchParam, asFlag } from '../../url/useSearchParam';
++import { useSearchParam, asFlag, asString } from '../../url/useSearchParam';
+ import { useProjects } from './projects';
+ 
+ // The projects list. Reads server data straight from its query key and shows the client's NAME
+@@ -10,6 +10,9 @@ import { useProjects } from './projects';
+ export function ProjectList() {
+   const { data: projects } = useProjects();
+   const [showArchived] = useSearchParam('showArchived', asFlag);
++  // Shared with the tag-filter toolbar control via the `projectTag` key (no import). When set, keep
++  // only projects carrying that tag; empty shows every tag.
++  const [tagFilter] = useSearchParam('projectTag', asString);
+ 
+   if (!projects) {
+     return null;
+@@ -19,7 +22,10 @@ export function ProjectList() {
+     return <p data-testid="projects-empty">No projects yet.</p>;
+   }
+ 
+-  const shown = showArchived ? projects : projects.filter((project) => !project.archived);
++  const tagId = tagFilter === '' ? undefined : Number(tagFilter);
++  const shown = projects
++    .filter((project) => showArchived || !project.archived)
++    .filter((project) => tagId === undefined || project.tagIds.includes(tagId));
+ 
+   return (
+     <>
+diff --git a/src/main/frontend/features/projects/projects.ts b/src/main/frontend/features/projects/projects.ts
+index c2ad4d9..08fee28 100644
+--- a/src/main/frontend/features/projects/projects.ts
++++ b/src/main/frontend/features/projects/projects.ts
+@@ -9,6 +9,7 @@ export type Project = {
+   clientId: number;
+   clientName: string;
+   archived: boolean;
++  tagIds: number[];
+ };
+ 
+ export const projectsKey = ['projects'] as const;
+diff --git a/src/main/frontend/features/projects/tagFilter.slot.tsx b/src/main/frontend/features/projects/tagFilter.slot.tsx
+new file mode 100644
+index 0000000..df4af89
+--- /dev/null
++++ b/src/main/frontend/features/projects/tagFilter.slot.tsx
+@@ -0,0 +1,29 @@
++import { ProjectsToolbar } from '../../slots/defs/projectsToolbar';
++import { useSearchParam, asString } from '../../url/useSearchParam';
++import { useAllTags } from './tags';
++
++// "Show just the projects carrying one label" — a self-contained control that owns the `projectTag`
++// URL key. Its options are the full tag catalogue (the shared ['tags'] key), so new tags appear
++// without touching this file. The projects list reads the same key and keeps only projects whose
++// tagIds include it; the two share only the key, no import. Choosing a tag commits it to the URL (so
++// the narrowed view outlives the click and is shareable); the empty option clears the key.
++function TagFilter() {
++  const [tag, setTag] = useSearchParam('projectTag', asString);
++  const { data: tags } = useAllTags();
++  return (
++    <select
++      data-testid="project-tag-filter"
++      value={tag}
++      onChange={(e) => setTag(e.target.value)}
++    >
++      <option value="">All tags</option>
++      {(tags ?? []).map((t) => (
++        <option key={t.id} value={String(t.id)}>
++          {t.name}
++        </option>
++      ))}
++    </select>
++  );
++}
++
++export const contribution = ProjectsToolbar.fill({ order: 20, Component: TagFilter });
+diff --git a/src/main/java/net/officefloor/hq/app/ProjectsGetLogic.java b/src/main/java/net/officefloor/hq/app/ProjectsGetLogic.java
+index e104f0d..a992a84 100644
+--- a/src/main/java/net/officefloor/hq/app/ProjectsGetLogic.java
++++ b/src/main/java/net/officefloor/hq/app/ProjectsGetLogic.java
+@@ -1,5 +1,6 @@
+ package net.officefloor.hq.app;
+ 
++import java.util.ArrayList;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.stream.Collectors;
+@@ -7,17 +8,22 @@ import net.officefloor.web.ObjectResponse;
+ 
+ /**
+  * {@code GET /api/projects} — list every project with the NAME of the client it is for (not just the
+- * id), so the UI can show the join directly. Wired by {@code officefloor/rest/api/projects.GET.yml}.
++ * id), plus the ids of the tags it carries so the list can be filtered by label. Wired by
++ * {@code officefloor/rest/api/projects.GET.yml}.
+  */
+ public class ProjectsGetLogic {
+ 
+     public void service(ProjectRepository projects, ClientRepository clients,
+-            ObjectResponse<List<ProjectView>> response) {
++            ProjectTagRepository projectTags, ObjectResponse<List<ProjectView>> response) {
+         Map<Long, String> nameByClient = clients.findAll().stream()
+                 .collect(Collectors.toMap(Client::getId, Client::getName));
++        Map<Long, List<Long>> tagsByProject = projectTags.findAll().stream()
++                .collect(Collectors.groupingBy(ProjectTag::getProjectId,
++                        Collectors.mapping(ProjectTag::getTagId, Collectors.toList())));
+         List<ProjectView> views = projects.findAll().stream()
+                 .map(p -> new ProjectView(p.getId(), p.getName(), p.getClientId(),
+-                        nameByClient.get(p.getClientId()), p.isArchived()))
++                        nameByClient.get(p.getClientId()), p.isArchived(),
++                        tagsByProject.getOrDefault(p.getId(), new ArrayList<>())))
+                 .collect(Collectors.toList());
+         response.send(views);
+     }
+@@ -29,14 +35,16 @@ public class ProjectsGetLogic {
+         private final Long clientId;
+         private final String clientName;
+         private final boolean archived;
++        private final List<Long> tagIds;
+ 
+         public ProjectView(Long id, String name, Long clientId, String clientName,
+-                boolean archived) {
++                boolean archived, List<Long> tagIds) {
+             this.id = id;
+             this.name = name;
+             this.clientId = clientId;
+             this.clientName = clientName;
+             this.archived = archived;
++            this.tagIds = tagIds;
+         }
+ 
+         public Long getId() {
+@@ -58,5 +66,9 @@ public class ProjectsGetLogic {
+         public boolean isArchived() {
+             return archived;
+         }
++
++        public List<Long> getTagIds() {
++            return tagIds;
++        }
+     }
+ }

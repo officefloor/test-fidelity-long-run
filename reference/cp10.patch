@@ -1,0 +1,65 @@
+diff --git a/src/main/frontend/features/invoices/InvoiceForm.tsx b/src/main/frontend/features/invoices/InvoiceForm.tsx
+index d5b97e4..a1f6418 100644
+--- a/src/main/frontend/features/invoices/InvoiceForm.tsx
++++ b/src/main/frontend/features/invoices/InvoiceForm.tsx
+@@ -1,11 +1,14 @@
+ import { useState } from 'react';
+ import { useCreateInvoice } from './invoices';
+ 
+-// Raise-an-invoice form. useState holds only what the user is currently typing (the amount). On
+-// submit it POSTs {projectId, amount} and invalidates ['invoices', projectId]; the list and total
+-// refresh from the server — nothing is hand-maintained here.
++// Raise-an-invoice form. useState holds only what the user is currently typing (the amount) and the
++// validation error for the current attempt. An invoice must bill a positive amount — a zero or
++// negative value is rejected with a visible error and no row is added (the server + DB enforce the
++// same rule). On a valid submit it POSTs {projectId, amount} and invalidates ['invoices', projectId];
++// the list and total refresh from the server — nothing is hand-maintained here.
+ export function InvoiceForm({ projectId }: { projectId: number }) {
+   const [amount, setAmount] = useState('');
++  const [error, setError] = useState('');
+   const create = useCreateInvoice(projectId);
+ 
+   return (
+@@ -15,8 +18,10 @@ export function InvoiceForm({ projectId }: { projectId: number }) {
+         event.preventDefault();
+         const value = Number(amount);
+         if (!amount.trim() || Number.isNaN(value) || value <= 0) {
++          setError('Amount must be more than zero');
+           return;
+         }
++        setError('');
+         create.mutate(
+           { amount: value },
+           {
+@@ -29,11 +34,19 @@ export function InvoiceForm({ projectId }: { projectId: number }) {
+         data-testid="invoice-form-amount"
+         placeholder="Amount"
+         value={amount}
+-        onChange={(event) => setAmount(event.target.value)}
++        onChange={(event) => {
++          setAmount(event.target.value);
++          setError('');
++        }}
+       />
+       <button data-testid="invoice-form-submit" type="submit">
+         Add invoice
+       </button>
++      {error && (
++        <p data-testid="invoice-form-amount-error" role="alert">
++          {error}
++        </p>
++      )}
+     </form>
+   );
+ }
+diff --git a/src/main/resources/db/migration/V6__invoices_amount_positive.sql b/src/main/resources/db/migration/V6__invoices_amount_positive.sql
+new file mode 100644
+index 0000000..166f569
+--- /dev/null
++++ b/src/main/resources/db/migration/V6__invoices_amount_positive.sql
+@@ -0,0 +1,5 @@
++-- An invoice must bill a positive amount — you cannot raise an invoice for nothing. Enforce it at
++-- the DB level too, matching the server + front-end validation: rejects zero and negative amounts,
++-- so no bad row can slip in through any path.
++ALTER TABLE invoices
++    ADD CONSTRAINT invoices_amount_positive CHECK (amount > 0);

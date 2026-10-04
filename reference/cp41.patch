@@ -1,0 +1,118 @@
+diff --git a/src/main/frontend/features/invoices/cancel.slot.tsx b/src/main/frontend/features/invoices/cancel.slot.tsx
+new file mode 100644
+index 0000000..13acf61
+--- /dev/null
++++ b/src/main/frontend/features/invoices/cancel.slot.tsx
+@@ -0,0 +1,27 @@
++import { InvoiceRow } from '../../slots/defs/invoiceRow';
++import type { Invoice } from './invoices';
++import { useVoidInvoice } from './voidInvoice';
++
++// "Cancel this invoice" — a self-contained row control filling the invoice-row region. The table is
++// not edited to add it beyond rendering the region (CLAUDE.md rule 3). It offers to void an invoice
++// that was sent by mistake: only a SENT invoice can be cancelled, so the control shows only then.
++// Sharing the ['invoices'] query key (via useVoidInvoice), the list re-reads on its own once the
++// invoice is voided — the row then reads VOID and the invoice stops counting toward what is owed.
++function CancelInvoice({ invoice }: { invoice: Invoice }) {
++  const voidInvoice = useVoidInvoice();
++  if (invoice.status !== 'SENT') {
++    return null;
++  }
++  return (
++    <button
++      type="button"
++      data-testid={`invoice-cancel-${invoice.id}`}
++      disabled={voidInvoice.isPending}
++      onClick={() => voidInvoice.mutate({ id: invoice.id })}
++    >
++      Cancel
++    </button>
++  );
++}
++
++export const contribution = InvoiceRow.fill({ order: 20, Component: CancelInvoice });
+diff --git a/src/main/frontend/features/invoices/voidInvoice.ts b/src/main/frontend/features/invoices/voidInvoice.ts
+new file mode 100644
+index 0000000..add5165
+--- /dev/null
++++ b/src/main/frontend/features/invoices/voidInvoice.ts
+@@ -0,0 +1,15 @@
++import { useMutation, useQueryClient } from '@tanstack/react-query';
++import { postJson } from '../../api/http';
++import type { Invoice } from './invoices';
++
++// Cancel (void) a sent invoice: POSTs {id} and invalidates the shared ['invoices'] prefix so both a
++// project's invoice list and any invoice-due panel re-read the new VOID status from the server. A
++// voided invoice stops counting toward what is owed; voiding is what records the audit entry.
++export function useVoidInvoice() {
++  const queryClient = useQueryClient();
++  return useMutation({
++    mutationFn: (input: { id: number }) =>
++      postJson<Invoice>('/api/invoices/void', { id: input.id }),
++    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['invoices'] }),
++  });
++}
+diff --git a/src/main/java/net/officefloor/hq/app/InvoicesVoidLogic.java b/src/main/java/net/officefloor/hq/app/InvoicesVoidLogic.java
+new file mode 100644
+index 0000000..644c22c
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/InvoicesVoidLogic.java
+@@ -0,0 +1,50 @@
++package net.officefloor.hq.app;
++
++import java.math.RoundingMode;
++import org.springframework.web.bind.annotation.RequestBody;
++import net.officefloor.server.http.HttpException;
++import net.officefloor.server.http.HttpStatus;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code POST /api/invoices/void} — cancel (void) a sent invoice from an {id} body and return the
++ * updated row. Wired by {@code officefloor/rest/api/invoices/void.POST.yml}. An invoice sent by
++ * mistake is voided: its status flips to VOID so it no longer counts toward what is owed (the
++ * dashboard outstanding total only sums SENT invoices), and one {@code INVOICE_VOIDED} audit record
++ * is appended (the kept record the request asks for — "note it") so the cancellation can be checked
++ * back later through the audit file even though the UI only shows the status. Only a SENT invoice
++ * can be voided.
++ */
++public class InvoicesVoidLogic {
++
++    public void service(@RequestBody VoidInvoice body, InvoiceRepository invoices, Audit audit,
++            ObjectResponse<Invoice> response) {
++        Long id = body.getId();
++        if (id == null) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "An invoice id is required");
++        }
++        Invoice invoice = invoices.findById(id)
++                .orElseThrow(() -> new HttpException(HttpStatus.NOT_FOUND, "No such invoice"));
++        if (!"SENT".equals(invoice.getStatus())) {
++            throw new HttpException(HttpStatus.CONFLICT, "Only a sent invoice can be cancelled");
++        }
++        invoice.setStatus("VOID");
++        Invoice saved = invoices.save(invoice);
++        String amount = saved.getAmount().setScale(2, RoundingMode.HALF_UP).toPlainString();
++        audit.record("INVOICE_VOIDED id=" + saved.getId() + " amount=" + amount);
++        response.send(saved);
++    }
++
++    /** Request body for cancelling an invoice. */
++    public static class VoidInvoice {
++        private Long id;
++
++        public Long getId() {
++            return id;
++        }
++
++        public void setId(Long id) {
++            this.id = id;
++        }
++    }
++}
+diff --git a/src/main/resources/officefloor/rest/api/invoices/void.POST.yml b/src/main/resources/officefloor/rest/api/invoices/void.POST.yml
+new file mode 100644
+index 0000000..52b7d9f
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/invoices/void.POST.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.InvoicesVoidLogic

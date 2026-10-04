@@ -47,12 +47,44 @@ conditions and five runs:
 | --- | --- | --- | --- |
 | cp26 | cp03, cp07 | 10/10 | "put labels on projects so I can group them" |
 | cp30 | cp01, cp06 | 10/10 | "record what a client has paid on an invoice" |
-| cp50 | cp21 | 9/10 | "filter by two things at once" |
+| cp50 | cp21 | 9/10 | "filter by two things at once" — but see below: the site is cp49 |
 | cp60 | cp41 | 10/10 | "different clients pay me in different currencies" |
 
 Independent stacks under different conditions do not break the same prior at the same step by
 chance. Each is one of: an under-declared `mutates`, a stale updated-prior spec copy that did not
 carry forward an earlier mutation, or a request every stack implements the same wrong way.
+
+### cp50 → cp21 is really cp49, and reveals an accounting bug
+
+Correcting the table above: cp50 is **not** the repair site for cp21. The reference chain's cp50
+commit changes **no code at all** (zero-byte agent diff, 14 turns, own test passed) — so it cannot
+have broken anything. The cp21 failure it shows was already failing at **cp49**, which ships its
+own updated `cp21_invoice_line_items.spec.ts` asserting tax in the invoice amount. That replacement
+spec fails at cp49: expected `$1,200.00`, got `$1,000.00`.
+
+It is not reported as a regression because cp49 declares `mutates: [21, 47]`, and the erosion
+harness classifies *any* cp21 failure at cp49 as `intended`. So:
+
+> **A mutative checkpoint's own shipped replacement spec can fail, and the harness forgives it.**
+> `intended` should excuse a prior test that was *replaced*; a failure of the *replacement* is a
+> plain failure.
+
+That undercounts `true_regressions` in every run, and it is worth fixing in
+`~/ui-long-degradation-test/harness/correctness.py` independently of this harness: the
+`_classify` / `count_true_regressions` path should exempt only prior test *ids* that the
+checkpoint's updated copies replaced, not every test belonging to a `mutates` checkpoint.
+
+### Two checkpoints were never implemented
+
+cp40 (thousands separator) and cp50 (combined filter) both produced a **zero-byte diff** — the
+agent ran, changed nothing, and its own acceptance test passed, because earlier code already
+satisfied the request. Fine for the erosion harness. For this one they have no feature to remove
+and no behaviour to mutate, so they are excluded from the relevance and mutation oracles
+(DESIGN.md §2).
+
+It also means those two acceptance specs do not test what they claim to: each is satisfiable
+without the change it describes. Worth knowing if the erosion checkpoints are ever reused as a
+specification of behaviour.
 
 **cp60 → cp41 is clear-cut and is a metadata defect.** cp60 asks to "keep the totals separate for
 each currency"; cp41's spec asserts `dashboard-outstanding-total` has text `$100.00`, and the

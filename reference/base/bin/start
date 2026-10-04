@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Start the Spring Boot app on $PORT (main class net.officefloor.hq.app.Application). On boot, Flyway
+# migrates the empty in-memory H2 up to the current schema; Spring serves the SPA (static/) and the
+# OfficeFloor REST routes; the `harness` profile enables the /__test__ seed endpoint. Returns once
+# launching (the harness polls /actuator/health). PINNED — do not edit. Contract: §B, §C.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+mkdir -p .run
+
+: "${PORT:?PORT must be set by the harness}"
+JAR="$(ls -t target/*.jar 2>/dev/null | head -n1 || true)"
+[ -n "$JAR" ] || { echo "no jar in target/ — run bin/build first" >&2; exit 1; }
+
+# Known audit file (the file-based test-assertion channel). Absolute so app + tests agree.
+export AUDIT_FILE="${AUDIT_FILE:-$PWD/.run/audit.log}"
+
+nohup java -jar "$JAR" --server.port="$PORT" --spring.profiles.active=harness > .run/app.log 2>&1 &
+echo $! > .run/app.pid

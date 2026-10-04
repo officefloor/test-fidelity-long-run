@@ -1,0 +1,146 @@
+diff --git a/src/main/frontend/features/invoices/InvoiceList.tsx b/src/main/frontend/features/invoices/InvoiceList.tsx
+index caab921..23425cd 100644
+--- a/src/main/frontend/features/invoices/InvoiceList.tsx
++++ b/src/main/frontend/features/invoices/InvoiceList.tsx
+@@ -1,11 +1,16 @@
++import { InvoiceListToolbar } from '../../slots/defs/invoiceListToolbar';
++import { useSearchParam, asString } from '../../url/useSearchParam';
+ import { formatMoney } from '../../ui/money';
+ import { useInvoices, usePayInvoice } from './invoices';
+ 
+ // A project's invoices and what they add up to. Reads its own query key (scoped to the project) and
+ // derives the total from the rows — the aggregate is never stored, so it always matches the list.
+-// Each row shows its payment status and, while UNPAID, a control to mark it paid.
++// Each row shows its payment status and, while UNPAID, a control to mark it paid. The ordering comes
++// from the shared `invoiceSort` URL key (set by a toolbar control), so the server returns the rows
++// already in order.
+ export function InvoiceList({ projectId }: { projectId: number }) {
+-  const { data: invoices } = useInvoices(projectId);
++  const [sort] = useSearchParam('invoiceSort', asString);
++  const { data: invoices } = useInvoices(projectId, sort || undefined);
+   const pay = usePayInvoice(projectId);
+ 
+   if (!invoices) {
+@@ -15,6 +20,8 @@ export function InvoiceList({ projectId }: { projectId: number }) {
+   const total = invoices.reduce((sum, invoice) => sum + Number(invoice.amount), 0);
+ 
+   return (
++    <>
++    <InvoiceListToolbar.Slot projectId={projectId} />
+     <table data-testid="project-invoices-table">
+       <thead>
+         <tr>
+@@ -53,5 +60,6 @@ export function InvoiceList({ projectId }: { projectId: number }) {
+         </tr>
+       </tfoot>
+     </table>
++    </>
+   );
+ }
+diff --git a/src/main/frontend/features/invoices/invoices.ts b/src/main/frontend/features/invoices/invoices.ts
+index 22a1f80..965f7c7 100644
+--- a/src/main/frontend/features/invoices/invoices.ts
++++ b/src/main/frontend/features/invoices/invoices.ts
+@@ -14,10 +14,14 @@ export type Invoice = {
+ 
+ export const invoicesKey = (projectId: number) => ['invoices', projectId] as const;
+ 
+-export function useInvoices(projectId: number) {
++// How a project's invoices are ordered. 'due' asks the server for earliest due date first; any other
++// value keeps the default id order. The sort is part of the query key (as a suffix under the shared
++// ['invoices', projectId] prefix) so each ordering caches on its own, while a write still invalidates
++// the whole prefix and refreshes every ordering at once.
++export function useInvoices(projectId: number, sort: string = 'id') {
+   return useQuery({
+-    queryKey: invoicesKey(projectId),
+-    queryFn: () => getJson<Invoice[]>(`/api/invoices?projectId=${projectId}`),
++    queryKey: [...invoicesKey(projectId), sort],
++    queryFn: () => getJson<Invoice[]>(`/api/invoices?projectId=${projectId}&sort=${sort}`),
+   });
+ }
+ 
+diff --git a/src/main/frontend/features/invoices/sortByDue.slot.tsx b/src/main/frontend/features/invoices/sortByDue.slot.tsx
+new file mode 100644
+index 0000000..d1ebb80
+--- /dev/null
++++ b/src/main/frontend/features/invoices/sortByDue.slot.tsx
+@@ -0,0 +1,16 @@
++import { InvoiceListToolbar } from '../../slots/defs/invoiceListToolbar';
++import { useSearchParam, asString } from '../../url/useSearchParam';
++
++// "Sort by due date" — a self-contained control that owns the `invoiceSort` URL key. The invoice
++// list reads the same key and asks the server for that ordering; the two share only the key, no
++// import. Clicking commits 'due' to the URL (so the ordering outlives the click and is shareable).
++function SortByDue() {
++  const [, setSort] = useSearchParam('invoiceSort', asString);
++  return (
++    <button type="button" data-testid="invoice-sort-due" onClick={() => setSort('due')}>
++      Sort by due date
++    </button>
++  );
++}
++
++export const contribution = InvoiceListToolbar.fill({ order: 10, Component: SortByDue });
+diff --git a/src/main/frontend/slots/defs/invoiceListToolbar.ts b/src/main/frontend/slots/defs/invoiceListToolbar.ts
+new file mode 100644
+index 0000000..02cf6ed
+--- /dev/null
++++ b/src/main/frontend/slots/defs/invoiceListToolbar.ts
+@@ -0,0 +1,8 @@
++import { defineSlot } from '../Slot';
++
++/**
++ * Controls that act on a project's invoice list — a sort, a filter, an export. Rendered above the
++ * list by the invoices feature; each control is its own `*.slot.tsx` file and owns a URL search
++ * param, so the list never lists its controls. Handed the project id as context.
++ */
++export const InvoiceListToolbar = defineSlot<{ projectId: number }>('invoices.toolbar');
+diff --git a/src/main/java/net/officefloor/hq/app/InvoiceRepository.java b/src/main/java/net/officefloor/hq/app/InvoiceRepository.java
+index 4b9cd42..36954b7 100644
+--- a/src/main/java/net/officefloor/hq/app/InvoiceRepository.java
++++ b/src/main/java/net/officefloor/hq/app/InvoiceRepository.java
+@@ -8,4 +8,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
+ 
+     /** The invoices for one project, oldest first, so a project's detail page lists only its own. */
+     List<Invoice> findByProjectIdOrderByIdAsc(Long projectId);
++
++    /** The invoices for one project, earliest due date first (id breaks ties for a stable order). */
++    List<Invoice> findByProjectIdOrderByDueDateAscIdAsc(Long projectId);
+ }
+diff --git a/src/main/java/net/officefloor/hq/app/InvoicesGetLogic.java b/src/main/java/net/officefloor/hq/app/InvoicesGetLogic.java
+index e169da0..b6552eb 100644
+--- a/src/main/java/net/officefloor/hq/app/InvoicesGetLogic.java
++++ b/src/main/java/net/officefloor/hq/app/InvoicesGetLogic.java
+@@ -5,13 +5,19 @@ import org.springframework.web.bind.annotation.RequestParam;
+ import net.officefloor.web.ObjectResponse;
+ 
+ /**
+- * {@code GET /api/invoices?projectId=<id>} — list the invoices that belong to one project, so a
+- * project's detail page shows only its own. Wired by {@code officefloor/rest/api/invoices.GET.yml}.
++ * {@code GET /api/invoices?projectId=<id>&sort=<order>} — list the invoices that belong to one
++ * project, so a project's detail page shows only its own. The optional {@code sort} orders the rows:
++ * {@code due} returns them earliest due date first; anything else (the default) keeps id order.
++ * Wired by {@code officefloor/rest/api/invoices.GET.yml}.
+  */
+ public class InvoicesGetLogic {
+ 
+-    public void service(@RequestParam("projectId") Long projectId, InvoiceRepository invoices,
++    public void service(@RequestParam("projectId") Long projectId,
++            @RequestParam(value = "sort", required = false) String sort, InvoiceRepository invoices,
+             ObjectResponse<List<Invoice>> response) {
+-        response.send(invoices.findByProjectIdOrderByIdAsc(projectId));
++        List<Invoice> rows = "due".equals(sort)
++                ? invoices.findByProjectIdOrderByDueDateAscIdAsc(projectId)
++                : invoices.findByProjectIdOrderByIdAsc(projectId);
++        response.send(rows);
+     }
+ }
+diff --git a/src/main/resources/db/migration/V8__invoices_due_date_index.sql b/src/main/resources/db/migration/V8__invoices_due_date_index.sql
+new file mode 100644
+index 0000000..53d32bf
+--- /dev/null
++++ b/src/main/resources/db/migration/V8__invoices_due_date_index.sql
+@@ -0,0 +1,3 @@
++-- Sorting a project's invoices by due date is a first-class view now, so index the column the sort
++-- orders by (scoped by project, matching the per-project list query). Additive: no data changes.
++CREATE INDEX idx_invoices_project_due ON invoices (project_id, due_date);

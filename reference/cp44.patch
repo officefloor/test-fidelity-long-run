@@ -1,0 +1,109 @@
+diff --git a/src/main/frontend/features/clients/ClientForm.tsx b/src/main/frontend/features/clients/ClientForm.tsx
+index 15db17b..6eedcbd 100644
+--- a/src/main/frontend/features/clients/ClientForm.tsx
++++ b/src/main/frontend/features/clients/ClientForm.tsx
+@@ -4,11 +4,13 @@ import { useCreateClient } from './clients';
+ 
+ // Add-a-client form. useState holds only what the user is currently typing; on submit it validates
+ // the email, and only a proper address POSTs and invalidates the ['clients'] key. A blank or
+-// malformed email surfaces client-form-email-error and never creates a row.
++// malformed email surfaces client-form-email-error and never creates a row. A well-formed email that
++// is already in use is rejected by the server (ClientsPostLogic): the mutation errors and the same
++// client-form-email-error is shown, so no duplicate row is added.
+ export function ClientForm() {
+   const [name, setName] = useState('');
+   const [email, setEmail] = useState('');
+-  const [emailError, setEmailError] = useState(false);
++  const [emailError, setEmailError] = useState<string | null>(null);
+   const create = useCreateClient();
+ 
+   return (
+@@ -17,10 +19,10 @@ export function ClientForm() {
+       onSubmit={(event) => {
+         event.preventDefault();
+         if (!isValidEmail(email)) {
+-          setEmailError(true);
++          setEmailError('Enter a valid email address.');
+           return;
+         }
+-        setEmailError(false);
++        setEmailError(null);
+         create.mutate(
+           { name, email },
+           {
+@@ -28,6 +30,7 @@ export function ClientForm() {
+               setName('');
+               setEmail('');
+             },
++            onError: () => setEmailError('That email is already in use.'),
+           },
+         );
+       }}
+@@ -45,13 +48,13 @@ export function ClientForm() {
+         onChange={(event) => {
+           setEmail(event.target.value);
+           if (emailError) {
+-            setEmailError(false);
++            setEmailError(null);
+           }
+         }}
+       />
+       {emailError && (
+         <span data-testid="client-form-email-error" role="alert">
+-          Enter a valid email address.
++          {emailError}
+         </span>
+       )}
+       <button data-testid="client-form-submit" type="submit">
+diff --git a/src/main/java/net/officefloor/hq/app/ClientRepository.java b/src/main/java/net/officefloor/hq/app/ClientRepository.java
+index ce870d1..55162d4 100644
+--- a/src/main/java/net/officefloor/hq/app/ClientRepository.java
++++ b/src/main/java/net/officefloor/hq/app/ClientRepository.java
+@@ -4,4 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
+ 
+ /** Data access for {@link Client}. Injected into the OfficeFloor REST logic classes. */
+ public interface ClientRepository extends JpaRepository<Client, Long> {
++
++    /** Whether any client (active or archived) already uses this email — the uniqueness check. */
++    boolean existsByEmail(String email);
+ }
+diff --git a/src/main/java/net/officefloor/hq/app/ClientsPostLogic.java b/src/main/java/net/officefloor/hq/app/ClientsPostLogic.java
+index 2f7677b..556b076 100644
+--- a/src/main/java/net/officefloor/hq/app/ClientsPostLogic.java
++++ b/src/main/java/net/officefloor/hq/app/ClientsPostLogic.java
+@@ -10,7 +10,9 @@ import net.officefloor.web.ObjectResponse;
+  * {@code POST /api/clients} — create a client from a {name, email} body and return the saved row
+  * (with its generated id). Wired by {@code officefloor/rest/api/clients.POST.yml}. A client is never
+  * saved without a proper email address: the email is validated here and rejected with 400 before it
+- * reaches the repository (the DB CHECK in Flyway V2 is the matching last line of defence).
++ * reaches the repository (the DB CHECK in Flyway V2 is the matching last line of defence). An email
++ * already in use by another client (active or archived) is likewise rejected with 400 before saving,
++ * matching the UNIQUE constraint in Flyway V25 — two clients can never share an email.
+  */
+ public class ClientsPostLogic {
+ 
+@@ -23,7 +25,11 @@ public class ClientsPostLogic {
+         if (email == null || !EMAIL.matcher(email.trim()).matches()) {
+             throw new HttpException(HttpStatus.BAD_REQUEST, "A proper email address is required");
+         }
+-        Client saved = repository.save(new Client(newClient.getName(), email.trim()));
++        String normalised = email.trim();
++        if (repository.existsByEmail(normalised)) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "That email is already in use");
++        }
++        Client saved = repository.save(new Client(newClient.getName(), normalised));
+         response.send(saved);
+     }
+ 
+diff --git a/src/main/resources/db/migration/V25__clients_email_unique.sql b/src/main/resources/db/migration/V25__clients_email_unique.sql
+new file mode 100644
+index 0000000..20482bb
+--- /dev/null
++++ b/src/main/resources/db/migration/V25__clients_email_unique.sql
+@@ -0,0 +1,6 @@
++-- Two clients cannot share an email. Enforce uniqueness at the DB level too (the last line of
++-- defence), matching the duplicate check in the server (ClientsPostLogic) and the error the front-end
++-- surfaces. Applies to every client row regardless of archived state: an email already on file — even
++-- an archived one — cannot be reused for a new client.
++ALTER TABLE clients
++    ADD CONSTRAINT clients_email_unique UNIQUE (email);

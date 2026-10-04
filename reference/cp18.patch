@@ -1,0 +1,98 @@
+diff --git a/src/main/frontend/features/clients/ClientContacts.tsx b/src/main/frontend/features/clients/ClientContacts.tsx
+index fbcdfde..874fcdc 100644
+--- a/src/main/frontend/features/clients/ClientContacts.tsx
++++ b/src/main/frontend/features/clients/ClientContacts.tsx
+@@ -1,4 +1,5 @@
+ import { useState } from 'react';
++import { isValidEmail } from './email';
+ import { useContacts, useCreateContact, type Contact } from './contacts';
+ 
+ // The contacts panel on a client's page: the client's contacts in a table, and a form to add one.
+@@ -11,6 +12,7 @@ export function ClientContacts({ clientId }: { clientId: number }) {
+   const [name, setName] = useState('');
+   const [email, setEmail] = useState('');
+   const [role, setRole] = useState('');
++  const [emailError, setEmailError] = useState(false);
+   const create = useCreateContact();
+ 
+   const forClient: Contact[] = (contacts ?? []).filter((c) => c.clientId === clientId);
+@@ -41,9 +43,14 @@ export function ClientContacts({ clientId }: { clientId: number }) {
+         data-testid="contact-form"
+         onSubmit={(event) => {
+           event.preventDefault();
+-          if (!name.trim() || !email.trim() || !role.trim()) {
++          if (!name.trim() || !role.trim()) {
+             return;
+           }
++          if (!isValidEmail(email)) {
++            setEmailError(true);
++            return;
++          }
++          setEmailError(false);
+           create.mutate(
+             { clientId, name, email, role },
+             {
+@@ -66,8 +73,18 @@ export function ClientContacts({ clientId }: { clientId: number }) {
+           data-testid="contact-form-email"
+           placeholder="Email"
+           value={email}
+-          onChange={(event) => setEmail(event.target.value)}
++          onChange={(event) => {
++            setEmail(event.target.value);
++            if (emailError) {
++              setEmailError(false);
++            }
++          }}
+         />
++        {emailError && (
++          <span data-testid="contact-form-email-error" role="alert">
++            Enter a valid email address.
++          </span>
++        )}
+         <input
+           data-testid="contact-form-role"
+           placeholder="Role"
+diff --git a/src/main/java/net/officefloor/hq/app/ContactsPostLogic.java b/src/main/java/net/officefloor/hq/app/ContactsPostLogic.java
+index 31b22ca..e26f4bb 100644
+--- a/src/main/java/net/officefloor/hq/app/ContactsPostLogic.java
++++ b/src/main/java/net/officefloor/hq/app/ContactsPostLogic.java
+@@ -1,5 +1,6 @@
+ package net.officefloor.hq.app;
+ 
++import java.util.regex.Pattern;
+ import org.springframework.web.bind.annotation.RequestBody;
+ import net.officefloor.server.http.HttpException;
+ import net.officefloor.server.http.HttpStatus;
+@@ -14,6 +15,9 @@ import net.officefloor.web.ObjectResponse;
+  */
+ public class ContactsPostLogic {
+ 
++    /** A proper email address: local part, @, and a domain with a dot — no whitespace. */
++    private static final Pattern EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
++
+     public void service(@RequestBody NewContact newContact, ContactRepository contacts,
+             ClientRepository clients, ObjectResponse<Contact> response) {
+         Long clientId = newContact.getClientId();
+@@ -26,8 +30,8 @@ public class ContactsPostLogic {
+         if (name == null || name.trim().isEmpty()) {
+             throw new HttpException(HttpStatus.BAD_REQUEST, "A contact name is required");
+         }
+-        if (email == null || email.trim().isEmpty()) {
+-            throw new HttpException(HttpStatus.BAD_REQUEST, "A contact email is required");
++        if (email == null || !EMAIL.matcher(email.trim()).matches()) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A proper contact email address is required");
+         }
+         if (role == null || role.trim().isEmpty()) {
+             throw new HttpException(HttpStatus.BAD_REQUEST, "A contact role is required");
+diff --git a/src/main/resources/db/migration/V11__contacts_email_format.sql b/src/main/resources/db/migration/V11__contacts_email_format.sql
+new file mode 100644
+index 0000000..6c534f2
+--- /dev/null
++++ b/src/main/resources/db/migration/V11__contacts_email_format.sql
+@@ -0,0 +1,6 @@
++-- A contact must have a proper email address, not just a non-null one. Enforce the shape at the DB
++-- level too (local part, @, a domain with a dot), matching the server (ContactsPostLogic) +
++-- front-end validation: rejects '' and values with no @/domain, so no bad row can slip in through
++-- any path.
++ALTER TABLE contacts
++    ADD CONSTRAINT contacts_email_format CHECK (email LIKE '%_@_%._%');

@@ -1,0 +1,143 @@
+diff --git a/src/main/frontend/features/clients/ClientCounts.tsx b/src/main/frontend/features/clients/ClientCounts.tsx
+index a49b373..1d0ba50 100644
+--- a/src/main/frontend/features/clients/ClientCounts.tsx
++++ b/src/main/frontend/features/clients/ClientCounts.tsx
+@@ -21,7 +21,7 @@ export function ClientCounts({ clientId }: { clientId: number }) {
+ 
+   return (
+     <dl data-testid="client-counts">
+-      <dt>Projects</dt>
++      <dt>Jobs</dt>
+       <dd data-testid="client-projects-count">{projectCount}</dd>
+       <dt>Contacts</dt>
+       <dd data-testid="client-contacts-count">{contactCount}</dd>
+diff --git a/src/main/frontend/features/clients/ClientProjects.tsx b/src/main/frontend/features/clients/ClientProjects.tsx
+index 4eb0d5a..2a66663 100644
+--- a/src/main/frontend/features/clients/ClientProjects.tsx
++++ b/src/main/frontend/features/clients/ClientProjects.tsx
+@@ -46,10 +46,10 @@ export function ClientProjects({ clientId }: { clientId: number }) {
+         aria-pressed={showAll}
+         onClick={() => setShowAll(showAll ? undefined : true)}
+       >
+-        {showAll ? 'Show active only' : 'Show all projects'}
++        {showAll ? 'Show active only' : 'Show all jobs'}
+       </button>
+       {owned.length === 0 ? (
+-        <p data-testid="client-projects-empty">No projects for this client yet.</p>
++        <p data-testid="client-projects-empty">No jobs for this client yet.</p>
+       ) : (
+         // Reuse the project-row-<id>/project-name anchors inside the client-context table.
+         <table data-testid="client-projects-table">
+diff --git a/src/main/frontend/features/dashboard/Dashboard.tsx b/src/main/frontend/features/dashboard/Dashboard.tsx
+index 329c114..f9a1157 100644
+--- a/src/main/frontend/features/dashboard/Dashboard.tsx
++++ b/src/main/frontend/features/dashboard/Dashboard.tsx
+@@ -18,7 +18,7 @@ export function Dashboard() {
+     <dl data-testid="dashboard">
+       <dt>Clients</dt>
+       <dd data-testid="dashboard-clients-count">{data.clientsCount}</dd>
+-      <dt>Projects</dt>
++      <dt>Jobs</dt>
+       <dd data-testid="dashboard-projects-count">{data.projectsCount}</dd>
+       <dt>Outstanding</dt>
+       <dd data-testid="dashboard-outstanding-total">{formatMoney(data.outstandingTotal)}</dd>
+diff --git a/src/main/frontend/features/invoices/AllInvoiceList.tsx b/src/main/frontend/features/invoices/AllInvoiceList.tsx
+index 4472531..2b2bd9e 100644
+--- a/src/main/frontend/features/invoices/AllInvoiceList.tsx
++++ b/src/main/frontend/features/invoices/AllInvoiceList.tsx
+@@ -31,7 +31,7 @@ export function AllInvoiceList() {
+     <table data-testid="all-invoices-table">
+       <thead>
+         <tr>
+-          <th>Project</th>
++          <th>Job</th>
+           <th>Amount</th>
+           <th>Stage</th>
+         </tr>
+diff --git a/src/main/frontend/features/projects/ProjectForm.tsx b/src/main/frontend/features/projects/ProjectForm.tsx
+index 79e6110..99536f1 100644
+--- a/src/main/frontend/features/projects/ProjectForm.tsx
++++ b/src/main/frontend/features/projects/ProjectForm.tsx
+@@ -60,7 +60,7 @@ export function ProjectForm() {
+         <option value="FINISHED">Finished</option>
+       </select>
+       <button data-testid="project-form-submit" type="submit">
+-        Add project
++        Add job
+       </button>
+     </form>
+   );
+diff --git a/src/main/frontend/features/projects/ProjectList.tsx b/src/main/frontend/features/projects/ProjectList.tsx
+index 0e07c3c..5463656 100644
+--- a/src/main/frontend/features/projects/ProjectList.tsx
++++ b/src/main/frontend/features/projects/ProjectList.tsx
+@@ -22,7 +22,7 @@ export function ProjectList() {
+   }
+ 
+   if (projects.length === 0) {
+-    return <p data-testid="projects-empty">No projects yet.</p>;
++    return <p data-testid="projects-empty">No jobs yet.</p>;
+   }
+ 
+   const tagId = tagFilter === '' ? undefined : Number(tagFilter);
+diff --git a/src/main/frontend/features/projects/nav.slot.tsx b/src/main/frontend/features/projects/nav.slot.tsx
+index 5111c28..8a0dfed 100644
+--- a/src/main/frontend/features/projects/nav.slot.tsx
++++ b/src/main/frontend/features/projects/nav.slot.tsx
+@@ -7,7 +7,7 @@ export const contribution = AppNav.fill({
+   order: 20,
+   Component: () => (
+     <Link to="/projects" data-testid="nav-projects">
+-      Projects
++      Jobs
+     </Link>
+   ),
+ });
+diff --git a/src/main/frontend/features/search/GlobalSearch.tsx b/src/main/frontend/features/search/GlobalSearch.tsx
+index 390c68f..03c021f 100644
+--- a/src/main/frontend/features/search/GlobalSearch.tsx
++++ b/src/main/frontend/features/search/GlobalSearch.tsx
+@@ -23,7 +23,7 @@ export function GlobalSearch() {
+       <input
+         data-testid="global-search"
+         type="search"
+-        placeholder="Search clients and projects"
++        placeholder="Search clients and jobs"
+         value={query}
+         onChange={(event) => setQuery(event.target.value)}
+       />
+@@ -52,7 +52,7 @@ export function GlobalSearch() {
+       <table data-testid="search-projects">
+         <thead>
+           <tr>
+-            <th>Project</th>
++            <th>Job</th>
+             <th>Client</th>
+           </tr>
+         </thead>
+diff --git a/src/main/frontend/routes/projects.$projectId.tsx b/src/main/frontend/routes/projects.$projectId.tsx
+index c9f21e3..894a37c 100644
+--- a/src/main/frontend/routes/projects.$projectId.tsx
++++ b/src/main/frontend/routes/projects.$projectId.tsx
+@@ -17,7 +17,7 @@ function ProjectDetailPage() {
+ 
+   return (
+     <section data-testid="project-detail-page">
+-      <h1>Project</h1>
++      <h1>Job</h1>
+       <ProjectDetail.Slot projectId={id} />
+       <InvoiceForm projectId={id} />
+       <InvoiceList projectId={id} />
+diff --git a/src/main/frontend/routes/projects.index.tsx b/src/main/frontend/routes/projects.index.tsx
+index 9988e1f..f2b588e 100644
+--- a/src/main/frontend/routes/projects.index.tsx
++++ b/src/main/frontend/routes/projects.index.tsx
+@@ -10,7 +10,7 @@ export const Route = createFileRoute('/projects/')({
+ function ProjectsPage() {
+   return (
+     <section data-testid="projects-page">
+-      <h1>Projects</h1>
++      <h1>Jobs</h1>
+       <ProjectForm />
+       <ProjectList />
+     </section>

@@ -1,0 +1,86 @@
+diff --git a/src/main/frontend/features/clients/ClientList.tsx b/src/main/frontend/features/clients/ClientList.tsx
+index 5e8cbc8..316c5ae 100644
+--- a/src/main/frontend/features/clients/ClientList.tsx
++++ b/src/main/frontend/features/clients/ClientList.tsx
+@@ -1,20 +1,36 @@
++import { asString, useSearchParam } from '../../url/useSearchParam';
++import { ClientSearch } from './ClientSearch';
+ import { useClients } from './clients';
+ 
+ // The clients list. Reads server data straight from its query key — never copied into state, never
+-// handed down from a parent.
++// handed down from a parent. The name filter lives in the URL (`clientSearch`), read directly here;
++// the search box owns that same key, so the two stay in step without any import between them.
+ export function ClientList() {
+   const { data: clients } = useClients();
++  const [query] = useSearchParam('clientSearch', asString);
+ 
+   if (!clients) {
+     return null;
+   }
+ 
+   if (clients.length === 0) {
+-    return <p data-testid="clients-empty">No clients yet.</p>;
++    return (
++      <>
++        <ClientSearch />
++        <p data-testid="clients-empty">No clients yet.</p>
++      </>
++    );
+   }
+ 
++  const needle = query.trim().toLowerCase();
++  const visible = needle
++    ? clients.filter((client) => client.name.toLowerCase().includes(needle))
++    : clients;
++
+   return (
+-    <table data-testid="clients-table">
++    <>
++      <ClientSearch />
++      <table data-testid="clients-table">
+       <thead>
+         <tr>
+           <th>Name</th>
+@@ -22,13 +38,14 @@ export function ClientList() {
+         </tr>
+       </thead>
+       <tbody>
+-        {clients.map((client) => (
++        {visible.map((client) => (
+           <tr key={client.id} data-testid={`client-row-${client.id}`}>
+             <td data-testid="client-name">{client.name}</td>
+             <td data-testid="client-email">{client.email}</td>
+           </tr>
+         ))}
+-      </tbody>
+-    </table>
++        </tbody>
++      </table>
++    </>
+   );
+ }
+diff --git a/src/main/frontend/features/clients/ClientSearch.tsx b/src/main/frontend/features/clients/ClientSearch.tsx
+new file mode 100644
+index 0000000..7de9ccc
+--- /dev/null
++++ b/src/main/frontend/features/clients/ClientSearch.tsx
+@@ -0,0 +1,18 @@
++import { asString, useSearchParam } from '../../url/useSearchParam';
++
++// The client-name search box. It OWNS the `clientSearch` URL param — a filter outlives a click, so
++// it lives in the URL, not in a parent's useState (CLAUDE.md rule 4). Anything that needs the value
++// (the list) reads the same key; nothing is passed between them.
++export function ClientSearch() {
++  const [query, setQuery] = useSearchParam('clientSearch', asString);
++
++  return (
++    <input
++      data-testid="client-search"
++      type="search"
++      placeholder="Search clients by name"
++      value={query}
++      onChange={(event) => setQuery(event.target.value)}
++    />
++  );
++}

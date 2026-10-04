@@ -1,0 +1,301 @@
+diff --git a/src/main/frontend/features/invoices/invoiceSummary.ts b/src/main/frontend/features/invoices/invoiceSummary.ts
+index 255977c..227d668 100644
+--- a/src/main/frontend/features/invoices/invoiceSummary.ts
++++ b/src/main/frontend/features/invoices/invoiceSummary.ts
+@@ -2,15 +2,17 @@ import { useQuery } from '@tanstack/react-query';
+ import { getJson } from '../../api/http';
+ 
+ // One invoice's money breakdown, worked out on the server (see InvoiceSummaryGetLogic): its subtotal
+-// (the sum of its line items), the percentage discount taken off it, that discount in money, and the
+-// final total (subtotal minus the discount). Keyed under the shared ['invoices'] prefix so adding or
+-// removing a line — which invalidates ['invoices'] — also refreshes the breakdown, with no import
+-// between the two.
++// (the sum of its line items), the percentage discount taken off it, that discount in money, the
++// percentage sales tax, that tax in money, and the final total (subtotal minus the discount, plus
++// tax added on top). Keyed under the shared ['invoices'] prefix so adding or removing a line — which
++// invalidates ['invoices'] — also refreshes the breakdown, with no import between the two.
+ export type InvoiceSummary = {
+   invoiceId: number;
+   subtotal: number;
+   discountPct: number;
+   discount: number;
++  taxPct: number;
++  tax: number;
+   total: number;
+ };
+ 
+diff --git a/src/main/frontend/features/invoices/summary.slot.tsx b/src/main/frontend/features/invoices/summary.slot.tsx
+index cc55add..1a8955e 100644
+--- a/src/main/frontend/features/invoices/summary.slot.tsx
++++ b/src/main/frontend/features/invoices/summary.slot.tsx
+@@ -23,6 +23,8 @@ function InvoiceSummary({ invoiceId }: { invoiceId: number }) {
+         <dd data-testid="invoice-subtotal">{formatMoney(summary.subtotal)}</dd>
+         <dt>Discount ({Number(summary.discountPct)}%)</dt>
+         <dd data-testid="invoice-discount">{formatMoney(summary.discount)}</dd>
++        <dt>Tax ({Number(summary.taxPct)}%)</dt>
++        <dd data-testid="invoice-tax">{formatMoney(summary.tax)}</dd>
+         <dt>Total</dt>
+         <dd data-testid="invoice-total">{formatMoney(summary.total)}</dd>
+       </dl>
+diff --git a/src/main/java/net/officefloor/hq/app/ClientStatementGetLogic.java b/src/main/java/net/officefloor/hq/app/ClientStatementGetLogic.java
+index fe33f7e..7693324 100644
+--- a/src/main/java/net/officefloor/hq/app/ClientStatementGetLogic.java
++++ b/src/main/java/net/officefloor/hq/app/ClientStatementGetLogic.java
+@@ -34,7 +34,8 @@ public class ClientStatementGetLogic {
+                     // What is owed is the net total after any discount (Flyway V27), worked out the
+                     // one-place way (InvoiceMoney) so the statement agrees with the dashboard and the
+                     // invoice detail. The due — and the status derived from it — follow that total.
+-                    BigDecimal netTotal = InvoiceMoney.netTotal(i.getAmount(), i.getDiscountPct());
++                    BigDecimal netTotal = InvoiceMoney.netTotal(i.getAmount(), i.getDiscountPct(),
++                            i.getTaxPct());
+                     BigDecimal due = netTotal.subtract(paid);
+                     String status = InvoiceStatus.derive(i.getStatus(), netTotal, paid);
+                     return new StatementInvoiceView(i.getId(), i.getProjectId(), netTotal,
+diff --git a/src/main/java/net/officefloor/hq/app/DashboardGetLogic.java b/src/main/java/net/officefloor/hq/app/DashboardGetLogic.java
+index 1b36d87..4322726 100644
+--- a/src/main/java/net/officefloor/hq/app/DashboardGetLogic.java
++++ b/src/main/java/net/officefloor/hq/app/DashboardGetLogic.java
+@@ -17,7 +17,7 @@ public class DashboardGetLogic {
+         // (InvoiceMoney) so the home figure agrees with the invoice detail and the client statement.
+         BigDecimal outstanding = invoices.findAll().stream()
+                 .filter(i -> "SENT".equals(i.getStatus()))
+-                .map(i -> InvoiceMoney.netTotal(i.getAmount(), i.getDiscountPct()))
++                .map(i -> InvoiceMoney.netTotal(i.getAmount(), i.getDiscountPct(), i.getTaxPct()))
+                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+         response.send(new DashboardView(clients.count(), projects.count(), outstanding));
+     }
+diff --git a/src/main/java/net/officefloor/hq/app/Invoice.java b/src/main/java/net/officefloor/hq/app/Invoice.java
+index 2d1845f..7f12924 100644
+--- a/src/main/java/net/officefloor/hq/app/Invoice.java
++++ b/src/main/java/net/officefloor/hq/app/Invoice.java
+@@ -35,6 +35,15 @@ public class Invoice {
+     @Column(name = "discount_pct")
+     private BigDecimal discountPct = BigDecimal.ZERO;
+ 
++    /**
++     * Percentage sales tax added on top of the net total — the subtotal less any discount (Flyway
++     * V28), 0-100. Defaults to zero, so an invoice with no tax set bills just its net total. The
++     * final amount is worked out from this, the discount and the amount on the server (see
++     * {@link InvoiceMoney}), never typed.
++     */
++    @Column(name = "tax_pct")
++    private BigDecimal taxPct = BigDecimal.ZERO;
++
+     /** Lifecycle status: DRAFT (default, matching Flyway V9) -> SENT (once sent) -> PAID (once paid). */
+     private String status = "DRAFT";
+ 
+@@ -86,6 +95,14 @@ public class Invoice {
+         this.discountPct = discountPct;
+     }
+ 
++    public BigDecimal getTaxPct() {
++        return taxPct;
++    }
++
++    public void setTaxPct(BigDecimal taxPct) {
++        this.taxPct = taxPct;
++    }
++
+     public String getStatus() {
+         return status;
+     }
+diff --git a/src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java b/src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java
+index b39260d..d4df825 100644
+--- a/src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java
++++ b/src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java
+@@ -17,10 +17,12 @@ public class InvoiceDueGetLogic {
+             PaymentRepository payments, ObjectResponse<InvoiceDueView> response) {
+         Invoice invoice = invoices.findById(invoiceId).orElse(null);
+         BigDecimal subtotal = invoice != null ? invoice.getAmount() : BigDecimal.ZERO;
+-        // What is owed is the net total after any discount (Flyway V27), worked out the one-place
+-        // way (InvoiceMoney) so the detail figure agrees with the dashboard and the statement.
++        // What is owed is the net total after any discount (Flyway V27) with tax added on top (Flyway
++        // V28), worked out the one-place way (InvoiceMoney) so the detail figure agrees with the
++        // dashboard and the statement.
+         BigDecimal amount = InvoiceMoney.netTotal(subtotal,
+-                invoice != null ? invoice.getDiscountPct() : null);
++                invoice != null ? invoice.getDiscountPct() : null,
++                invoice != null ? invoice.getTaxPct() : null);
+         BigDecimal paid = payments.findByInvoiceIdOrderByIdAsc(invoiceId).stream()
+                 .map(Payment::getAmount)
+                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+diff --git a/src/main/java/net/officefloor/hq/app/InvoiceMoney.java b/src/main/java/net/officefloor/hq/app/InvoiceMoney.java
+index f65f614..be7d01d 100644
+--- a/src/main/java/net/officefloor/hq/app/InvoiceMoney.java
++++ b/src/main/java/net/officefloor/hq/app/InvoiceMoney.java
+@@ -4,11 +4,13 @@ import java.math.BigDecimal;
+ import java.math.RoundingMode;
+ 
+ /**
+- * The one place the invoice discount money-rule lives: given an invoice's subtotal (the worked-out
+- * sum of its line items, kept in the amount column) and its percentage discount (Flyway V27), works
+- * out the discount in money and the net total actually billed (subtotal less that discount). Kept in
+- * one place so every surface that shows "what is owed" — the invoice detail, the client statement
+- * and the home dashboard — discounts the same way, with the same whole-cent rounding.
++ * The one place the invoice money-rules live: given an invoice's subtotal (the worked-out sum of its
++ * line items, kept in the amount column), its percentage discount (Flyway V27) and its percentage
++ * sales tax (Flyway V28), works out the discount in money, the tax in money and the final total
++ * actually billed. Tax is added on top AFTER the discount: the total is (subtotal less discount) plus
++ * tax on that net figure. Kept in one place so every surface that shows "what is owed" — the invoice
++ * detail, the client statement and the home dashboard — works it out the same way, with the same
++ * whole-cent rounding.
+  */
+ public final class InvoiceMoney {
+ 
+@@ -24,9 +26,27 @@ public final class InvoiceMoney {
+                 .setScale(2, RoundingMode.HALF_UP);
+     }
+ 
+-    /** The net total billed: the subtotal less the discount. Null-safe. */
+-    public static BigDecimal netTotal(BigDecimal subtotal, BigDecimal discountPct) {
++    /** The net figure the tax is worked out on: the subtotal less the discount. Null-safe. */
++    public static BigDecimal netOfDiscount(BigDecimal subtotal, BigDecimal discountPct) {
+         BigDecimal base = subtotal != null ? subtotal : BigDecimal.ZERO;
+         return base.subtract(discount(base, discountPct));
+     }
++
++    /**
++     * The tax in money: the net figure (subtotal less discount) times the tax percentage, rounded to
++     * whole cents. Worked out AFTER the discount, so it never taxes the discounted-off amount.
++     * Null-safe.
++     */
++    public static BigDecimal tax(BigDecimal subtotal, BigDecimal discountPct, BigDecimal taxPct) {
++        BigDecimal net = netOfDiscount(subtotal, discountPct);
++        BigDecimal pct = taxPct != null ? taxPct : BigDecimal.ZERO;
++        return net.multiply(pct)
++                .divide(BigDecimal.valueOf(100))
++                .setScale(2, RoundingMode.HALF_UP);
++    }
++
++    /** The final total billed: the subtotal less the discount, plus tax added on top. Null-safe. */
++    public static BigDecimal netTotal(BigDecimal subtotal, BigDecimal discountPct, BigDecimal taxPct) {
++        return netOfDiscount(subtotal, discountPct).add(tax(subtotal, discountPct, taxPct));
++    }
+ }
+diff --git a/src/main/java/net/officefloor/hq/app/InvoiceSummaryGetLogic.java b/src/main/java/net/officefloor/hq/app/InvoiceSummaryGetLogic.java
+index fa26c7b..1711665 100644
+--- a/src/main/java/net/officefloor/hq/app/InvoiceSummaryGetLogic.java
++++ b/src/main/java/net/officefloor/hq/app/InvoiceSummaryGetLogic.java
+@@ -7,9 +7,10 @@ import net.officefloor.web.ObjectResponse;
+ /**
+  * {@code GET /api/invoices/summary?invoiceId=<id>} — the money breakdown for one invoice: its
+  * subtotal (the worked-out sum of its line items, Flyway V13/V14, kept in the amount column), the
+- * percentage discount taken off it (Flyway V27), the discount in money, and the final total
+- * (subtotal minus discount). The figures are worked out on the server so the money math lives in one
+- * place; an invoice with no discount simply bills its full subtotal. Wired by
++ * percentage discount taken off it (Flyway V27), the discount in money, the percentage sales tax
++ * (Flyway V28), the tax in money, and the final total (subtotal minus discount, plus tax on top).
++ * The figures are worked out on the server so the money math lives in one place; an invoice with no
++ * discount or tax simply bills its full subtotal. Wired by
+  * {@code officefloor/rest/api/invoices/summary.GET.yml}.
+  */
+ public class InvoiceSummaryGetLogic {
+@@ -21,27 +22,40 @@ public class InvoiceSummaryGetLogic {
+         BigDecimal discountPct = invoice != null && invoice.getDiscountPct() != null
+                 ? invoice.getDiscountPct()
+                 : BigDecimal.ZERO;
+-        // Discount in money, rounded to whole cents; the final total is the subtotal less that.
+-        // The same one-place rule the dashboard, statement and due figures use (see InvoiceMoney).
++        BigDecimal taxPct = invoice != null && invoice.getTaxPct() != null
++                ? invoice.getTaxPct()
++                : BigDecimal.ZERO;
++        // Discount and tax in money, rounded to whole cents; the final total is the subtotal less the
++        // discount, plus tax worked out on that net figure. The same one-place rule the dashboard,
++        // statement and due figures use (see InvoiceMoney) — tax is added on top AFTER the discount.
+         BigDecimal discount = InvoiceMoney.discount(subtotal, discountPct);
+-        BigDecimal total = subtotal.subtract(discount);
+-        response.send(new InvoiceSummaryView(invoiceId, subtotal, discountPct, discount, total));
++        BigDecimal tax = InvoiceMoney.tax(subtotal, discountPct, taxPct);
++        BigDecimal total = InvoiceMoney.netTotal(subtotal, discountPct, taxPct);
++        response.send(new InvoiceSummaryView(invoiceId, subtotal, discountPct, discount, taxPct, tax,
++                total));
+     }
+ 
+-    /** One invoice's money breakdown: subtotal, the discount percentage, the discount, the total. */
++    /**
++     * One invoice's money breakdown: subtotal, the discount percentage, the discount, the tax
++     * percentage, the tax, and the final total.
++     */
+     public static class InvoiceSummaryView {
+         private final long invoiceId;
+         private final BigDecimal subtotal;
+         private final BigDecimal discountPct;
+         private final BigDecimal discount;
++        private final BigDecimal taxPct;
++        private final BigDecimal tax;
+         private final BigDecimal total;
+ 
+         public InvoiceSummaryView(long invoiceId, BigDecimal subtotal, BigDecimal discountPct,
+-                BigDecimal discount, BigDecimal total) {
++                BigDecimal discount, BigDecimal taxPct, BigDecimal tax, BigDecimal total) {
+             this.invoiceId = invoiceId;
+             this.subtotal = subtotal;
+             this.discountPct = discountPct;
+             this.discount = discount;
++            this.taxPct = taxPct;
++            this.tax = tax;
+             this.total = total;
+         }
+ 
+@@ -61,6 +75,14 @@ public class InvoiceSummaryGetLogic {
+             return discount;
+         }
+ 
++        public BigDecimal getTaxPct() {
++            return taxPct;
++        }
++
++        public BigDecimal getTax() {
++            return tax;
++        }
++
+         public BigDecimal getTotal() {
+             return total;
+         }
+diff --git a/src/main/java/net/officefloor/hq/app/TestSupportController.java b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+index 2f8ef02..9361e29 100644
+--- a/src/main/java/net/officefloor/hq/app/TestSupportController.java
++++ b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+@@ -163,6 +163,8 @@ public class TestSupportController {
+                 Object dueDate = invoice.get("dueDate");
+                 // discountPct is optional; default to 0 (no discount, matching Flyway V27) when absent.
+                 Object discountPct = invoice.get("discountPct");
++                // taxPct is optional; default to 0 (no tax, matching Flyway V28) when absent.
++                Object taxPct = invoice.get("taxPct");
+                 // An invoice is built from line items (Flyway V13). Its amount is the worked-out sum
+                 // of qty * unitPrice across them (zero when there are none yet) — a fixture no longer
+                 // types a figure, it lists what is charged. (An explicit `amount` still wins if a
+@@ -183,9 +185,10 @@ public class TestSupportController {
+                 }
+                 long invoiceId = ((Number) invoice.get("id")).longValue();
+                 jdbc.update("INSERT INTO invoices"
+-                        + " (id, project_id, amount, status, issued_date, due_date, discount_pct)"
++                        + " (id, project_id, amount, status, issued_date, due_date, discount_pct,"
++                        + " tax_pct)"
+                         + " VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_DATE),"
+-                        + " COALESCE(?, DATEADD('DAY', 30, CURRENT_DATE)), ?)",
++                        + " COALESCE(?, DATEADD('DAY', 30, CURRENT_DATE)), ?, ?)",
+                         invoiceId,
+                         ((Number) invoice.get("projectId")).longValue(),
+                         amount,
+@@ -193,6 +196,8 @@ public class TestSupportController {
+                         issuedDate != null ? java.sql.Date.valueOf(issuedDate.toString()) : null,
+                         dueDate != null ? java.sql.Date.valueOf(dueDate.toString()) : null,
+                         discountPct != null ? new java.math.BigDecimal(discountPct.toString())
++                                : java.math.BigDecimal.ZERO,
++                        taxPct != null ? new java.math.BigDecimal(taxPct.toString())
+                                 : java.math.BigDecimal.ZERO);
+                 if (lineItems != null) {
+                     for (Map<String, Object> line : lineItems) {
+diff --git a/src/main/resources/db/migration/V28__invoices_tax_pct.sql b/src/main/resources/db/migration/V28__invoices_tax_pct.sql
+new file mode 100644
+index 0000000..1686b24
+--- /dev/null
++++ b/src/main/resources/db/migration/V28__invoices_tax_pct.sql
+@@ -0,0 +1,6 @@
++-- An invoice can carry a percentage sales tax added ON TOP of its net total — the subtotal less any
++-- discount (Flyway V27). Tax is worked out after the discount: (subtotal - discount) * tax_pct. A
++-- new NUMERIC column holding the percentage (0-100), defaulting to 0 so every existing invoice has
++-- no tax — its final amount equals its net total until a tax rate is set. The final amount is worked
++-- out on the server (see InvoiceMoney), never typed.
++ALTER TABLE invoices ADD COLUMN tax_pct NUMERIC(5, 2) NOT NULL DEFAULT 0;

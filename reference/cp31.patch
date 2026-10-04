@@ -1,0 +1,177 @@
+diff --git a/src/main/frontend/features/invoices/InvoiceList.tsx b/src/main/frontend/features/invoices/InvoiceList.tsx
+index 7cfb3ac..c1611d2 100644
+--- a/src/main/frontend/features/invoices/InvoiceList.tsx
++++ b/src/main/frontend/features/invoices/InvoiceList.tsx
+@@ -1,5 +1,6 @@
+ import { Link } from '@tanstack/react-router';
+ import { InvoiceListToolbar } from '../../slots/defs/invoiceListToolbar';
++import { InvoiceRow } from '../../slots/defs/invoiceRow';
+ import { useSearchParam, asString } from '../../url/useSearchParam';
+ import { formatMoney } from '../../ui/money';
+ import { useInvoices, usePayInvoice, useSendInvoice } from './invoices';
+@@ -31,6 +32,7 @@ export function InvoiceList({ projectId }: { projectId: number }) {
+           <th>Amount</th>
+           <th>Issued</th>
+           <th>Due</th>
++          <th>Left to pay</th>
+           <th>Status</th>
+           <th></th>
+         </tr>
+@@ -41,6 +43,9 @@ export function InvoiceList({ projectId }: { projectId: number }) {
+             <td data-testid="invoice-amount">{formatMoney(invoice.amount)}</td>
+             <td data-testid="invoice-issued">{invoice.issuedDate}</td>
+             <td data-testid="invoice-due">{invoice.dueDate}</td>
++            <td>
++              <InvoiceRow.Slot invoice={invoice} />
++            </td>
+             <td data-testid="invoice-status">{invoice.status}</td>
+             <td>
+               <Link
+diff --git a/src/main/frontend/features/invoices/dueAmount.slot.tsx b/src/main/frontend/features/invoices/dueAmount.slot.tsx
+new file mode 100644
+index 0000000..09bef45
+--- /dev/null
++++ b/src/main/frontend/features/invoices/dueAmount.slot.tsx
+@@ -0,0 +1,17 @@
++import { InvoiceRow } from '../../slots/defs/invoiceRow';
++import { formatMoney } from '../../ui/money';
++import type { Invoice } from './invoices';
++import { useInvoiceDue } from './invoiceDue';
++
++// "How much is still left to pay on this invoice" — a self-contained cell filling the invoice-row
++// region. The table is not edited to add it beyond rendering the region (CLAUDE.md rule 3); it reads
++// the server-derived amount due (invoice amount minus its payments) for its own invoice. Sharing the
++// ['invoices'] query key, it drops on its own when a payment is recorded — no parent hands it data.
++function DueAmount({ invoice }: { invoice: Invoice }) {
++  const { data } = useInvoiceDue(invoice.id);
++  return (
++    <span data-testid="invoice-due-amount">{data ? formatMoney(data.due) : ''}</span>
++  );
++}
++
++export const contribution = InvoiceRow.fill({ order: 10, Component: DueAmount });
+diff --git a/src/main/frontend/features/invoices/invoiceDue.ts b/src/main/frontend/features/invoices/invoiceDue.ts
+new file mode 100644
+index 0000000..0459ca3
+--- /dev/null
++++ b/src/main/frontend/features/invoices/invoiceDue.ts
+@@ -0,0 +1,22 @@
++import { useQuery } from '@tanstack/react-query';
++import { getJson } from '../../api/http';
++
++// How much is still left to pay on one invoice: its amount minus everything paid against it, worked
++// out on the server (see InvoiceDueGetLogic). Keyed under the shared ['invoices'] prefix so that
++// recording a payment — which invalidates ['invoices'] (see useAddPayment) — also refreshes the
++// amount due, with no import between the two.
++export type InvoiceDue = {
++  invoiceId: number;
++  amount: number;
++  paid: number;
++  due: number;
++};
++
++export const invoiceDueKey = (invoiceId: number) => ['invoices', 'due', invoiceId] as const;
++
++export function useInvoiceDue(invoiceId: number) {
++  return useQuery({
++    queryKey: invoiceDueKey(invoiceId),
++    queryFn: () => getJson<InvoiceDue>(`/api/invoices/due?invoiceId=${invoiceId}`),
++  });
++}
+diff --git a/src/main/frontend/slots/defs/invoiceRow.ts b/src/main/frontend/slots/defs/invoiceRow.ts
+new file mode 100644
+index 0000000..f7cf717
+--- /dev/null
++++ b/src/main/frontend/slots/defs/invoiceRow.ts
+@@ -0,0 +1,11 @@
++import { defineSlot } from '../Slot';
++import type { Invoice } from '../../features/invoices/invoices';
++
++/**
++ * A cell on one invoice row in a project's invoice list — per-row figures and controls that read a
++ * single invoice (what is still left to pay on it, and more over time). The invoice table renders
++ * this region once per row and never lists what fills it; each contribution is its own `*.slot.tsx`
++ * file under `features/invoices/`. Handed the whole invoice as context, so a contribution has its id
++ * and amount to work with.
++ */
++export const InvoiceRow = defineSlot<{ invoice: Invoice }>('invoice.row');
+diff --git a/src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java b/src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java
+new file mode 100644
+index 0000000..4ccdeb3
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java
+@@ -0,0 +1,56 @@
++package net.officefloor.hq.app;
++
++import java.math.BigDecimal;
++import org.springframework.web.bind.annotation.RequestParam;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code GET /api/invoices/due?invoiceId=<id>} — how much is still left to pay on one invoice: its
++ * amount (the worked-out sum of its line items, Flyway V13/V14) minus everything paid against it (the
++ * sum of its payments, Flyway V19). The figure is derived on the server so the money math lives in
++ * one place, and an invoice with no payments yet is simply its full amount. Wired by
++ * {@code officefloor/rest/api/invoices/due.GET.yml}.
++ */
++public class InvoiceDueGetLogic {
++
++    public void service(@RequestParam("invoiceId") Long invoiceId, InvoiceRepository invoices,
++            PaymentRepository payments, ObjectResponse<InvoiceDueView> response) {
++        BigDecimal amount = invoices.findById(invoiceId).map(Invoice::getAmount)
++                .orElse(BigDecimal.ZERO);
++        BigDecimal paid = payments.findByInvoiceIdOrderByIdAsc(invoiceId).stream()
++                .map(Payment::getAmount)
++                .reduce(BigDecimal.ZERO, BigDecimal::add);
++        response.send(new InvoiceDueView(invoiceId, amount, paid, amount.subtract(paid)));
++    }
++
++    /** What is left to pay on one invoice: its amount, what has been paid, and the difference. */
++    public static class InvoiceDueView {
++        private final long invoiceId;
++        private final BigDecimal amount;
++        private final BigDecimal paid;
++        private final BigDecimal due;
++
++        public InvoiceDueView(long invoiceId, BigDecimal amount, BigDecimal paid, BigDecimal due) {
++            this.invoiceId = invoiceId;
++            this.amount = amount;
++            this.paid = paid;
++            this.due = due;
++        }
++
++        public long getInvoiceId() {
++            return invoiceId;
++        }
++
++        public BigDecimal getAmount() {
++            return amount;
++        }
++
++        public BigDecimal getPaid() {
++            return paid;
++        }
++
++        public BigDecimal getDue() {
++            return due;
++        }
++    }
++}
+diff --git a/src/main/resources/db/migration/V20__payments_invoice_id_index.sql b/src/main/resources/db/migration/V20__payments_invoice_id_index.sql
+new file mode 100644
+index 0000000..b218b21
+--- /dev/null
++++ b/src/main/resources/db/migration/V20__payments_invoice_id_index.sql
+@@ -0,0 +1,4 @@
++-- How much is still left to pay on an invoice is now shown per row (amount minus its payments), so
++-- the project invoice list sums each invoice's payments once per row. Index the column those sums
++-- group by (invoice_id, matching the per-invoice payments query). Additive: no data changes.
++CREATE INDEX idx_payments_invoice ON payments (invoice_id);
+diff --git a/src/main/resources/officefloor/rest/api/invoices/due.GET.yml b/src/main/resources/officefloor/rest/api/invoices/due.GET.yml
+new file mode 100644
+index 0000000..593ff79
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/invoices/due.GET.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.InvoiceDueGetLogic

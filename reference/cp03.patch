@@ -1,0 +1,441 @@
+diff --git a/src/main/frontend/features/projects/ProjectForm.tsx b/src/main/frontend/features/projects/ProjectForm.tsx
+new file mode 100644
+index 0000000..7b25ab0
+--- /dev/null
++++ b/src/main/frontend/features/projects/ProjectForm.tsx
+@@ -0,0 +1,55 @@
++import { useState } from 'react';
++import { useClientOptions, useCreateProject } from './projects';
++
++// Add-a-project form. useState holds only what the user is currently entering: the name and the
++// chosen client id. On submit it POSTs {name, clientId} and invalidates the ['projects'] key. The
++// client select's option values are client ids (what the test selects by).
++export function ProjectForm() {
++  const [name, setName] = useState('');
++  const [clientId, setClientId] = useState('');
++  const { data: clients } = useClientOptions();
++  const create = useCreateProject();
++
++  return (
++    <form
++      data-testid="project-form"
++      onSubmit={(event) => {
++        event.preventDefault();
++        if (!name.trim() || !clientId) {
++          return;
++        }
++        create.mutate(
++          { name, clientId: Number(clientId) },
++          {
++            onSuccess: () => {
++              setName('');
++              setClientId('');
++            },
++          },
++        );
++      }}
++    >
++      <input
++        data-testid="project-form-name"
++        placeholder="Name"
++        value={name}
++        onChange={(event) => setName(event.target.value)}
++      />
++      <select
++        data-testid="project-form-client"
++        value={clientId}
++        onChange={(event) => setClientId(event.target.value)}
++      >
++        <option value="">Select a client</option>
++        {(clients ?? []).map((client) => (
++          <option key={client.id} value={client.id}>
++            {client.name}
++          </option>
++        ))}
++      </select>
++      <button data-testid="project-form-submit" type="submit">
++        Add project
++      </button>
++    </form>
++  );
++}
+diff --git a/src/main/frontend/features/projects/ProjectList.tsx b/src/main/frontend/features/projects/ProjectList.tsx
+new file mode 100644
+index 0000000..ecb39cf
+--- /dev/null
++++ b/src/main/frontend/features/projects/ProjectList.tsx
+@@ -0,0 +1,34 @@
++import { useProjects } from './projects';
++
++// The projects list. Reads server data straight from its query key and shows the client's NAME
++// (served alongside each project), not the id.
++export function ProjectList() {
++  const { data: projects } = useProjects();
++
++  if (!projects) {
++    return null;
++  }
++
++  if (projects.length === 0) {
++    return <p data-testid="projects-empty">No projects yet.</p>;
++  }
++
++  return (
++    <table data-testid="projects-table">
++      <thead>
++        <tr>
++          <th>Name</th>
++          <th>Client</th>
++        </tr>
++      </thead>
++      <tbody>
++        {projects.map((project) => (
++          <tr key={project.id} data-testid={`project-row-${project.id}`}>
++            <td data-testid="project-name">{project.name}</td>
++            <td data-testid="project-client">{project.clientName}</td>
++          </tr>
++        ))}
++      </tbody>
++    </table>
++  );
++}
+diff --git a/src/main/frontend/features/projects/nav.slot.tsx b/src/main/frontend/features/projects/nav.slot.tsx
+new file mode 100644
+index 0000000..5111c28
+--- /dev/null
++++ b/src/main/frontend/features/projects/nav.slot.tsx
+@@ -0,0 +1,13 @@
++import { Link } from '@tanstack/react-router';
++import { AppNav } from '../../slots/defs/appNav';
++
++// Projects' presence in the nav bar — its own file, filling the shared nav region. The shell is not
++// touched to add it (CLAUDE.md rule 1).
++export const contribution = AppNav.fill({
++  order: 20,
++  Component: () => (
++    <Link to="/projects" data-testid="nav-projects">
++      Projects
++    </Link>
++  ),
++});
+diff --git a/src/main/frontend/features/projects/projects.ts b/src/main/frontend/features/projects/projects.ts
+new file mode 100644
+index 0000000..d75025a
+--- /dev/null
++++ b/src/main/frontend/features/projects/projects.ts
+@@ -0,0 +1,35 @@
++import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
++import { getJson, postJson } from '../../api/http';
++
++// The shape the server returns (a project joined to its client's name) and the query key everything
++// that shows projects shares. Invalidating ['projects'] refreshes every view of projects.
++export type Project = { id: number; name: string; clientId: number; clientName: string };
++
++export const projectsKey = ['projects'] as const;
++
++export function useProjects() {
++  return useQuery({
++    queryKey: projectsKey,
++    queryFn: () => getJson<Project[]>('/api/projects'),
++  });
++}
++
++export function useCreateProject() {
++  const queryClient = useQueryClient();
++  return useMutation({
++    mutationFn: (input: { name: string; clientId: number }) =>
++      postJson<Project>('/api/projects', input),
++    onSuccess: () => queryClient.invalidateQueries({ queryKey: projectsKey }),
++  });
++}
++
++// The client choices the project form needs. Reads the SHARED ['clients'] key — no import of the
++// clients feature; the two stay in step through the key, not a dependency.
++type ClientOption = { id: number; name: string };
++
++export function useClientOptions() {
++  return useQuery({
++    queryKey: ['clients'] as const,
++    queryFn: () => getJson<ClientOption[]>('/api/clients'),
++  });
++}
+diff --git a/src/main/frontend/routes/projects.index.tsx b/src/main/frontend/routes/projects.index.tsx
+new file mode 100644
+index 0000000..9988e1f
+--- /dev/null
++++ b/src/main/frontend/routes/projects.index.tsx
+@@ -0,0 +1,18 @@
++import { createFileRoute } from '@tanstack/react-router';
++import { ProjectForm } from '../features/projects/ProjectForm';
++import { ProjectList } from '../features/projects/ProjectList';
++
++// The Projects page: one new file under routes/. The route table is generated from this directory.
++export const Route = createFileRoute('/projects/')({
++  component: ProjectsPage,
++});
++
++function ProjectsPage() {
++  return (
++    <section data-testid="projects-page">
++      <h1>Projects</h1>
++      <ProjectForm />
++      <ProjectList />
++    </section>
++  );
++}
+diff --git a/src/main/java/net/officefloor/hq/app/Project.java b/src/main/java/net/officefloor/hq/app/Project.java
+new file mode 100644
+index 0000000..eab4d97
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/Project.java
+@@ -0,0 +1,59 @@
++package net.officefloor.hq.app;
++
++import jakarta.persistence.Column;
++import jakarta.persistence.Entity;
++import jakarta.persistence.GeneratedValue;
++import jakarta.persistence.GenerationType;
++import jakarta.persistence.Id;
++import jakarta.persistence.Table;
++
++/**
++ * A project the owner does for a client: a name and the id of the owning client. Persisted to the
++ * {@code projects} table (Flyway V3). The id is database-generated (IDENTITY) on create; the seed
++ * path inserts explicit ids directly via JdbcTemplate (see {@link TestSupportController}).
++ */
++@Entity
++@Table(name = "projects")
++public class Project {
++
++    @Id
++    @GeneratedValue(strategy = GenerationType.IDENTITY)
++    private Long id;
++
++    private String name;
++
++    @Column(name = "client_id")
++    private Long clientId;
++
++    public Project() {
++    }
++
++    public Project(String name, Long clientId) {
++        this.name = name;
++        this.clientId = clientId;
++    }
++
++    public Long getId() {
++        return id;
++    }
++
++    public void setId(Long id) {
++        this.id = id;
++    }
++
++    public String getName() {
++        return name;
++    }
++
++    public void setName(String name) {
++        this.name = name;
++    }
++
++    public Long getClientId() {
++        return clientId;
++    }
++
++    public void setClientId(Long clientId) {
++        this.clientId = clientId;
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/ProjectRepository.java b/src/main/java/net/officefloor/hq/app/ProjectRepository.java
+new file mode 100644
+index 0000000..17aac2e
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/ProjectRepository.java
+@@ -0,0 +1,7 @@
++package net.officefloor.hq.app;
++
++import org.springframework.data.jpa.repository.JpaRepository;
++
++/** Data access for {@link Project}. Injected into the OfficeFloor REST logic classes. */
++public interface ProjectRepository extends JpaRepository<Project, Long> {
++}
+diff --git a/src/main/java/net/officefloor/hq/app/ProjectsGetLogic.java b/src/main/java/net/officefloor/hq/app/ProjectsGetLogic.java
+new file mode 100644
+index 0000000..88d4810
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/ProjectsGetLogic.java
+@@ -0,0 +1,55 @@
++package net.officefloor.hq.app;
++
++import java.util.List;
++import java.util.Map;
++import java.util.stream.Collectors;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code GET /api/projects} — list every project with the NAME of the client it is for (not just the
++ * id), so the UI can show the join directly. Wired by {@code officefloor/rest/api/projects.GET.yml}.
++ */
++public class ProjectsGetLogic {
++
++    public void service(ProjectRepository projects, ClientRepository clients,
++            ObjectResponse<List<ProjectView>> response) {
++        Map<Long, String> nameByClient = clients.findAll().stream()
++                .collect(Collectors.toMap(Client::getId, Client::getName));
++        List<ProjectView> views = projects.findAll().stream()
++                .map(p -> new ProjectView(p.getId(), p.getName(), p.getClientId(),
++                        nameByClient.get(p.getClientId())))
++                .collect(Collectors.toList());
++        response.send(views);
++    }
++
++    /** A project plus its client's name, as the projects list needs it. */
++    public static class ProjectView {
++        private final Long id;
++        private final String name;
++        private final Long clientId;
++        private final String clientName;
++
++        public ProjectView(Long id, String name, Long clientId, String clientName) {
++            this.id = id;
++            this.name = name;
++            this.clientId = clientId;
++            this.clientName = clientName;
++        }
++
++        public Long getId() {
++            return id;
++        }
++
++        public String getName() {
++            return name;
++        }
++
++        public Long getClientId() {
++            return clientId;
++        }
++
++        public String getClientName() {
++            return clientName;
++        }
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/ProjectsPostLogic.java b/src/main/java/net/officefloor/hq/app/ProjectsPostLogic.java
+new file mode 100644
+index 0000000..efb4dd1
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/ProjectsPostLogic.java
+@@ -0,0 +1,51 @@
++package net.officefloor.hq.app;
++
++import org.springframework.web.bind.annotation.RequestBody;
++import net.officefloor.server.http.HttpException;
++import net.officefloor.server.http.HttpStatus;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code POST /api/projects} — create a project from a {name, clientId} body and return the saved row
++ * (with its generated id). Wired by {@code officefloor/rest/api/projects.POST.yml}. A project must
++ * belong to an existing client: the clientId is validated here and rejected with 400 before it
++ * reaches the repository (the DB foreign key in Flyway V3 is the matching last line of defence).
++ */
++public class ProjectsPostLogic {
++
++    public void service(@RequestBody NewProject newProject, ProjectRepository projects,
++            ClientRepository clients, ObjectResponse<Project> response) {
++        String name = newProject.getName();
++        Long clientId = newProject.getClientId();
++        if (name == null || name.trim().isEmpty()) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A project name is required");
++        }
++        if (clientId == null || !clients.existsById(clientId)) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A valid client is required");
++        }
++        Project saved = projects.save(new Project(name.trim(), clientId));
++        response.send(saved);
++    }
++
++    /** Request body for creating a project. */
++    public static class NewProject {
++        private String name;
++        private Long clientId;
++
++        public String getName() {
++            return name;
++        }
++
++        public void setName(String name) {
++            this.name = name;
++        }
++
++        public Long getClientId() {
++            return clientId;
++        }
++
++        public void setClientId(Long clientId) {
++            this.clientId = clientId;
++        }
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/TestSupportController.java b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+index 1357a18..dcc27d4 100644
+--- a/src/main/java/net/officefloor/hq/app/TestSupportController.java
++++ b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+@@ -32,7 +32,12 @@ public class TestSupportController {
+     @PostMapping("/reset")
+     public void reset() {
+         audit.clear();
++        // projects -> clients foreign key: H2 refuses TRUNCATE on a referenced table, so drop
++        // referential integrity for the truncate and restore it immediately after.
++        jdbc.execute("SET REFERENTIAL_INTEGRITY FALSE");
++        jdbc.execute("TRUNCATE TABLE projects RESTART IDENTITY");
+         jdbc.execute("TRUNCATE TABLE clients RESTART IDENTITY");
++        jdbc.execute("SET REFERENTIAL_INTEGRITY TRUE");
+     }
+ 
+     /** Insert the fixture a spec needs; the payload shape evolves with the schema. */
+@@ -48,5 +53,13 @@ public class TestSupportController {
+                         client.get("email"));
+             }
+         }
++        List<Map<String, Object>> projects = (List<Map<String, Object>>) fixture.get("projects");
++        if (projects != null) {
++            for (Map<String, Object> project : projects) {
++                jdbc.update("INSERT INTO projects (id, name, client_id) VALUES (?, ?, ?)",
++                        ((Number) project.get("id")).longValue(), project.get("name"),
++                        ((Number) project.get("clientId")).longValue());
++            }
++        }
+     }
+ }
+diff --git a/src/main/resources/db/migration/V3__projects.sql b/src/main/resources/db/migration/V3__projects.sql
+new file mode 100644
+index 0000000..7e2ea7c
+--- /dev/null
++++ b/src/main/resources/db/migration/V3__projects.sql
+@@ -0,0 +1,7 @@
++-- Projects: a piece of work the owner does for a client. Each project belongs to one client
++-- (client_id -> clients.id), so the projects list can show the client's name via the join.
++CREATE TABLE projects (
++    id        BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
++    name      VARCHAR(255) NOT NULL,
++    client_id BIGINT NOT NULL REFERENCES clients(id)
++);
+diff --git a/src/main/resources/officefloor/rest/api/projects.GET.yml b/src/main/resources/officefloor/rest/api/projects.GET.yml
+new file mode 100644
+index 0000000..84a3f7c
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/projects.GET.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.ProjectsGetLogic
+diff --git a/src/main/resources/officefloor/rest/api/projects.POST.yml b/src/main/resources/officefloor/rest/api/projects.POST.yml
+new file mode 100644
+index 0000000..860774f
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/projects.POST.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.ProjectsPostLogic

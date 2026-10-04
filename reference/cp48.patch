@@ -1,0 +1,124 @@
+diff --git a/src/main/java/net/officefloor/hq/app/ClientStatementGetLogic.java b/src/main/java/net/officefloor/hq/app/ClientStatementGetLogic.java
+index 57ea303..fe33f7e 100644
+--- a/src/main/java/net/officefloor/hq/app/ClientStatementGetLogic.java
++++ b/src/main/java/net/officefloor/hq/app/ClientStatementGetLogic.java
+@@ -31,9 +31,13 @@ public class ClientStatementGetLogic {
+                 .map(i -> {
+                     BigDecimal paid = payments.findByInvoiceIdOrderByIdAsc(i.getId()).stream()
+                             .map(Payment::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+-                    BigDecimal due = i.getAmount().subtract(paid);
+-                    String status = InvoiceStatus.derive(i.getStatus(), i.getAmount(), paid);
+-                    return new StatementInvoiceView(i.getId(), i.getProjectId(), i.getAmount(),
++                    // What is owed is the net total after any discount (Flyway V27), worked out the
++                    // one-place way (InvoiceMoney) so the statement agrees with the dashboard and the
++                    // invoice detail. The due — and the status derived from it — follow that total.
++                    BigDecimal netTotal = InvoiceMoney.netTotal(i.getAmount(), i.getDiscountPct());
++                    BigDecimal due = netTotal.subtract(paid);
++                    String status = InvoiceStatus.derive(i.getStatus(), netTotal, paid);
++                    return new StatementInvoiceView(i.getId(), i.getProjectId(), netTotal,
+                             paid, due, status);
+                 })
+                 .collect(Collectors.toList());
+diff --git a/src/main/java/net/officefloor/hq/app/DashboardGetLogic.java b/src/main/java/net/officefloor/hq/app/DashboardGetLogic.java
+index 00ac39c..1b36d87 100644
+--- a/src/main/java/net/officefloor/hq/app/DashboardGetLogic.java
++++ b/src/main/java/net/officefloor/hq/app/DashboardGetLogic.java
+@@ -13,9 +13,11 @@ public class DashboardGetLogic {
+ 
+     public void service(ClientRepository clients, ProjectRepository projects,
+             InvoiceRepository invoices, ObjectResponse<DashboardView> response) {
++        // "Owed" is the net total after any discount (Flyway V27), worked out the one-place way
++        // (InvoiceMoney) so the home figure agrees with the invoice detail and the client statement.
+         BigDecimal outstanding = invoices.findAll().stream()
+                 .filter(i -> "SENT".equals(i.getStatus()))
+-                .map(Invoice::getAmount)
++                .map(i -> InvoiceMoney.netTotal(i.getAmount(), i.getDiscountPct()))
+                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+         response.send(new DashboardView(clients.count(), projects.count(), outstanding));
+     }
+diff --git a/src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java b/src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java
+index 2b40a8c..b39260d 100644
+--- a/src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java
++++ b/src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java
+@@ -16,12 +16,17 @@ public class InvoiceDueGetLogic {
+     public void service(@RequestParam("invoiceId") Long invoiceId, InvoiceRepository invoices,
+             PaymentRepository payments, ObjectResponse<InvoiceDueView> response) {
+         Invoice invoice = invoices.findById(invoiceId).orElse(null);
+-        BigDecimal amount = invoice != null ? invoice.getAmount() : BigDecimal.ZERO;
++        BigDecimal subtotal = invoice != null ? invoice.getAmount() : BigDecimal.ZERO;
++        // What is owed is the net total after any discount (Flyway V27), worked out the one-place
++        // way (InvoiceMoney) so the detail figure agrees with the dashboard and the statement.
++        BigDecimal amount = InvoiceMoney.netTotal(subtotal,
++                invoice != null ? invoice.getDiscountPct() : null);
+         BigDecimal paid = payments.findByInvoiceIdOrderByIdAsc(invoiceId).stream()
+                 .map(Payment::getAmount)
+                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+         // The status is worked out from the payments too (see InvoiceStatus), so the detail page
+-        // reads the same one-place rule as the list — no hand-set paid flag.
++        // reads the same one-place rule as the list — no hand-set paid flag. It compares against the
++        // discounted total, so an invoice is PAID once the payments cover what is actually owed.
+         String status = InvoiceStatus.derive(invoice != null ? invoice.getStatus() : null, amount,
+                 paid);
+         response.send(new InvoiceDueView(invoiceId, amount, paid, amount.subtract(paid), status));
+diff --git a/src/main/java/net/officefloor/hq/app/InvoiceMoney.java b/src/main/java/net/officefloor/hq/app/InvoiceMoney.java
+new file mode 100644
+index 0000000..f65f614
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/InvoiceMoney.java
+@@ -0,0 +1,32 @@
++package net.officefloor.hq.app;
++
++import java.math.BigDecimal;
++import java.math.RoundingMode;
++
++/**
++ * The one place the invoice discount money-rule lives: given an invoice's subtotal (the worked-out
++ * sum of its line items, kept in the amount column) and its percentage discount (Flyway V27), works
++ * out the discount in money and the net total actually billed (subtotal less that discount). Kept in
++ * one place so every surface that shows "what is owed" — the invoice detail, the client statement
++ * and the home dashboard — discounts the same way, with the same whole-cent rounding.
++ */
++public final class InvoiceMoney {
++
++    private InvoiceMoney() {
++    }
++
++    /** The discount in money: the subtotal times the percentage, rounded to whole cents. Null-safe. */
++    public static BigDecimal discount(BigDecimal subtotal, BigDecimal discountPct) {
++        BigDecimal base = subtotal != null ? subtotal : BigDecimal.ZERO;
++        BigDecimal pct = discountPct != null ? discountPct : BigDecimal.ZERO;
++        return base.multiply(pct)
++                .divide(BigDecimal.valueOf(100))
++                .setScale(2, RoundingMode.HALF_UP);
++    }
++
++    /** The net total billed: the subtotal less the discount. Null-safe. */
++    public static BigDecimal netTotal(BigDecimal subtotal, BigDecimal discountPct) {
++        BigDecimal base = subtotal != null ? subtotal : BigDecimal.ZERO;
++        return base.subtract(discount(base, discountPct));
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/InvoiceSummaryGetLogic.java b/src/main/java/net/officefloor/hq/app/InvoiceSummaryGetLogic.java
+index 6a02ce2..fa26c7b 100644
+--- a/src/main/java/net/officefloor/hq/app/InvoiceSummaryGetLogic.java
++++ b/src/main/java/net/officefloor/hq/app/InvoiceSummaryGetLogic.java
+@@ -1,7 +1,6 @@
+ package net.officefloor.hq.app;
+ 
+ import java.math.BigDecimal;
+-import java.math.RoundingMode;
+ import org.springframework.web.bind.annotation.RequestParam;
+ import net.officefloor.web.ObjectResponse;
+ 
+@@ -23,9 +22,8 @@ public class InvoiceSummaryGetLogic {
+                 ? invoice.getDiscountPct()
+                 : BigDecimal.ZERO;
+         // Discount in money, rounded to whole cents; the final total is the subtotal less that.
+-        BigDecimal discount = subtotal.multiply(discountPct)
+-                .divide(BigDecimal.valueOf(100))
+-                .setScale(2, RoundingMode.HALF_UP);
++        // The same one-place rule the dashboard, statement and due figures use (see InvoiceMoney).
++        BigDecimal discount = InvoiceMoney.discount(subtotal, discountPct);
+         BigDecimal total = subtotal.subtract(discount);
+         response.send(new InvoiceSummaryView(invoiceId, subtotal, discountPct, discount, total));
+     }

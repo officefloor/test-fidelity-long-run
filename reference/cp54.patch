@@ -1,0 +1,154 @@
+diff --git a/src/main/frontend/features/invoices/InvoiceNotes.tsx b/src/main/frontend/features/invoices/InvoiceNotes.tsx
+new file mode 100644
+index 0000000..29eee67
+--- /dev/null
++++ b/src/main/frontend/features/invoices/InvoiceNotes.tsx
+@@ -0,0 +1,58 @@
++import { useState } from 'react';
++import { useCreateInvoiceNote, useInvoiceNotes } from './notes';
++
++// An invoice's notes: a form to write one and the list of them, newest first. The server orders by
++// the instant each note was written and stamps a new note with the current instant, so a written
++// note appears on top. useState holds only the text the user is currently typing; on submit a
++// non-empty note POSTs and invalidates the shared key, then the field is cleared. The row/field
++// testids (note-row-*, note-text, note-form-*) match the project notes so notes read the same
++// everywhere; only the panel's own testid names the invoice.
++export function InvoiceNotes({ invoiceId }: { invoiceId: number }) {
++  const { data: notes } = useInvoiceNotes(invoiceId);
++  const create = useCreateInvoiceNote(invoiceId);
++  const [text, setText] = useState('');
++
++  if (!notes) {
++    return null;
++  }
++
++  return (
++    <section data-testid="invoice-notes">
++      <h2>Notes</h2>
++      <form
++        data-testid="note-form"
++        onSubmit={(event) => {
++          event.preventDefault();
++          if (text.trim().length === 0) {
++            return;
++          }
++          create.mutate(
++            { text: text.trim() },
++            { onSuccess: () => setText('') },
++          );
++        }}
++      >
++        <input
++          data-testid="note-form-text"
++          placeholder="Write a note"
++          value={text}
++          onChange={(event) => setText(event.target.value)}
++        />
++        <button data-testid="note-form-submit" type="submit" disabled={create.isPending}>
++          Add note
++        </button>
++      </form>
++      {notes.length === 0 ? (
++        <p data-testid="invoice-notes-empty">No notes yet.</p>
++      ) : (
++        <ul data-testid="invoice-notes-list">
++          {notes.map((note) => (
++            <li key={note.id} data-testid={`note-row-${note.id}`}>
++              <span data-testid="note-text">{note.text}</span>
++            </li>
++          ))}
++        </ul>
++      )}
++    </section>
++  );
++}
+diff --git a/src/main/frontend/features/invoices/notes.slot.tsx b/src/main/frontend/features/invoices/notes.slot.tsx
+new file mode 100644
+index 0000000..dda1677
+--- /dev/null
++++ b/src/main/frontend/features/invoices/notes.slot.tsx
+@@ -0,0 +1,7 @@
++import { InvoiceDetail } from '../../slots/defs/invoiceDetail';
++import { InvoiceNotes } from './InvoiceNotes';
++
++// The notes panel's presence on the invoice detail page — its own file, filling the shared
++// invoice.detail region. The detail route is not touched to add it (CLAUDE.md rule 3). Ordered after
++// the payments panel.
++export const contribution = InvoiceDetail.fill({ order: 30, Component: InvoiceNotes });
+diff --git a/src/main/frontend/features/invoices/notes.ts b/src/main/frontend/features/invoices/notes.ts
+new file mode 100644
+index 0000000..37d214c
+--- /dev/null
++++ b/src/main/frontend/features/invoices/notes.ts
+@@ -0,0 +1,39 @@
++import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
++import { getJson, postJson } from '../../api/http';
++
++// A note written against an invoice. Everything that shows an invoice's notes shares the key
++// ['invoice', invoiceId, 'notes']; writing one invalidates it so the list re-reads from the server.
++// The server (the same generic /api/notes endpoint the project notes use) returns notes newest
++// first and stamps each new one with the current instant, so a freshly written note sorts on top.
++export type Note = {
++  id: number;
++  targetType: string;
++  targetId: number;
++  text: string;
++  at: string;
++};
++
++export const invoiceNotesKey = (invoiceId: number) =>
++  ['invoice', invoiceId, 'notes'] as const;
++
++export function useInvoiceNotes(invoiceId: number) {
++  return useQuery({
++    queryKey: invoiceNotesKey(invoiceId),
++    queryFn: () =>
++      getJson<Note[]>(`/api/notes?targetType=invoice&targetId=${invoiceId}`),
++  });
++}
++
++export function useCreateInvoiceNote(invoiceId: number) {
++  const queryClient = useQueryClient();
++  return useMutation({
++    mutationFn: (input: { text: string }) =>
++      postJson<Note>('/api/notes', {
++        targetType: 'invoice',
++        targetId: invoiceId,
++        text: input.text,
++      }),
++    onSuccess: () =>
++      queryClient.invalidateQueries({ queryKey: invoiceNotesKey(invoiceId) }),
++  });
++}
+diff --git a/src/main/java/net/officefloor/hq/app/TestSupportController.java b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+index a8badc9..e6cc40d 100644
+--- a/src/main/java/net/officefloor/hq/app/TestSupportController.java
++++ b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+@@ -130,7 +130,7 @@ public class TestSupportController {
+                         id, note.get("targetType"),
+                         ((Number) note.get("targetId")).longValue(), note.get("text"),
+                         java.time.OffsetDateTime.ofInstant(
+-                                java.time.Instant.parse(note.get("at").toString()),
++                                parseInstant(note.get("at").toString()),
+                                 java.time.ZoneOffset.UTC));
+             }
+             // Explicit-id inserts don't advance H2's IDENTITY counter, so a later JPA save() would
+@@ -239,4 +239,18 @@ public class TestSupportController {
+             }
+         }
+     }
++
++    /**
++     * Parse a fixture's `at` value to an instant. A full ISO instant ("2026-01-05T09:00:00Z") is
++     * used as-is; a date-only value ("2026-02-01") is taken at the start of that day in UTC, so a
++     * spec can stamp a note with just a date.
++     */
++    private static java.time.Instant parseInstant(String at) {
++        try {
++            return java.time.Instant.parse(at);
++        } catch (java.time.format.DateTimeParseException dateOnly) {
++            return java.time.LocalDate.parse(at)
++                    .atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
++        }
++    }
+ }

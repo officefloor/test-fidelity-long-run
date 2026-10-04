@@ -1,49 +1,61 @@
-# test-fidelity-long-run configuration. SKELETON — the driver that consumes it is not built yet
-# (DESIGN.md §11). Values here record the decisions already made, so they are not re-litigated.
+# test-fidelity-long-run configuration. The driver and grader that consume this are not built yet
+# (DESIGN.md §11); the values here record decisions already made, so they are not re-litigated.
 
 model: claude-opus-4-8
 agent_timeout: 3600
 
-# The 60 plain-English change requests, their `type` and `mutates` — reused, not copied, so a
-# repair to the checkpoint metadata (REFERENCE_CHAIN.md §5) lands in one place.
+# The 60 plain-English change requests, with their `type` and `mutates`. Read from the erosion
+# harness rather than copied, so a repair to the checkpoint metadata lands in one place — and it
+# needs repairing (DESIGN.md §10, REFERENCE_CHAIN.md).
 erosion_harness: ~/ui-long-degradation-test
 checkpoints_file: ${erosion_harness}/checkpoints.yaml
 
-# THE FIXED APPLICATION (DESIGN.md §2). A fixture, never modified by a run. Pinned by branch
-# because "whichever chain was checked out last" would silently change what every score means.
-# The harness refuses to start until tools/reference_chain.py grades this chain 0 repair sites.
-reference_chain:
-  repo: ~/officehq-tanstack-officefloor
-  branch: evolve/202610020135/just-solve/chain2
-  commit_for_checkpoint: reset     # `cpNN reset` is the state the erosion harness graded
-  require_clean: true              # fail closed rather than score against a dirty fixture
+# THE FIXED APPLICATION (DESIGN.md §2). Imported ONCE into reference/ by
+#   tools/reference.py import --repo <stack> --branch <chain>
+# and owned by this repo thereafter. The stack repos are records of completed runs: this harness
+# never writes to them, and does not read them at run time either — a later erosion run would
+# otherwise change what every score here meant. reference/manifest.yaml holds the provenance.
+reference:
+  dir: reference
+  # checkpoints whose patch is empty: the chain implements the request already, so there is no
+  # feature to remove and no behaviour to mutate. Flagged at import; excluded from the relevance
+  # and mutation oracles, still graded for soundness.
+  no_code_change: [40, 50]
 
-# Where the agent's OWN accumulated suite lives in the worktree. Its git history is what
-# DESIGN.md §8 measures for test-suite churn, so it is a tracked directory, not a scratch area.
+# The interface contract handed to the agent with each request (DESIGN.md §3), so its anchors
+# match the implementation. Built by tools/contract.py, calibrated by `contract.py check`.
+contracts:
+  dir: contracts
+  include_in_prompt: [new_testids, new_audit_records, available_testids, available_audit_records]
+
+# Where the agent's OWN accumulated suite lives in the materialised app. Its git history is what
+# DESIGN.md §8 measures, so it is committed per checkpoint, not a scratch area.
 generated_suite:
   dest_subpath: e2e/specs
-  support_subpath: e2e/support      # seed + audit helpers: READ-ONLY to the agent, the same
-                                    #   two assertion channels the reference specs use
+  support_subpath: e2e/support     # seed + audit helpers: READ-ONLY to the agent — the two
+                                   #   assertion channels the contract declares
   run_cmd: bin/e2e
 
-oracles:
-  soundness:
-    repeats: 2                      # identical runs; any test that flips is flaky (DESIGN.md §5)
-  relevance:
-    enabled: true                   # run this round's new/updated tests at cp(N-1) — must FAIL
-    scope: changed_only             # grading the whole suite here would fail on priors by design
-  depth:
-    catalogue: sabotage/
-    require_calibrated: true        # refuse an uncalibrated set rather than report a soft number
+grading:
+  green:
+    repeats: 2                     # identical runs; a test that flips is flaky (DESIGN.md §5)
+    require_growth: true           # more tests than the previous checkpoint ...
+    growth_exempt:                 # ... except where that rule would fire on the harness's own
+      mutative: changed_or_added   #   artefacts: a mutative checkpoint may rewrite rather than
+      no_code_change: true         #   add, and a no-code checkpoint has nothing new to cover
+  mutation:
+    catalogue: mutations/
+    require_calibrated: true       # refuse an uncalibrated set rather than report a soft number
+    zero: previous_checkpoint      # mutation zero is free: the app at N-1 is the feature removed
   maintenance:
-    enabled: true
-    track_deletions: true           # a deleted prior is the cheap way out; count it separately
+    track_deletions: true          # a deleted prior is the cheap way out; counted separately
 
 # BLINDNESS (DESIGN.md §7). Reuses the erosion harness's Landlock confinement, which fails closed
-# if any listed path is reachable from the agent turn. The inversion vs the erosion harness:
-# application source is READABLE here — it is the input, not a leak.
+# if any listed path is reachable from the agent turn. The inversion vs that harness: application
+# source is READABLE here — it is the input. What is withheld is every statement of what the
+# application should do.
 blind:
   deny:
     - ${erosion_harness}/acceptance/specs    # the experimenter's reference suite
     - ${erosion_harness}/checkpoints.yaml    # future requests + sequence hints
-    - sabotage/                              # the depth oracle's patches
+    - mutations/                             # the depth oracle's patches

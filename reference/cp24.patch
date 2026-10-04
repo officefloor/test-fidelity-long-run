@@ -1,0 +1,156 @@
+diff --git a/src/main/frontend/features/projects/ProjectList.tsx b/src/main/frontend/features/projects/ProjectList.tsx
+index 6448ab2..ac48c8d 100644
+--- a/src/main/frontend/features/projects/ProjectList.tsx
++++ b/src/main/frontend/features/projects/ProjectList.tsx
+@@ -1,4 +1,5 @@
+ import { Link } from '@tanstack/react-router';
++import { ProjectRow } from '../../slots/defs/projectRow';
+ import { useProjects } from './projects';
+ 
+ // The projects list. Reads server data straight from its query key and shows the client's NAME
+@@ -37,6 +38,9 @@ export function ProjectList() {
+                 Open
+               </Link>
+             </td>
++            <td>
++              <ProjectRow.Slot project={project} />
++            </td>
+           </tr>
+         ))}
+       </tbody>
+diff --git a/src/main/frontend/features/projects/deleteProject.slot.tsx b/src/main/frontend/features/projects/deleteProject.slot.tsx
+new file mode 100644
+index 0000000..5405d80
+--- /dev/null
++++ b/src/main/frontend/features/projects/deleteProject.slot.tsx
+@@ -0,0 +1,24 @@
++import { ProjectRow } from '../../slots/defs/projectRow';
++import type { Project } from './projects';
++import { useDeleteProject } from './projects';
++
++// "Delete this project" — a self-contained row action filling the project-row region. The projects
++// table is not edited to add it (CLAUDE.md rule 3); it fills the slot the table renders per row.
++// Clicking removes the project through the shared mutation, which invalidates ['projects'] so the
++// list re-reads from the server and the row drops with no hand-maintained list. The server records
++// the deletion to the audit file.
++function DeleteProject({ project }: { project: Project }) {
++  const remove = useDeleteProject();
++  return (
++    <button
++      type="button"
++      data-testid={`project-delete-${project.id}`}
++      disabled={remove.isPending}
++      onClick={() => remove.mutate(project.id)}
++    >
++      Delete
++    </button>
++  );
++}
++
++export const contribution = ProjectRow.fill({ order: 10, Component: DeleteProject });
+diff --git a/src/main/frontend/features/projects/projects.ts b/src/main/frontend/features/projects/projects.ts
+index d75025a..3963fb4 100644
+--- a/src/main/frontend/features/projects/projects.ts
++++ b/src/main/frontend/features/projects/projects.ts
+@@ -23,6 +23,17 @@ export function useCreateProject() {
+   });
+ }
+ 
++// Delete a project the owner no longer needs: POSTs {id} and returns the id removed. Invalidates
++// ['projects'] so every view of projects re-reads from the server and the row drops — the list is
++// never hand-edited after the write (CLAUDE.md rule 5). The audit record is written server-side.
++export function useDeleteProject() {
++  const queryClient = useQueryClient();
++  return useMutation({
++    mutationFn: (id: number) => postJson<{ id: number }>('/api/projects/remove', { id }),
++    onSuccess: () => queryClient.invalidateQueries({ queryKey: projectsKey }),
++  });
++}
++
+ // The client choices the project form needs. Reads the SHARED ['clients'] key — no import of the
+ // clients feature; the two stay in step through the key, not a dependency.
+ type ClientOption = { id: number; name: string };
+diff --git a/src/main/frontend/slots/defs/projectRow.ts b/src/main/frontend/slots/defs/projectRow.ts
+new file mode 100644
+index 0000000..ed5614b
+--- /dev/null
++++ b/src/main/frontend/slots/defs/projectRow.ts
+@@ -0,0 +1,10 @@
++import { defineSlot } from '../Slot';
++import type { Project } from '../../features/projects/projects';
++
++/**
++ * The actions cell of one project row in the projects list — per-row controls that act on a single
++ * project (deleting it, and more over time). The projects table renders this region once per row and
++ * never lists what fills it; each action is its own `*.slot.tsx` file under `features/projects/`.
++ * Handed the whole project as context, so an action has its id and name to work with.
++ */
++export const ProjectRow = defineSlot<{ project: Project }>('project.row');
+diff --git a/src/main/java/net/officefloor/hq/app/ProjectsRemoveLogic.java b/src/main/java/net/officefloor/hq/app/ProjectsRemoveLogic.java
+new file mode 100644
+index 0000000..7e1587f
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/ProjectsRemoveLogic.java
+@@ -0,0 +1,54 @@
++package net.officefloor.hq.app;
++
++import org.springframework.web.bind.annotation.RequestBody;
++import net.officefloor.server.http.HttpException;
++import net.officefloor.server.http.HttpStatus;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code POST /api/projects/remove} — delete a project the owner no longer needs from an {id} body
++ * and return the id that was removed. Wired by {@code officefloor/rest/api/projects/remove.POST.yml}.
++ * The project must exist (404 otherwise). One {@code PROJECT_DELETED} audit record is appended so the
++ * deletion can be checked back later through the audit file even though the UI only drops the row.
++ */
++public class ProjectsRemoveLogic {
++
++    public void service(@RequestBody RemoveProject body, ProjectRepository projects, Audit audit,
++            ObjectResponse<RemovedProject> response) {
++        Long id = body.getId();
++        if (id == null) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A project id is required");
++        }
++        Project project = projects.findById(id)
++                .orElseThrow(() -> new HttpException(HttpStatus.NOT_FOUND, "No such project"));
++        projects.delete(project);
++        audit.record("PROJECT_DELETED id=" + id);
++        response.send(new RemovedProject(id));
++    }
++
++    /** Request body for deleting a project. */
++    public static class RemoveProject {
++        private Long id;
++
++        public Long getId() {
++            return id;
++        }
++
++        public void setId(Long id) {
++            this.id = id;
++        }
++    }
++
++    /** The id of the project that was removed. */
++    public static class RemovedProject {
++        private final Long id;
++
++        public RemovedProject(Long id) {
++            this.id = id;
++        }
++
++        public Long getId() {
++            return id;
++        }
++    }
++}
+diff --git a/src/main/resources/officefloor/rest/api/projects/remove.POST.yml b/src/main/resources/officefloor/rest/api/projects/remove.POST.yml
+new file mode 100644
+index 0000000..22d1db8
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/projects/remove.POST.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.ProjectsRemoveLogic

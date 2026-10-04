@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  react-officefloor base app. Model: SPRING BOOT 4 hosts; OfficeFloor REST is added via the
+  OfficeFloor Spring Boot 4 starter. Domain REST endpoints are additive OfficeFloor YAML
+  (src/main/resources/officefloor/rest/*.GET.yml -> a logic class); Spring serves the SPA (static/),
+  H2 + Flyway + Actuator. Coordinates VERIFIED against OfficeFloor tutorials
+  (tutorials/springboot/SpringRestGettingStartedHttpServer, SpringRestDataJpaHttpServer) and the
+  OfficeFloor BOM (net.officefloor:bom @ revision 4.0.2: spring-version=4.1.0).
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- Standard Spring Boot app parent. Spring Boot 4.1.0 = the SB4 line in the OfficeFloor BOM
+       (net.officefloor:bom @ 4.0.2, spring-version=4.1.0). VERIFIED to resolve via `mvn dependency:
+       resolve` (BUILD SUCCESS): parent + all deps + build plugins resolve from Maven Central. -->
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.1.0</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>net.officefloor.hq</groupId>
+  <artifactId>officehq-app</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
+  <packaging>jar</packaging>
+
+  <properties>
+    <java.version>17</java.version>
+    <!-- OfficeFloor current release (net.officefloor:bom revision). VERIFIED: officefloor-rest-
+         spring-boot-4-starter:4.0.2 resolves. NOTE: its jar has no automatic module name ('4' is
+         not a valid Java identifier) — harmless on the classpath; would matter only for JPMS. -->
+    <officefloor.version>4.0.2</officefloor.version>
+    <node.version>v20.11.1</node.version>
+    <npm.version>10.2.4</npm.version>
+  </properties>
+
+  <dependencies>
+    <!-- OfficeFloor REST inside Spring Boot 4: add this + write officefloor/rest/*.yml.
+         Domain endpoints are additive OfficeFloor YAML (the property under test). -->
+    <dependency>
+      <groupId>net.officefloor.springboot</groupId>
+      <artifactId>officefloor-rest-spring-boot-4-starter</artifactId>
+      <version>${officefloor.version}</version>
+    </dependency>
+
+    <!-- Spring Boot hosts: web (serves the SPA from static/ + hosts the HTTP server),
+         data-jpa (H2 access for services), actuator (health probe). -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <!-- Bean Validation provider (Hibernate Validator) — OfficeFloor REST / Spring bind + @Valid. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+
+    <!-- In-memory H2 + Flyway schema migrations on boot (Spring-managed). -->
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <!-- REQUIRED under Spring Boot 4: FlywayAutoConfiguration was extracted from
+         spring-boot-autoconfigure into this module. Without it, flyway-core is on the classpath but
+         migrations NEVER run on boot (silently — no error, the table is just missing). Version is
+         managed by the parent BOM. Found via the cp01 dry run. flyway-core 12.x has H2 support
+         built in, so no flyway-database-h2 module is needed. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-flyway</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Build the React SPA into src/main/resources/static so Spring serves it.
+           TODO: set the front-end build (vite) outDir to ../resources/static. -->
+      <plugin>
+        <groupId>com.github.eirslett</groupId>
+        <artifactId>frontend-maven-plugin</artifactId>
+        <version>1.15.1</version>
+        <configuration>
+          <workingDirectory>src/main/frontend</workingDirectory>
+          <nodeVersion>${node.version}</nodeVersion>
+          <npmVersion>${npm.version}</npmVersion>
+        </configuration>
+        <executions>
+          <execution>
+            <id>install-node-and-npm</id>
+            <goals><goal>install-node-and-npm</goal></goals>
+            <phase>generate-resources</phase>
+          </execution>
+          <execution>
+            <id>npm-ci</id>
+            <goals><goal>npm</goal></goals>
+            <phase>generate-resources</phase>
+            <configuration><arguments>ci</arguments></configuration>
+          </execution>
+          <execution>
+            <id>npm-build</id>
+            <goals><goal>npm</goal></goals>
+            <phase>generate-resources</phase>
+            <configuration><arguments>run build</arguments></configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Standard Spring Boot executable jar (main = the @SpringBootApplication class). -->
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration>
+          <mainClass>net.officefloor.hq.app.Application</mainClass>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

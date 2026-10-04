@@ -1,0 +1,307 @@
+# Written by tools/reference.py import — DO NOT EDIT BY HAND.
+# The application is imported read-only; the source repo is never modified.
+source_repo: /home/daniel/officehq-tanstack-officefloor
+source_branch: evolve/202610020135/just-solve/chain2
+base_commit: fe447200189dbd96d7912b6b8034c69f65441e6b
+excluded_paths: [evolve-results, e2e/specs]
+checkpoints:
+  - n: 1
+    commit: 3bd58f4732f898594086489484d4ac826233a39e
+    patch: cp01.patch
+    files_changed: 13
+    sha256_16: 9f703b56608ac5b4
+  - n: 2
+    commit: 860c1fc13936abafedf89a985269e7639d551efb
+    patch: cp02.patch
+    files_changed: 4
+    sha256_16: 95a753fef9ea1705
+  - n: 3
+    commit: 260a431948ed37db2ebe224c2e53cb0dae76c19c
+    patch: cp03.patch
+    files_changed: 13
+    sha256_16: 11182e40bf00c9ae
+  - n: 4
+    commit: a7c5914c675e42cad38182b0e0ddca1a084d14e6
+    patch: cp04.patch
+    files_changed: 14
+    sha256_16: 8873655e0b95a62d
+  - n: 5
+    commit: d254ea95d09f473235ee6c717d4470a1a208d340
+    patch: cp05.patch
+    files_changed: 7
+    sha256_16: a48128d6f79ccf73
+  - n: 6
+    commit: f60fedc3f2b733f83d722750dbcb87d3654b656a
+    patch: cp06.patch
+    files_changed: 2
+    sha256_16: 795403641927731d
+  - n: 7
+    commit: 4003d030947ca06a9486a6139f4817ade195723e
+    patch: cp07.patch
+    files_changed: 4
+    sha256_16: 25547d54d3d5a8c9
+  - n: 8
+    commit: 5a8516d023f01ec7f148158d3d22060a0c2d9cf5
+    patch: cp08.patch
+    files_changed: 6
+    sha256_16: 8a488ae4572c9e19
+  - n: 9
+    commit: 3272d50b8436a83eb940dc87b0e5a2ac8fb4385b
+    patch: cp09.patch
+    files_changed: 3
+    sha256_16: e5814b8a1d731a48
+  - n: 10
+    commit: a40a8b01f8f4ab1a6fe6a68c9ef87b1d04508ad1
+    patch: cp10.patch
+    files_changed: 2
+    sha256_16: 5e2db6cd3565bc5a
+  - n: 11
+    commit: 3c7ff0baa7533b31794ac4f38dee05f25228e360
+    patch: cp11.patch
+    files_changed: 6
+    sha256_16: a0448ef3fb18a532
+  - n: 12
+    commit: 401f1a3bc695ae1b009b80cf358d00fd4eb9c0b1
+    patch: cp12.patch
+    files_changed: 7
+    sha256_16: a6d590d19101096e
+  - n: 13
+    commit: 2dedbb9f2bbe5e2da8aa35df6e8ca680d49a52b2
+    patch: cp13.patch
+    files_changed: 7
+    sha256_16: 0285d0d851e18d43
+  - n: 14
+    commit: 4b6a831006013f7a17e598e266521256a977258a
+    patch: cp14.patch
+    files_changed: 6
+    sha256_16: 7c8783e44003a1a4
+  - n: 15
+    commit: 1040130c1f4b4c072faa692b4c50a2c76865f9cc
+    patch: cp15.patch
+    files_changed: 3
+    sha256_16: 539ca499a99738ab
+  - n: 16
+    commit: 40d7713070fab8cd737fab6e30e2e2b754874c97
+    patch: cp16.patch
+    files_changed: 13
+    sha256_16: a25d5b2341a06f85
+  - n: 17
+    commit: 835d68cea020b1f89d3effc45e7a0ceeb12080d7
+    patch: cp17.patch
+    files_changed: 1
+    sha256_16: 064530aab8fe2fe2
+  - n: 18
+    commit: 977f74ad70e8f7c38524159eefba0c15326eed68
+    patch: cp18.patch
+    files_changed: 3
+    sha256_16: 85f87de2fc3a690a
+  - n: 19
+    commit: 53dc304b88ea0165d91e719e4e2ad97a286b9918
+    patch: cp19.patch
+    files_changed: 2
+    sha256_16: e350e6a207f49882
+  - n: 20
+    commit: 4dd9abcec94f942f906e8de8ab8c0ddb92c935ed
+    patch: cp20.patch
+    files_changed: 13
+    sha256_16: 77ef02858ef3e39a
+  - n: 21
+    commit: 2d05bdb4da6b37f7b4b45f933cff971964e7a19a
+    patch: cp21.patch
+    files_changed: 15
+    sha256_16: 7c11d432e0f6cdf2
+  - n: 22
+    commit: 0d7eb505a7e9bf1f933eb7faf610e60bb91aab06
+    patch: cp22.patch
+    files_changed: 6
+    sha256_16: f5bf2e1ad92d360d
+  - n: 23
+    commit: f05b2d9d3500552e6948b3c3f1cacc6bcf28d08f
+    patch: cp23.patch
+    files_changed: 3
+    sha256_16: c214843b99482ca3
+  - n: 24
+    commit: fe858eb0bb86e05d2c58f1c7f5ade8be692fd595
+    patch: cp24.patch
+    files_changed: 6
+    sha256_16: 868fb27382958a0f
+  - n: 25
+    commit: 40f9672659cb8bb771fe69fbd7c6d9e3706c2ac3
+    patch: cp25.patch
+    files_changed: 11
+    sha256_16: 3cffc786192085eb
+  - n: 26
+    commit: 95c2dde0803615e81cc5e5795b4fd638f5c23f21
+    patch: cp26.patch
+    files_changed: 17
+    sha256_16: b15f5fd871332324
+  - n: 27
+    commit: 12add7d5065dd92dc30d960eebe994917dd32cd1
+    patch: cp27.patch
+    files_changed: 4
+    sha256_16: f0fc47c3ef8ba332
+  - n: 28
+    commit: 3983d2d3a8c6c425a990f7996611ee44a6153660
+    patch: cp28.patch
+    files_changed: 11
+    sha256_16: c7cd3f401142bc9b
+  - n: 29
+    commit: 2ba2de2bb37c6ce3c82d5ae1a1a912ae4c24cff8
+    patch: cp29.patch
+    files_changed: 8
+    sha256_16: 430e86b79b2efd66
+  - n: 30
+    commit: f9031608e731e3937d807904010fa43151f3a3ee
+    patch: cp30.patch
+    files_changed: 14
+    sha256_16: 0bfc9c004d4d8001
+  - n: 31
+    commit: 7c1f70bd232fc66776d86b4fe8ada5d01ee45ee3
+    patch: cp31.patch
+    files_changed: 7
+    sha256_16: bac19548b2c6dbfb
+  - n: 32
+    commit: 3a0ff76b75c41011a5bfc03f15cc03152c1dd671
+    patch: cp32.patch
+    files_changed: 9
+    sha256_16: e6348da5582ac0db
+  - n: 33
+    commit: 2bd687540c5ec2f59c42c9cb4edf983284349d9f
+    patch: cp33.patch
+    files_changed: 5
+    sha256_16: 9f90f18a7544dc92
+  - n: 34
+    commit: 363ac2ba887cfd087eb82c18c0e7e7beb49a264c
+    patch: cp34.patch
+    files_changed: 8
+    sha256_16: 795e0127a89363a3
+  - n: 35
+    commit: 192e04c523bb52ef491a100cd145675996174af9
+    patch: cp35.patch
+    files_changed: 2
+    sha256_16: edf17f247b78de81
+  - n: 36
+    commit: 30728b09629d05d106aefb83957b5045ec72b50e
+    patch: cp36.patch
+    files_changed: 2
+    sha256_16: 3ac7ecf3ea8e3baf
+  - n: 37
+    commit: 1f614446a78b33fbeb4dc8812f80f26f0eecd0f5
+    patch: cp37.patch
+    files_changed: 8
+    sha256_16: 54f20b5bc073360d
+  - n: 38
+    commit: f52c84bc75fd71514c5ac5f6c257f5568ae1cb66
+    patch: cp38.patch
+    files_changed: 11
+    sha256_16: 1016379c8799c1cc
+  - n: 39
+    commit: 6dd709fa7c5615337f9f0332bc048d8d82eec29a
+    patch: cp39.patch
+    files_changed: 3
+    sha256_16: 697002d2fa30f1a6
+  - n: 40
+    commit: c6f3efea541d891f7814014f2416a36b6a36669f
+    patch: cp40.patch
+    files_changed: 0
+    sha256_16: e3b0c44298fc1c14
+  - n: 41
+    commit: b5fed027bae93f348379a551f26c75e1ac05570b
+    patch: cp41.patch
+    files_changed: 4
+    sha256_16: 8d9e81e348b616f8
+  - n: 42
+    commit: 40b0e5b90dd84d8071458964fb8bf23c89079891
+    patch: cp42.patch
+    files_changed: 9
+    sha256_16: 28ded7569ca966d8
+  - n: 43
+    commit: 40fc8d93fcb36a8eb37364ef3028bf38e4c8a034
+    patch: cp43.patch
+    files_changed: 7
+    sha256_16: fc01b0d4cd8bd893
+  - n: 44
+    commit: a4e313df853e3b7913b3ddca7c427ba19276a357
+    patch: cp44.patch
+    files_changed: 4
+    sha256_16: a796ccea3265ad0f
+  - n: 45
+    commit: 29c630fb05c1778257d0cbc27dfe2645d48ed182
+    patch: cp45.patch
+    files_changed: 5
+    sha256_16: 9eec0c18c5dd2b48
+  - n: 46
+    commit: cd3a73ec61cc651fb537a3ba1885d83e0bec83f1
+    patch: cp46.patch
+    files_changed: 7
+    sha256_16: 686275819008c9f6
+  - n: 47
+    commit: 3b420417c0ae48706bf1dbe614842096fb5b52a5
+    patch: cp47.patch
+    files_changed: 8
+    sha256_16: eafd980886628751
+  - n: 48
+    commit: c5c8a69b5eb2f56e27c8fe786e881798271f9d1a
+    patch: cp48.patch
+    files_changed: 5
+    sha256_16: 4b3d75fe0f4df06d
+  - n: 49
+    commit: b064fb1e71aaed4022ee0708540c0d477c635f9a
+    patch: cp49.patch
+    files_changed: 10
+    sha256_16: ddbac7c97592b6b7
+  - n: 50
+    commit: 5667e96a4e36b10f950df310cff31e94d33629fa
+    patch: cp50.patch
+    files_changed: 0
+    sha256_16: e3b0c44298fc1c14
+  - n: 51
+    commit: a0f74083764c9ac56c16e9b7ba5b74badbcf76f0
+    patch: cp51.patch
+    files_changed: 5
+    sha256_16: 1a1bbc2c25621110
+  - n: 52
+    commit: f3485cb39a0566f5845a0bcee2bf99979b006a1d
+    patch: cp52.patch
+    files_changed: 10
+    sha256_16: 8c720b9ef7d15b7b
+  - n: 53
+    commit: a03edbadaa144b21e566353c377839dc89997ffe
+    patch: cp53.patch
+    files_changed: 9
+    sha256_16: 4e75eb35b82b4e25
+  - n: 54
+    commit: 01cb5b9556a0213b3d8bdad982cf92a35d5ab2e6
+    patch: cp54.patch
+    files_changed: 4
+    sha256_16: 68a674bdcb8bec97
+  - n: 55
+    commit: a2430abc001aa3d3f80b5413458a3f4adcae6ed1
+    patch: cp55.patch
+    files_changed: 5
+    sha256_16: 51a3387499e0a9fc
+  - n: 56
+    commit: 63def66f9e6cbce67654bc7457a65d86a662adec
+    patch: cp56.patch
+    files_changed: 7
+    sha256_16: 19db1d0ee50bb174
+  - n: 57
+    commit: cadcbd3c68c21fff07f32e1f1dc9785faa818143
+    patch: cp57.patch
+    files_changed: 3
+    sha256_16: 72729d81a260da72
+  - n: 58
+    commit: 628a50c1e675aee5ff7b130bb682dbd9bc37c01f
+    patch: cp58.patch
+    files_changed: 9
+    sha256_16: d23f366832ea2b06
+  - n: 59
+    commit: 9c19b238e0dc2a3234b6ec81b898e6a7847bd58e
+    patch: cp59.patch
+    files_changed: 1
+    sha256_16: 74aefc28f9d45fba
+  - n: 60
+    commit: c1cd7367f70fbd44f02ba0c5eb1ae1daf5a14917
+    patch: cp60.patch
+    files_changed: 21
+    sha256_16: 6a4e726a1590babe

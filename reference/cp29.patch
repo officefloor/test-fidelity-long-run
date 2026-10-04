@@ -1,0 +1,226 @@
+diff --git a/src/main/frontend/features/clients/ClientList.tsx b/src/main/frontend/features/clients/ClientList.tsx
+index 3a65917..50c7261 100644
+--- a/src/main/frontend/features/clients/ClientList.tsx
++++ b/src/main/frontend/features/clients/ClientList.tsx
+@@ -1,4 +1,5 @@
+ import { Link } from '@tanstack/react-router';
++import { ClientRow } from '../../slots/defs/clientRow';
+ import { asString, useSearchParam } from '../../url/useSearchParam';
+ import { ClientSearch } from './ClientSearch';
+ import { useClients } from './clients';
+@@ -6,6 +7,7 @@ import { useClients } from './clients';
+ // The clients list. Reads server data straight from its query key — never copied into state, never
+ // handed down from a parent. The name filter lives in the URL (`clientSearch`), read directly here;
+ // the search box owns that same key, so the two stay in step without any import between them.
++// Archived clients are tucked away: they drop off the list and search but are retained server-side.
+ export function ClientList() {
+   const { data: clients } = useClients();
+   const [query] = useSearchParam('clientSearch', asString);
+@@ -23,10 +25,11 @@ export function ClientList() {
+     );
+   }
+ 
++  const active = clients.filter((client) => !client.archived);
+   const needle = query.trim().toLowerCase();
+   const visible = needle
+-    ? clients.filter((client) => client.name.toLowerCase().includes(needle))
+-    : clients;
++    ? active.filter((client) => client.name.toLowerCase().includes(needle))
++    : active;
+ 
+   return (
+     <>
+@@ -53,6 +56,9 @@ export function ClientList() {
+                 Open
+               </Link>
+             </td>
++            <td>
++              <ClientRow.Slot client={client} />
++            </td>
+           </tr>
+         ))}
+         </tbody>
+diff --git a/src/main/frontend/features/clients/archiveClient.slot.tsx b/src/main/frontend/features/clients/archiveClient.slot.tsx
+new file mode 100644
+index 0000000..a9334c9
+--- /dev/null
++++ b/src/main/frontend/features/clients/archiveClient.slot.tsx
+@@ -0,0 +1,24 @@
++import { ClientRow } from '../../slots/defs/clientRow';
++import type { Client } from './clients';
++import { useArchiveClient } from './clients';
++
++// "Archive this client" — a self-contained row action filling the client-row region. Archiving tucks
++// the client away rather than deleting it: nothing is lost, it just drops off the list and search.
++// Clicking archives it through the shared mutation, which invalidates ['clients'] so every view
++// re-reads from the server and the row drops with no hand-maintained list. The server keeps the row
++// and records the archiving to the audit file.
++function ArchiveClient({ client }: { client: Client }) {
++  const archive = useArchiveClient();
++  return (
++    <button
++      type="button"
++      data-testid={`client-archive-${client.id}`}
++      disabled={archive.isPending}
++      onClick={() => archive.mutate(client.id)}
++    >
++      Archive
++    </button>
++  );
++}
++
++export const contribution = ClientRow.fill({ order: 20, Component: ArchiveClient });
+diff --git a/src/main/frontend/features/clients/clients.ts b/src/main/frontend/features/clients/clients.ts
+index 396edf8..dfefa0c 100644
+--- a/src/main/frontend/features/clients/clients.ts
++++ b/src/main/frontend/features/clients/clients.ts
+@@ -3,7 +3,7 @@ import { getJson, postJson } from '../../api/http';
+ 
+ // The shape the server returns and the query key everything that shows clients shares. Two features
+ // stay in step by invalidating ['clients']; nothing imports a sibling to refresh it.
+-export type Client = { id: number; name: string; email: string };
++export type Client = { id: number; name: string; email: string; archived: boolean };
+ 
+ export const clientsKey = ['clients'] as const;
+ 
+@@ -22,3 +22,15 @@ export function useCreateClient() {
+     onSuccess: () => queryClient.invalidateQueries({ queryKey: clientsKey }),
+   });
+ }
++
++// Archive a client instead of deleting it: POSTs {id} and returns the id archived. The client is
++// kept server-side with its archived flag set; invalidating ['clients'] re-reads every view so the
++// row drops off the list and search with no hand-maintained list (CLAUDE.md rule 5). The audit
++// record is written server-side.
++export function useArchiveClient() {
++  const queryClient = useQueryClient();
++  return useMutation({
++    mutationFn: (id: number) => postJson<{ id: number }>('/api/clients/archive', { id }),
++    onSuccess: () => queryClient.invalidateQueries({ queryKey: clientsKey }),
++  });
++}
+diff --git a/src/main/frontend/slots/defs/clientRow.ts b/src/main/frontend/slots/defs/clientRow.ts
+new file mode 100644
+index 0000000..9daa88a
+--- /dev/null
++++ b/src/main/frontend/slots/defs/clientRow.ts
+@@ -0,0 +1,10 @@
++import { defineSlot } from '../Slot';
++import type { Client } from '../../features/clients/clients';
++
++/**
++ * The actions cell of one client row in the clients list — per-row controls that act on a single
++ * client (archiving it, and more over time). The clients table renders this region once per row and
++ * never lists what fills it; each action is its own `*.slot.tsx` file under `features/clients/`.
++ * Handed the whole client as context, so an action has its id and name to work with.
++ */
++export const ClientRow = defineSlot<{ client: Client }>('client.row');
+diff --git a/src/main/java/net/officefloor/hq/app/Client.java b/src/main/java/net/officefloor/hq/app/Client.java
+index 2f8ff95..809e015 100644
+--- a/src/main/java/net/officefloor/hq/app/Client.java
++++ b/src/main/java/net/officefloor/hq/app/Client.java
+@@ -23,6 +23,10 @@ public class Client {
+ 
+     private String email;
+ 
++    // Archived clients are tucked away: they drop off the list and search but the row is retained.
++    // Defaults to active (false); matches Flyway V18's column default for existing rows.
++    private boolean archived = false;
++
+     public Client() {
+     }
+ 
+@@ -54,4 +58,12 @@ public class Client {
+     public void setEmail(String email) {
+         this.email = email;
+     }
++
++    public boolean isArchived() {
++        return archived;
++    }
++
++    public void setArchived(boolean archived) {
++        this.archived = archived;
++    }
+ }
+diff --git a/src/main/java/net/officefloor/hq/app/ClientsArchiveLogic.java b/src/main/java/net/officefloor/hq/app/ClientsArchiveLogic.java
+new file mode 100644
+index 0000000..fb0c88b
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/ClientsArchiveLogic.java
+@@ -0,0 +1,57 @@
++package net.officefloor.hq.app;
++
++import org.springframework.web.bind.annotation.RequestBody;
++import net.officefloor.server.http.HttpException;
++import net.officefloor.server.http.HttpStatus;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code POST /api/clients/archive} — tuck a client away instead of deleting it, from an {id} body,
++ * and return the id that was archived. Wired by {@code officefloor/rest/api/clients/archive.POST.yml}.
++ * The client must exist (404 otherwise). The client is kept (nothing is lost): its {@code archived}
++ * flag is set so it drops off the list and search but the row is retained. One
++ * {@code CLIENT_ARCHIVED} audit record is appended so the archiving can be checked back later through
++ * the audit file even though the UI only drops the row.
++ */
++public class ClientsArchiveLogic {
++
++    public void service(@RequestBody ArchiveClient body, ClientRepository clients, Audit audit,
++            ObjectResponse<ArchivedClient> response) {
++        Long id = body.getId();
++        if (id == null) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A client id is required");
++        }
++        Client client = clients.findById(id)
++                .orElseThrow(() -> new HttpException(HttpStatus.NOT_FOUND, "No such client"));
++        client.setArchived(true);
++        clients.save(client);
++        audit.record("CLIENT_ARCHIVED id=" + id);
++        response.send(new ArchivedClient(id));
++    }
++
++    /** Request body for archiving a client. */
++    public static class ArchiveClient {
++        private Long id;
++
++        public Long getId() {
++            return id;
++        }
++
++        public void setId(Long id) {
++            this.id = id;
++        }
++    }
++
++    /** The id of the client that was archived. */
++    public static class ArchivedClient {
++        private final Long id;
++
++        public ArchivedClient(Long id) {
++            this.id = id;
++        }
++
++        public Long getId() {
++            return id;
++        }
++    }
++}
+diff --git a/src/main/resources/db/migration/V18__clients_archived.sql b/src/main/resources/db/migration/V18__clients_archived.sql
+new file mode 100644
+index 0000000..c8eba54
+--- /dev/null
++++ b/src/main/resources/db/migration/V18__clients_archived.sql
+@@ -0,0 +1,4 @@
++-- Archiving a client tucks it away instead of deleting it: it drops off the list and search but the
++-- row is retained (nothing is lost). A new boolean column, defaulting to FALSE so every existing
++-- client stays active.
++ALTER TABLE clients ADD COLUMN archived BOOLEAN NOT NULL DEFAULT FALSE;
+diff --git a/src/main/resources/officefloor/rest/api/clients/archive.POST.yml b/src/main/resources/officefloor/rest/api/clients/archive.POST.yml
+new file mode 100644
+index 0000000..a412ccf
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/clients/archive.POST.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.ClientsArchiveLogic

@@ -1,0 +1,102 @@
+diff --git a/src/main/frontend/features/projects/ProjectTasks.tsx b/src/main/frontend/features/projects/ProjectTasks.tsx
+index 2fbd1d2..5e10963 100644
+--- a/src/main/frontend/features/projects/ProjectTasks.tsx
++++ b/src/main/frontend/features/projects/ProjectTasks.tsx
+@@ -1,11 +1,16 @@
++import { ProjectTasksToolbar } from '../../slots/defs/projectTasksToolbar';
++import { useSearchParam, asString } from '../../url/useSearchParam';
+ import { useTasks, useToggleTask } from './tasks';
+ 
+ // A project's task checklist. Reads its own query key (scoped to the project) and shows each task's
+ // title and status (OPEN while not done, DONE once ticked off) with a control to toggle it. A toggle
+ // is a mutation that invalidates the shared key, so the row re-reads its status from the server.
++// When the shared `taskFilter` URL key (set by a toolbar control) names a state, the list keeps only
++// the open tasks (OPEN) or only the finished ones (DONE).
+ export function ProjectTasks({ projectId }: { projectId: number }) {
+   const { data: tasks } = useTasks(projectId);
+   const toggle = useToggleTask(projectId);
++  const [filter] = useSearchParam('taskFilter', asString);
+ 
+   if (!tasks) {
+     return null;
+@@ -15,7 +20,16 @@ export function ProjectTasks({ projectId }: { projectId: number }) {
+     return <p data-testid="project-tasks-empty">No tasks yet.</p>;
+   }
+ 
++  const shown =
++    filter === 'OPEN'
++      ? tasks.filter((task) => !task.done)
++      : filter === 'DONE'
++        ? tasks.filter((task) => task.done)
++        : tasks;
++
+   return (
++    <>
++    <ProjectTasksToolbar.Slot />
+     <table data-testid="project-tasks-table">
+       <thead>
+         <tr>
+@@ -25,7 +39,7 @@ export function ProjectTasks({ projectId }: { projectId: number }) {
+         </tr>
+       </thead>
+       <tbody>
+-        {tasks.map((task) => (
++        {shown.map((task) => (
+           <tr key={task.id} data-testid={`task-row-${task.id}`}>
+             <td data-testid="task-title">{task.title}</td>
+             <td data-testid="task-status">{task.done ? 'DONE' : 'OPEN'}</td>
+@@ -43,5 +57,6 @@ export function ProjectTasks({ projectId }: { projectId: number }) {
+         ))}
+       </tbody>
+     </table>
++    </>
+   );
+ }
+diff --git a/src/main/frontend/features/projects/taskFilter.slot.tsx b/src/main/frontend/features/projects/taskFilter.slot.tsx
+new file mode 100644
+index 0000000..744c45e
+--- /dev/null
++++ b/src/main/frontend/features/projects/taskFilter.slot.tsx
+@@ -0,0 +1,28 @@
++import { ProjectTasksToolbar } from '../../slots/defs/projectTasksToolbar';
++import { useSearchParam, asString } from '../../url/useSearchParam';
++
++// "Show just the open ones, or just the finished ones" — a self-contained control that owns the
++// `taskFilter` URL key. The task list reads the same key and keeps only matching rows; the two share
++// only the key, no import. Choosing a state commits it to the URL (so the narrowed view outlives the
++// click and is shareable); the empty option clears the key and shows every task again.
++const STATES = ['OPEN', 'DONE'] as const;
++
++function TaskFilter() {
++  const [filter, setFilter] = useSearchParam('taskFilter', asString);
++  return (
++    <select
++      data-testid="task-filter"
++      value={filter}
++      onChange={(e) => setFilter(e.target.value)}
++    >
++      <option value="">All tasks</option>
++      {STATES.map((state) => (
++        <option key={state} value={state}>
++          {state}
++        </option>
++      ))}
++    </select>
++  );
++}
++
++export const contribution = ProjectTasksToolbar.fill({ order: 10, Component: TaskFilter });
+diff --git a/src/main/frontend/slots/defs/projectTasksToolbar.ts b/src/main/frontend/slots/defs/projectTasksToolbar.ts
+new file mode 100644
+index 0000000..0cc1e6b
+--- /dev/null
++++ b/src/main/frontend/slots/defs/projectTasksToolbar.ts
+@@ -0,0 +1,8 @@
++import { defineSlot } from '../Slot';
++
++/**
++ * Controls that act on a project's task checklist — a filter today, more over time. Rendered above
++ * the task table by the projects feature; each control is its own `*.slot.tsx` file and owns a URL
++ * search param, so the list never lists its controls.
++ */
++export const ProjectTasksToolbar = defineSlot('projectTasks.toolbar');

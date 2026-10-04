@@ -1,0 +1,245 @@
+diff --git a/src/main/frontend/features/clients/ClientList.tsx b/src/main/frontend/features/clients/ClientList.tsx
+index ada6d9b..0c18759 100644
+--- a/src/main/frontend/features/clients/ClientList.tsx
++++ b/src/main/frontend/features/clients/ClientList.tsx
+@@ -1,6 +1,7 @@
+ import { Link } from '@tanstack/react-router';
+ import { ClientRow } from '../../slots/defs/clientRow';
+-import { asString, useSearchParam } from '../../url/useSearchParam';
++import { ClientsToolbar } from '../../slots/defs/clientsToolbar';
++import { asFlag, asString, useSearchParam } from '../../url/useSearchParam';
+ import { ClientSearch } from './ClientSearch';
+ import { ClientSort } from './ClientSort';
+ import { useClients } from './clients';
+@@ -15,6 +16,9 @@ export function ClientList() {
+   const { data: outstanding } = useClientOutstanding();
+   const [query] = useSearchParam('clientSearch', asString);
+   const [sort] = useSearchParam('clientSort', asString);
++  // Shared with the "show archived" toolbar control via the `clientsShowArchived` key (no import).
++  // Archived clients are tucked away by default; when it is on, they are revealed too.
++  const [showArchived] = useSearchParam('clientsShowArchived', asFlag);
+ 
+   if (!clients) {
+     return null;
+@@ -25,12 +29,13 @@ export function ClientList() {
+       <>
+         <ClientSearch />
+         <ClientSort />
++        <ClientsToolbar.Slot />
+         <p data-testid="clients-empty">No clients yet.</p>
+       </>
+     );
+   }
+ 
+-  const active = clients.filter((client) => !client.archived);
++  const active = clients.filter((client) => showArchived || !client.archived);
+   const needle = query.trim().toLowerCase();
+   const filtered = needle
+     ? active.filter((client) => client.name.toLowerCase().includes(needle))
+@@ -49,6 +54,7 @@ export function ClientList() {
+     <>
+       <ClientSearch />
+       <ClientSort />
++      <ClientsToolbar.Slot />
+       <table data-testid="clients-table">
+       <thead>
+         <tr>
+diff --git a/src/main/frontend/features/clients/archiveClient.slot.tsx b/src/main/frontend/features/clients/archiveClient.slot.tsx
+index a9334c9..9fcf8d5 100644
+--- a/src/main/frontend/features/clients/archiveClient.slot.tsx
++++ b/src/main/frontend/features/clients/archiveClient.slot.tsx
+@@ -9,6 +9,9 @@ import { useArchiveClient } from './clients';
+ // and records the archiving to the audit file.
+ function ArchiveClient({ client }: { client: Client }) {
+   const archive = useArchiveClient();
++  if (client.archived) {
++    return null;
++  }
+   return (
+     <button
+       type="button"
+diff --git a/src/main/frontend/features/clients/clients.ts b/src/main/frontend/features/clients/clients.ts
+index 81cfc47..bb7e45c 100644
+--- a/src/main/frontend/features/clients/clients.ts
++++ b/src/main/frontend/features/clients/clients.ts
+@@ -47,3 +47,15 @@ export function useArchiveClient() {
+     onSuccess: () => queryClient.invalidateQueries({ queryKey: clientsKey }),
+   });
+ }
++
++// Restore an archived client so they return to the main list: POSTs {id} and returns the id
++// restored. The mirror of archiving — the server clears the archived flag and keeps the row's id;
++// invalidating ['clients'] re-reads every view so the row returns to the list and search with no
++// hand-maintained list (CLAUDE.md rule 5). The audit record is written server-side.
++export function useRestoreClient() {
++  const queryClient = useQueryClient();
++  return useMutation({
++    mutationFn: (id: number) => postJson<{ id: number }>('/api/clients/restore', { id }),
++    onSuccess: () => queryClient.invalidateQueries({ queryKey: clientsKey }),
++  });
++}
+diff --git a/src/main/frontend/features/clients/restoreClient.slot.tsx b/src/main/frontend/features/clients/restoreClient.slot.tsx
+new file mode 100644
+index 0000000..4111757
+--- /dev/null
++++ b/src/main/frontend/features/clients/restoreClient.slot.tsx
+@@ -0,0 +1,27 @@
++import { ClientRow } from '../../slots/defs/clientRow';
++import type { Client } from './clients';
++import { useRestoreClient } from './clients';
++
++// "Restore this client" — a self-contained row action filling the client-row region, the mirror of
++// archiving. It only shows for an archived client (an active one has nothing to restore), so it
++// surfaces exactly in the "show archived" view. Clicking restores it through the shared mutation,
++// which invalidates ['clients'] so every view re-reads from the server and the row returns to the
++// main list with no hand-maintained list. The restore is recorded to the audit file server-side.
++function RestoreClient({ client }: { client: Client }) {
++  const restore = useRestoreClient();
++  if (!client.archived) {
++    return null;
++  }
++  return (
++    <button
++      type="button"
++      data-testid={`client-restore-${client.id}`}
++      disabled={restore.isPending}
++      onClick={() => restore.mutate(client.id)}
++    >
++      Restore
++    </button>
++  );
++}
++
++export const contribution = ClientRow.fill({ order: 30, Component: RestoreClient });
+diff --git a/src/main/frontend/features/clients/showArchived.slot.tsx b/src/main/frontend/features/clients/showArchived.slot.tsx
+new file mode 100644
+index 0000000..4cd71d3
+--- /dev/null
++++ b/src/main/frontend/features/clients/showArchived.slot.tsx
+@@ -0,0 +1,22 @@
++import { ClientsToolbar } from '../../slots/defs/clientsToolbar';
++import { useSearchParam, asFlag } from '../../url/useSearchParam';
++
++// "Show archived" — a self-contained control that owns the `clientsShowArchived` URL key. Archived
++// clients are hidden by default; the clients list reads the same key and, when it is on, reveals
++// archived rows too (each carrying its own restore action). The two share only the key, no import.
++// The flag lives in the URL so the revealed view outlives the click and is shareable.
++function ShowArchived() {
++  const [showArchived, setShowArchived] = useSearchParam('clientsShowArchived', asFlag);
++  return (
++    <button
++      type="button"
++      data-testid="clients-show-archived"
++      aria-pressed={showArchived}
++      onClick={() => setShowArchived(showArchived ? undefined : true)}
++    >
++      {showArchived ? 'Hide archived' : 'Show archived'}
++    </button>
++  );
++}
++
++export const contribution = ClientsToolbar.fill({ order: 10, Component: ShowArchived });
+diff --git a/src/main/frontend/slots/defs/clientsToolbar.ts b/src/main/frontend/slots/defs/clientsToolbar.ts
+new file mode 100644
+index 0000000..4f51936
+--- /dev/null
++++ b/src/main/frontend/slots/defs/clientsToolbar.ts
+@@ -0,0 +1,8 @@
++import { defineSlot } from '../Slot';
++
++/**
++ * Controls that act on the clients list — a filter, a toggle, a sort. Rendered above the clients
++ * table by the clients feature; each control is its own `*.slot.tsx` file and owns a URL search
++ * param, so the list never lists its controls. No context: it spans every client.
++ */
++export const ClientsToolbar = defineSlot('clients.toolbar');
+diff --git a/src/main/java/net/officefloor/hq/app/ClientsRestoreLogic.java b/src/main/java/net/officefloor/hq/app/ClientsRestoreLogic.java
+new file mode 100644
+index 0000000..2a95d69
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/ClientsRestoreLogic.java
+@@ -0,0 +1,56 @@
++package net.officefloor.hq.app;
++
++import org.springframework.web.bind.annotation.RequestBody;
++import net.officefloor.server.http.HttpException;
++import net.officefloor.server.http.HttpStatus;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code POST /api/clients/restore} — bring a tucked-away client back, from an {id} body, and return
++ * the id that was restored. Wired by {@code officefloor/rest/api/clients/restore.POST.yml}. The
++ * mirror of {@link ClientsArchiveLogic}: the client must exist (404 otherwise), its {@code archived}
++ * flag is cleared so it returns to the list and search, and one {@code CLIENT_RESTORED} audit record
++ * is appended so the restore can be checked back later through the audit file.
++ */
++public class ClientsRestoreLogic {
++
++    public void service(@RequestBody RestoreClient body, ClientRepository clients, Audit audit,
++            ObjectResponse<RestoredClient> response) {
++        Long id = body.getId();
++        if (id == null) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A client id is required");
++        }
++        Client client = clients.findById(id)
++                .orElseThrow(() -> new HttpException(HttpStatus.NOT_FOUND, "No such client"));
++        client.setArchived(false);
++        clients.save(client);
++        audit.record("CLIENT_RESTORED id=" + id);
++        response.send(new RestoredClient(id));
++    }
++
++    /** Request body for restoring a client. */
++    public static class RestoreClient {
++        private Long id;
++
++        public Long getId() {
++            return id;
++        }
++
++        public void setId(Long id) {
++            this.id = id;
++        }
++    }
++
++    /** The id of the client that was restored. */
++    public static class RestoredClient {
++        private final Long id;
++
++        public RestoredClient(Long id) {
++            this.id = id;
++        }
++
++        public Long getId() {
++            return id;
++        }
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/TestSupportController.java b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+index e6cc40d..249178c 100644
+--- a/src/main/java/net/officefloor/hq/app/TestSupportController.java
++++ b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+@@ -65,10 +65,13 @@ public class TestSupportController {
+         List<Map<String, Object>> clients = (List<Map<String, Object>>) fixture.get("clients");
+         if (clients != null) {
+             for (Map<String, Object> client : clients) {
++                // archived is optional; default to false (active, matching Flyway V18) when absent.
++                Object archived = client.get("archived");
+                 // Explicit fixture id (JPA save() would ignore it on an IDENTITY column).
+-                jdbc.update("INSERT INTO clients (id, name, email) VALUES (?, ?, ?)",
++                jdbc.update("INSERT INTO clients (id, name, email, archived) VALUES (?, ?, ?, ?)",
+                         ((Number) client.get("id")).longValue(), client.get("name"),
+-                        client.get("email"));
++                        client.get("email"),
++                        archived != null && Boolean.parseBoolean(archived.toString()));
+             }
+         }
+         List<Map<String, Object>> projects = (List<Map<String, Object>>) fixture.get("projects");
+diff --git a/src/main/resources/officefloor/rest/api/clients/restore.POST.yml b/src/main/resources/officefloor/rest/api/clients/restore.POST.yml
+new file mode 100644
+index 0000000..d547693
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/clients/restore.POST.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.ClientsRestoreLogic

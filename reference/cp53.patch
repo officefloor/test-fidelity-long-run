@@ -1,0 +1,281 @@
+diff --git a/src/main/frontend/features/projects/ProjectForm.tsx b/src/main/frontend/features/projects/ProjectForm.tsx
+index 99536f1..7ac0d09 100644
+--- a/src/main/frontend/features/projects/ProjectForm.tsx
++++ b/src/main/frontend/features/projects/ProjectForm.tsx
+@@ -2,13 +2,18 @@ import { useState } from 'react';
+ import { useClientOptions, useCreateProject, type ProjectStatus } from './projects';
+ 
+ // Add-a-project form. useState holds only what the user is currently entering: the name, the chosen
+-// client id, and the lifecycle status to start the project in. On submit it POSTs
+-// {name, clientId, status} and invalidates the ['projects'] key. The client select's option values
+-// are client ids and the status select's values are the status codes (what the test selects by).
++// client id, the lifecycle status to start the project in, and the short reference code. On submit
++// it POSTs {name, clientId, status, code} and invalidates the ['projects'] key. The code must be
++// unique across projects (Flyway V29): a blank or already-used code surfaces project-form-code-error
++// and never creates a row — a duplicate is rejected by the server (ProjectsPostLogic) and the same
++// error is shown, so no duplicate job is added. The client select's option values are client ids and
++// the status select's values are the status codes (what the test selects by).
+ export function ProjectForm() {
+   const [name, setName] = useState('');
+   const [clientId, setClientId] = useState('');
+   const [status, setStatus] = useState<ProjectStatus>('ACTIVE');
++  const [code, setCode] = useState('');
++  const [codeError, setCodeError] = useState<string | null>(null);
+   const { data: clients } = useClientOptions();
+   const create = useCreateProject();
+ 
+@@ -20,14 +25,21 @@ export function ProjectForm() {
+         if (!name.trim() || !clientId) {
+           return;
+         }
++        if (!code.trim()) {
++          setCodeError('Enter a reference code.');
++          return;
++        }
++        setCodeError(null);
+         create.mutate(
+-          { name, clientId: Number(clientId), status },
++          { name, clientId: Number(clientId), status, code: code.trim() },
+           {
+             onSuccess: () => {
+               setName('');
+               setClientId('');
+               setStatus('ACTIVE');
++              setCode('');
+             },
++            onError: () => setCodeError('That code is already in use.'),
+           },
+         );
+       }}
+@@ -59,6 +71,22 @@ export function ProjectForm() {
+         <option value="ON_HOLD">On hold</option>
+         <option value="FINISHED">Finished</option>
+       </select>
++      <input
++        data-testid="project-form-code"
++        placeholder="Code"
++        value={code}
++        onChange={(event) => {
++          setCode(event.target.value);
++          if (codeError) {
++            setCodeError(null);
++          }
++        }}
++      />
++      {codeError && (
++        <span data-testid="project-form-code-error" role="alert">
++          {codeError}
++        </span>
++      )}
+       <button data-testid="project-form-submit" type="submit">
+         Add job
+       </button>
+diff --git a/src/main/frontend/features/projects/code.slot.tsx b/src/main/frontend/features/projects/code.slot.tsx
+new file mode 100644
+index 0000000..57ba7ad
+--- /dev/null
++++ b/src/main/frontend/features/projects/code.slot.tsx
+@@ -0,0 +1,12 @@
++import { ProjectRow } from '../../slots/defs/projectRow';
++import type { Project } from './projects';
++
++// "What is this job's reference code" — a self-contained cell filling the project-row region,
++// showing the short code set when the job was created (Flyway V29). The projects table is not
++// edited to add it (CLAUDE.md rule 3); it fills the slot the table renders per row, reading the
++// code served alongside each project. Ordered first so the code reads before the status and actions.
++function ProjectCode({ project }: { project: Project }) {
++  return <span data-testid="project-code">{project.code ?? ''}</span>;
++}
++
++export const contribution = ProjectRow.fill({ order: 1, Component: ProjectCode });
+diff --git a/src/main/frontend/features/projects/projects.ts b/src/main/frontend/features/projects/projects.ts
+index ef90814..d530c0c 100644
+--- a/src/main/frontend/features/projects/projects.ts
++++ b/src/main/frontend/features/projects/projects.ts
+@@ -14,6 +14,7 @@ export type Project = {
+   archived: boolean;
+   status: ProjectStatus;
+   tagIds: number[];
++  code: string | null;
+ };
+ 
+ export const projectsKey = ['projects'] as const;
+@@ -28,7 +29,7 @@ export function useProjects() {
+ export function useCreateProject() {
+   const queryClient = useQueryClient();
+   return useMutation({
+-    mutationFn: (input: { name: string; clientId: number; status: ProjectStatus }) =>
++    mutationFn: (input: { name: string; clientId: number; status: ProjectStatus; code: string }) =>
+       postJson<Project>('/api/projects', input),
+     onSuccess: () => queryClient.invalidateQueries({ queryKey: projectsKey }),
+   });
+diff --git a/src/main/java/net/officefloor/hq/app/Project.java b/src/main/java/net/officefloor/hq/app/Project.java
+index a17ce3f..3e3772a 100644
+--- a/src/main/java/net/officefloor/hq/app/Project.java
++++ b/src/main/java/net/officefloor/hq/app/Project.java
+@@ -36,6 +36,9 @@ public class Project {
+     // project may have no budget set (Flyway V22).
+     private BigDecimal budget;
+ 
++    // A short reference code set when the job is created, unique across projects (Flyway V29).
++    private String code;
++
+     public Project() {
+     }
+ 
+@@ -91,4 +94,12 @@ public class Project {
+     public void setBudget(BigDecimal budget) {
+         this.budget = budget;
+     }
++
++    public String getCode() {
++        return code;
++    }
++
++    public void setCode(String code) {
++        this.code = code;
++    }
+ }
+diff --git a/src/main/java/net/officefloor/hq/app/ProjectRepository.java b/src/main/java/net/officefloor/hq/app/ProjectRepository.java
+index 17aac2e..4273067 100644
+--- a/src/main/java/net/officefloor/hq/app/ProjectRepository.java
++++ b/src/main/java/net/officefloor/hq/app/ProjectRepository.java
+@@ -4,4 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
+ 
+ /** Data access for {@link Project}. Injected into the OfficeFloor REST logic classes. */
+ public interface ProjectRepository extends JpaRepository<Project, Long> {
++
++    /** Whether a project already carries this reference code (uniqueness check, Flyway V29). */
++    boolean existsByCode(String code);
+ }
+diff --git a/src/main/java/net/officefloor/hq/app/ProjectsGetLogic.java b/src/main/java/net/officefloor/hq/app/ProjectsGetLogic.java
+index d9b8bb1..9dcb928 100644
+--- a/src/main/java/net/officefloor/hq/app/ProjectsGetLogic.java
++++ b/src/main/java/net/officefloor/hq/app/ProjectsGetLogic.java
+@@ -23,7 +23,7 @@ public class ProjectsGetLogic {
+         List<ProjectView> views = projects.findAll().stream()
+                 .map(p -> new ProjectView(p.getId(), p.getName(), p.getClientId(),
+                         nameByClient.get(p.getClientId()), p.isArchived(), p.getStatus(),
+-                        tagsByProject.getOrDefault(p.getId(), new ArrayList<>())))
++                        tagsByProject.getOrDefault(p.getId(), new ArrayList<>()), p.getCode()))
+                 .collect(Collectors.toList());
+         response.send(views);
+     }
+@@ -37,9 +37,10 @@ public class ProjectsGetLogic {
+         private final boolean archived;
+         private final String status;
+         private final List<Long> tagIds;
++        private final String code;
+ 
+         public ProjectView(Long id, String name, Long clientId, String clientName,
+-                boolean archived, String status, List<Long> tagIds) {
++                boolean archived, String status, List<Long> tagIds, String code) {
+             this.id = id;
+             this.name = name;
+             this.clientId = clientId;
+@@ -47,6 +48,7 @@ public class ProjectsGetLogic {
+             this.archived = archived;
+             this.status = status;
+             this.tagIds = tagIds;
++            this.code = code;
+         }
+ 
+         public Long getId() {
+@@ -76,5 +78,9 @@ public class ProjectsGetLogic {
+         public List<Long> getTagIds() {
+             return tagIds;
+         }
++
++        public String getCode() {
++            return code;
++        }
+     }
+ }
+diff --git a/src/main/java/net/officefloor/hq/app/ProjectsPostLogic.java b/src/main/java/net/officefloor/hq/app/ProjectsPostLogic.java
+index 33204ff..3e89a36 100644
+--- a/src/main/java/net/officefloor/hq/app/ProjectsPostLogic.java
++++ b/src/main/java/net/officefloor/hq/app/ProjectsPostLogic.java
+@@ -35,8 +35,20 @@ public class ProjectsPostLogic {
+         if (!STATUSES.contains(status)) {
+             throw new HttpException(HttpStatus.BAD_REQUEST, "An unknown project status");
+         }
++        // A reference code is set at creation and must be unique across projects (Flyway V29): a
++        // blank code, or one already in use by another project, is rejected with 400 before saving
++        // (the DB UNIQUE constraint is the matching last line of defence).
++        String code = newProject.getCode();
++        if (code == null || code.trim().isEmpty()) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A project code is required");
++        }
++        String normalisedCode = code.trim();
++        if (projects.existsByCode(normalisedCode)) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "That project code is already in use");
++        }
+         Project project = new Project(name.trim(), clientId);
+         project.setStatus(status);
++        project.setCode(normalisedCode);
+         Project saved = projects.save(project);
+         response.send(saved);
+     }
+@@ -46,6 +58,7 @@ public class ProjectsPostLogic {
+         private String name;
+         private Long clientId;
+         private String status;
++        private String code;
+ 
+         public String getName() {
+             return name;
+@@ -70,5 +83,13 @@ public class ProjectsPostLogic {
+         public void setStatus(String status) {
+             this.status = status;
+         }
++
++        public String getCode() {
++            return code;
++        }
++
++        public void setCode(String code) {
++            this.code = code;
++        }
+     }
+ }
+diff --git a/src/main/java/net/officefloor/hq/app/TestSupportController.java b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+index 9361e29..a8badc9 100644
+--- a/src/main/java/net/officefloor/hq/app/TestSupportController.java
++++ b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+@@ -80,13 +80,17 @@ public class TestSupportController {
+                 Object archived = project.get("archived");
+                 // budget is optional; a project without one has no budget set (NULL, Flyway V22).
+                 Object budget = project.get("budget");
+-                jdbc.update("INSERT INTO projects (id, name, client_id, status, archived, budget)"
+-                        + " VALUES (?, ?, ?, ?, ?, ?)",
++                // code is optional; a project without one has no reference code (NULL, Flyway V29).
++                Object code = project.get("code");
++                jdbc.update("INSERT INTO projects"
++                        + " (id, name, client_id, status, archived, budget, code)"
++                        + " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                         ((Number) project.get("id")).longValue(), project.get("name"),
+                         ((Number) project.get("clientId")).longValue(),
+                         status != null ? status.toString() : "ACTIVE",
+                         archived != null && Boolean.parseBoolean(archived.toString()),
+-                        budget != null ? new java.math.BigDecimal(budget.toString()) : null);
++                        budget != null ? new java.math.BigDecimal(budget.toString()) : null,
++                        code != null ? code.toString() : null);
+             }
+         }
+         List<Map<String, Object>> contacts = (List<Map<String, Object>>) fixture.get("contacts");
+diff --git a/src/main/resources/db/migration/V29__projects_code.sql b/src/main/resources/db/migration/V29__projects_code.sql
+new file mode 100644
+index 0000000..04a599d
+--- /dev/null
++++ b/src/main/resources/db/migration/V29__projects_code.sql
+@@ -0,0 +1,10 @@
++-- Each project (job) carries a short reference code, set when the job is created. The code is
++-- unique across projects so no two jobs share one — enforce that at the DB level (the last line of
++-- defence), matching the duplicate check in the server (ProjectsPostLogic) and the error the
++-- front-end surfaces. Nullable: projects predating this column have no code (multiple NULLs are
++-- allowed under a UNIQUE constraint), so the uniqueness only binds the codes actually set.
++ALTER TABLE projects
++    ADD COLUMN code VARCHAR(255);
++
++ALTER TABLE projects
++    ADD CONSTRAINT projects_code_unique UNIQUE (code);

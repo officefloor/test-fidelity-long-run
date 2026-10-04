@@ -1,0 +1,193 @@
+diff --git a/src/main/frontend/features/invoices/AllInvoiceList.tsx b/src/main/frontend/features/invoices/AllInvoiceList.tsx
+new file mode 100644
+index 0000000..42b168e
+--- /dev/null
++++ b/src/main/frontend/features/invoices/AllInvoiceList.tsx
+@@ -0,0 +1,37 @@
++import { formatMoney } from '../../ui/money';
++import { useAllInvoices } from './allInvoices';
++
++// One place listing every invoice from every project. Reads its own query key and shows, per row,
++// which project the invoice is for and what stage (status) it is at.
++export function AllInvoiceList() {
++  const { data: invoices } = useAllInvoices();
++
++  if (!invoices) {
++    return null;
++  }
++
++  if (invoices.length === 0) {
++    return <p data-testid="all-invoices-empty">No invoices yet.</p>;
++  }
++
++  return (
++    <table data-testid="all-invoices-table">
++      <thead>
++        <tr>
++          <th>Project</th>
++          <th>Amount</th>
++          <th>Stage</th>
++        </tr>
++      </thead>
++      <tbody>
++        {invoices.map((invoice) => (
++          <tr key={invoice.id} data-testid={`invoice-row-${invoice.id}`}>
++            <td data-testid="invoice-project">{invoice.projectName}</td>
++            <td data-testid="invoice-amount">{formatMoney(invoice.amount)}</td>
++            <td data-testid="invoice-status">{invoice.status}</td>
++          </tr>
++        ))}
++      </tbody>
++    </table>
++  );
++}
+diff --git a/src/main/frontend/features/invoices/allInvoices.ts b/src/main/frontend/features/invoices/allInvoices.ts
+new file mode 100644
+index 0000000..0f990a2
+--- /dev/null
++++ b/src/main/frontend/features/invoices/allInvoices.ts
+@@ -0,0 +1,22 @@
++import { useQuery } from '@tanstack/react-query';
++import { getJson } from '../../api/http';
++
++// Every invoice across all projects, each joined to the NAME of the project it bills and its stage
++// (status). Served already in id order by GET /api/invoices/all. Its own query key, distinct from the
++// per-project ['invoices', projectId] lists.
++export type AllInvoice = {
++  id: number;
++  projectId: number;
++  projectName: string;
++  amount: number;
++  status: string;
++};
++
++export const allInvoicesKey = ['invoices', 'all'] as const;
++
++export function useAllInvoices() {
++  return useQuery({
++    queryKey: allInvoicesKey,
++    queryFn: () => getJson<AllInvoice[]>('/api/invoices/all'),
++  });
++}
+diff --git a/src/main/frontend/features/invoices/nav.slot.tsx b/src/main/frontend/features/invoices/nav.slot.tsx
+new file mode 100644
+index 0000000..2332fd8
+--- /dev/null
++++ b/src/main/frontend/features/invoices/nav.slot.tsx
+@@ -0,0 +1,13 @@
++import { Link } from '@tanstack/react-router';
++import { AppNav } from '../../slots/defs/appNav';
++
++// Invoices' presence in the nav bar — its own file, filling the shared nav region. The shell is not
++// touched to add it (CLAUDE.md rule 1). Links to the one page that lists every invoice.
++export const contribution = AppNav.fill({
++  order: 30,
++  Component: () => (
++    <Link to="/invoices" data-testid="nav-invoices">
++      Invoices
++    </Link>
++  ),
++});
+diff --git a/src/main/frontend/routes/invoices.index.tsx b/src/main/frontend/routes/invoices.index.tsx
+new file mode 100644
+index 0000000..a3326fc
+--- /dev/null
++++ b/src/main/frontend/routes/invoices.index.tsx
+@@ -0,0 +1,16 @@
++import { createFileRoute } from '@tanstack/react-router';
++import { AllInvoiceList } from '../features/invoices/AllInvoiceList';
++
++// The Invoices page: one new file under routes/. Lists every invoice across all projects.
++export const Route = createFileRoute('/invoices/')({
++  component: InvoicesPage,
++});
++
++function InvoicesPage() {
++  return (
++    <section data-testid="invoices-page">
++      <h1>Invoices</h1>
++      <AllInvoiceList />
++    </section>
++  );
++}
+diff --git a/src/main/java/net/officefloor/hq/app/AllInvoicesGetLogic.java b/src/main/java/net/officefloor/hq/app/AllInvoicesGetLogic.java
+new file mode 100644
+index 0000000..222aba8
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/AllInvoicesGetLogic.java
+@@ -0,0 +1,67 @@
++package net.officefloor.hq.app;
++
++import java.math.BigDecimal;
++import java.util.Comparator;
++import java.util.List;
++import java.util.Map;
++import java.util.stream.Collectors;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code GET /api/invoices/all} — every invoice across ALL projects, each carrying the NAME of the
++ * project it bills and its lifecycle status, so one page can list them all in one place (the
++ * per-project {@link InvoicesGetLogic} only lists a single project's). Ordered by id for a stable
++ * list. Wired by {@code officefloor/rest/api/invoices/all.GET.yml}.
++ */
++public class AllInvoicesGetLogic {
++
++    public void service(InvoiceRepository invoices, ProjectRepository projects,
++            ObjectResponse<List<InvoiceView>> response) {
++        Map<Long, String> nameByProject = projects.findAll().stream()
++                .collect(Collectors.toMap(Project::getId, Project::getName));
++        List<InvoiceView> views = invoices.findAll().stream()
++                .sorted(Comparator.comparing(Invoice::getId))
++                .map(i -> new InvoiceView(i.getId(), i.getProjectId(),
++                        nameByProject.get(i.getProjectId()), i.getAmount(), i.getStatus()))
++                .collect(Collectors.toList());
++        response.send(views);
++    }
++
++    /** An invoice plus the name of the project it bills, as the all-invoices list needs it. */
++    public static class InvoiceView {
++        private final Long id;
++        private final Long projectId;
++        private final String projectName;
++        private final BigDecimal amount;
++        private final String status;
++
++        public InvoiceView(Long id, Long projectId, String projectName, BigDecimal amount,
++                String status) {
++            this.id = id;
++            this.projectId = projectId;
++            this.projectName = projectName;
++            this.amount = amount;
++            this.status = status;
++        }
++
++        public Long getId() {
++            return id;
++        }
++
++        public Long getProjectId() {
++            return projectId;
++        }
++
++        public String getProjectName() {
++            return projectName;
++        }
++
++        public BigDecimal getAmount() {
++            return amount;
++        }
++
++        public String getStatus() {
++            return status;
++        }
++    }
++}
+diff --git a/src/main/resources/officefloor/rest/api/invoices/all.GET.yml b/src/main/resources/officefloor/rest/api/invoices/all.GET.yml
+new file mode 100644
+index 0000000..46402f5
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/invoices/all.GET.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.AllInvoicesGetLogic

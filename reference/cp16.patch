@@ -1,0 +1,441 @@
+diff --git a/src/main/frontend/features/clients/ClientContacts.tsx b/src/main/frontend/features/clients/ClientContacts.tsx
+new file mode 100644
+index 0000000..fbcdfde
+--- /dev/null
++++ b/src/main/frontend/features/clients/ClientContacts.tsx
+@@ -0,0 +1,83 @@
++import { useState } from 'react';
++import { useContacts, useCreateContact, type Contact } from './contacts';
++
++// The contacts panel on a client's page: the client's contacts in a table, and a form to add one.
++// Server data is read from the shared ['contacts'] key and filtered to this client (CLAUDE.md
++// rule 5) — never copied into state. The form's useState holds only what the user is currently
++// typing; on submit it POSTs {clientId, name, email, role} and invalidates the key, so the table
++// refreshes itself.
++export function ClientContacts({ clientId }: { clientId: number }) {
++  const { data: contacts } = useContacts();
++  const [name, setName] = useState('');
++  const [email, setEmail] = useState('');
++  const [role, setRole] = useState('');
++  const create = useCreateContact();
++
++  const forClient: Contact[] = (contacts ?? []).filter((c) => c.clientId === clientId);
++
++  return (
++    <section data-testid="client-contacts">
++      <h2>Contacts</h2>
++      <table data-testid="client-contacts-table">
++        <thead>
++          <tr>
++            <th>Name</th>
++            <th>Email</th>
++            <th>Role</th>
++          </tr>
++        </thead>
++        <tbody>
++          {forClient.map((contact) => (
++            <tr key={contact.id} data-testid={`contact-row-${contact.id}`}>
++              <td data-testid="contact-name">{contact.name}</td>
++              <td data-testid="contact-email">{contact.email}</td>
++              <td data-testid="contact-role">{contact.role}</td>
++            </tr>
++          ))}
++        </tbody>
++      </table>
++
++      <form
++        data-testid="contact-form"
++        onSubmit={(event) => {
++          event.preventDefault();
++          if (!name.trim() || !email.trim() || !role.trim()) {
++            return;
++          }
++          create.mutate(
++            { clientId, name, email, role },
++            {
++              onSuccess: () => {
++                setName('');
++                setEmail('');
++                setRole('');
++              },
++            },
++          );
++        }}
++      >
++        <input
++          data-testid="contact-form-name"
++          placeholder="Name"
++          value={name}
++          onChange={(event) => setName(event.target.value)}
++        />
++        <input
++          data-testid="contact-form-email"
++          placeholder="Email"
++          value={email}
++          onChange={(event) => setEmail(event.target.value)}
++        />
++        <input
++          data-testid="contact-form-role"
++          placeholder="Role"
++          value={role}
++          onChange={(event) => setRole(event.target.value)}
++        />
++        <button data-testid="contact-form-submit" type="submit">
++          Add contact
++        </button>
++      </form>
++    </section>
++  );
++}
+diff --git a/src/main/frontend/features/clients/contacts.slot.tsx b/src/main/frontend/features/clients/contacts.slot.tsx
+new file mode 100644
+index 0000000..de3f92a
+--- /dev/null
++++ b/src/main/frontend/features/clients/contacts.slot.tsx
+@@ -0,0 +1,6 @@
++import { ClientDetail } from '../../slots/defs/clientDetail';
++import { ClientContacts } from './ClientContacts';
++
++// The contacts panel's presence on the client detail page — its own file, filling the shared
++// client.detail region. The detail route is not touched to add it (CLAUDE.md rule 3).
++export const contribution = ClientDetail.fill({ order: 20, Component: ClientContacts });
+diff --git a/src/main/frontend/features/clients/contacts.ts b/src/main/frontend/features/clients/contacts.ts
+new file mode 100644
+index 0000000..c8a3bdb
+--- /dev/null
++++ b/src/main/frontend/features/clients/contacts.ts
+@@ -0,0 +1,31 @@
++import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
++import { getJson, postJson } from '../../api/http';
++
++// A client's contacts: a name, an email and a role, each carrying the id of the client they belong
++// to. Everything that shows contacts shares the ['contacts'] key; adding one anywhere invalidates
++// it and refreshes every view, with no import between features (CLAUDE.md rule 5).
++export type Contact = {
++  id: number;
++  clientId: number;
++  name: string;
++  email: string;
++  role: string;
++};
++
++export const contactsKey = ['contacts'] as const;
++
++export function useContacts() {
++  return useQuery({
++    queryKey: contactsKey,
++    queryFn: () => getJson<Contact[]>('/api/contacts'),
++  });
++}
++
++export function useCreateContact() {
++  const queryClient = useQueryClient();
++  return useMutation({
++    mutationFn: (input: { clientId: number; name: string; email: string; role: string }) =>
++      postJson<Contact>('/api/contacts', input),
++    onSuccess: () => queryClient.invalidateQueries({ queryKey: contactsKey }),
++  });
++}
+diff --git a/src/main/frontend/routes/clients.$clientId.tsx b/src/main/frontend/routes/clients.$clientId.tsx
+index 9860471..54aede2 100644
+--- a/src/main/frontend/routes/clients.$clientId.tsx
++++ b/src/main/frontend/routes/clients.$clientId.tsx
+@@ -1,5 +1,6 @@
+ import { createFileRoute } from '@tanstack/react-router';
+ import { ClientProjects } from '../features/clients/ClientProjects';
++import { ClientDetail } from '../slots/defs/clientDetail';
+ 
+ // Drilling into a client is its own route — a new file, not a flag on the list (CLAUDE.md rule 2).
+ // The detail page shows the projects the owner is doing for that client.
+@@ -15,6 +16,7 @@ function ClientDetailPage() {
+     <section data-testid="client-detail-page">
+       <h1>Client</h1>
+       <ClientProjects clientId={id} />
++      <ClientDetail.Slot clientId={id} />
+     </section>
+   );
+ }
+diff --git a/src/main/frontend/slots/defs/clientDetail.ts b/src/main/frontend/slots/defs/clientDetail.ts
+new file mode 100644
+index 0000000..3bbc113
+--- /dev/null
++++ b/src/main/frontend/slots/defs/clientDetail.ts
+@@ -0,0 +1,8 @@
++import { defineSlot } from '../Slot';
++
++/**
++ * A client's detail page — panels about one client (its contacts, and more over time). The detail
++ * route renders this region and never lists what fills it; each panel is its own `*.slot.tsx` file
++ * under `features/clients/`. Handed the client id as context.
++ */
++export const ClientDetail = defineSlot<{ clientId: number }>('client.detail');
+diff --git a/src/main/java/net/officefloor/hq/app/Contact.java b/src/main/java/net/officefloor/hq/app/Contact.java
+new file mode 100644
+index 0000000..86d9cbe
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/Contact.java
+@@ -0,0 +1,83 @@
++package net.officefloor.hq.app;
++
++import jakarta.persistence.Column;
++import jakarta.persistence.Entity;
++import jakarta.persistence.GeneratedValue;
++import jakarta.persistence.GenerationType;
++import jakarta.persistence.Id;
++import jakarta.persistence.Table;
++
++/**
++ * A contact at a client: a name, an email and the person's role, plus the id of the owning client.
++ * Persisted to the {@code contacts} table (Flyway V10). The id is database-generated (IDENTITY) on
++ * create; the seed path inserts explicit ids directly via JdbcTemplate (see
++ * {@link TestSupportController}). The {@code role} field maps to the {@code contact_role} column.
++ */
++@Entity
++@Table(name = "contacts")
++public class Contact {
++
++    @Id
++    @GeneratedValue(strategy = GenerationType.IDENTITY)
++    private Long id;
++
++    @Column(name = "client_id")
++    private Long clientId;
++
++    private String name;
++
++    private String email;
++
++    @Column(name = "contact_role")
++    private String role;
++
++    public Contact() {
++    }
++
++    public Contact(Long clientId, String name, String email, String role) {
++        this.clientId = clientId;
++        this.name = name;
++        this.email = email;
++        this.role = role;
++    }
++
++    public Long getId() {
++        return id;
++    }
++
++    public void setId(Long id) {
++        this.id = id;
++    }
++
++    public Long getClientId() {
++        return clientId;
++    }
++
++    public void setClientId(Long clientId) {
++        this.clientId = clientId;
++    }
++
++    public String getName() {
++        return name;
++    }
++
++    public void setName(String name) {
++        this.name = name;
++    }
++
++    public String getEmail() {
++        return email;
++    }
++
++    public void setEmail(String email) {
++        this.email = email;
++    }
++
++    public String getRole() {
++        return role;
++    }
++
++    public void setRole(String role) {
++        this.role = role;
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/ContactRepository.java b/src/main/java/net/officefloor/hq/app/ContactRepository.java
+new file mode 100644
+index 0000000..8c2578a
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/ContactRepository.java
+@@ -0,0 +1,7 @@
++package net.officefloor.hq.app;
++
++import org.springframework.data.jpa.repository.JpaRepository;
++
++/** Data access for {@link Contact}. Injected into the OfficeFloor REST logic classes. */
++public interface ContactRepository extends JpaRepository<Contact, Long> {
++}
+diff --git a/src/main/java/net/officefloor/hq/app/ContactsGetLogic.java b/src/main/java/net/officefloor/hq/app/ContactsGetLogic.java
+new file mode 100644
+index 0000000..bf72fc7
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/ContactsGetLogic.java
+@@ -0,0 +1,16 @@
++package net.officefloor.hq.app;
++
++import java.util.List;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code GET /api/contacts} — list every contact (each carrying its {@code clientId}), so the
++ * client's page can filter to its own. Wired by {@code officefloor/rest/api/contacts.GET.yml}.
++ * Mirrors the projects list: one shared collection, the client context is a filter on it.
++ */
++public class ContactsGetLogic {
++
++    public void service(ContactRepository contacts, ObjectResponse<List<Contact>> response) {
++        response.send(contacts.findAll());
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/ContactsPostLogic.java b/src/main/java/net/officefloor/hq/app/ContactsPostLogic.java
+new file mode 100644
+index 0000000..31b22ca
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/ContactsPostLogic.java
+@@ -0,0 +1,79 @@
++package net.officefloor.hq.app;
++
++import org.springframework.web.bind.annotation.RequestBody;
++import net.officefloor.server.http.HttpException;
++import net.officefloor.server.http.HttpStatus;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code POST /api/contacts} — create a contact from a {clientId, name, email, role} body and return
++ * the saved row (with its generated id). Wired by {@code officefloor/rest/api/contacts.POST.yml}. A
++ * contact must belong to an existing client: the clientId is validated here and rejected with 400
++ * before it reaches the repository (the DB foreign key in Flyway V10 is the matching last line of
++ * defence). Name, email and role are required.
++ */
++public class ContactsPostLogic {
++
++    public void service(@RequestBody NewContact newContact, ContactRepository contacts,
++            ClientRepository clients, ObjectResponse<Contact> response) {
++        Long clientId = newContact.getClientId();
++        String name = newContact.getName();
++        String email = newContact.getEmail();
++        String role = newContact.getRole();
++        if (clientId == null || !clients.existsById(clientId)) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A valid client is required");
++        }
++        if (name == null || name.trim().isEmpty()) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A contact name is required");
++        }
++        if (email == null || email.trim().isEmpty()) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A contact email is required");
++        }
++        if (role == null || role.trim().isEmpty()) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "A contact role is required");
++        }
++        Contact saved = contacts.save(
++                new Contact(clientId, name.trim(), email.trim(), role.trim()));
++        response.send(saved);
++    }
++
++    /** Request body for creating a contact. */
++    public static class NewContact {
++        private Long clientId;
++        private String name;
++        private String email;
++        private String role;
++
++        public Long getClientId() {
++            return clientId;
++        }
++
++        public void setClientId(Long clientId) {
++            this.clientId = clientId;
++        }
++
++        public String getName() {
++            return name;
++        }
++
++        public void setName(String name) {
++            this.name = name;
++        }
++
++        public String getEmail() {
++            return email;
++        }
++
++        public void setEmail(String email) {
++            this.email = email;
++        }
++
++        public String getRole() {
++            return role;
++        }
++
++        public void setRole(String role) {
++            this.role = role;
++        }
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/TestSupportController.java b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+index ed92b64..9f718dc 100644
+--- a/src/main/java/net/officefloor/hq/app/TestSupportController.java
++++ b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+@@ -36,6 +36,7 @@ public class TestSupportController {
+         // referential integrity for the truncate and restore it immediately after.
+         jdbc.execute("SET REFERENTIAL_INTEGRITY FALSE");
+         jdbc.execute("TRUNCATE TABLE invoices RESTART IDENTITY");
++        jdbc.execute("TRUNCATE TABLE contacts RESTART IDENTITY");
+         jdbc.execute("TRUNCATE TABLE projects RESTART IDENTITY");
+         jdbc.execute("TRUNCATE TABLE clients RESTART IDENTITY");
+         jdbc.execute("SET REFERENTIAL_INTEGRITY TRUE");
+@@ -62,6 +63,16 @@ public class TestSupportController {
+                         ((Number) project.get("clientId")).longValue());
+             }
+         }
++        List<Map<String, Object>> contacts = (List<Map<String, Object>>) fixture.get("contacts");
++        if (contacts != null) {
++            for (Map<String, Object> contact : contacts) {
++                jdbc.update("INSERT INTO contacts (id, client_id, name, email, contact_role)"
++                        + " VALUES (?, ?, ?, ?, ?)",
++                        ((Number) contact.get("id")).longValue(),
++                        ((Number) contact.get("clientId")).longValue(), contact.get("name"),
++                        contact.get("email"), contact.get("role"));
++            }
++        }
+         List<Map<String, Object>> invoices = (List<Map<String, Object>>) fixture.get("invoices");
+         if (invoices != null) {
+             for (Map<String, Object> invoice : invoices) {
+diff --git a/src/main/resources/db/migration/V10__contacts.sql b/src/main/resources/db/migration/V10__contacts.sql
+new file mode 100644
+index 0000000..569e895
+--- /dev/null
++++ b/src/main/resources/db/migration/V10__contacts.sql
+@@ -0,0 +1,10 @@
++-- Contacts: the people at a client the owner deals with. Each contact belongs to one client
++-- (client_id -> clients.id) and carries a name, an email and their role, so the client's page can
++-- list its contacts. (`role` is spelled `contact_role` in the table to dodge any SQL keyword.)
++CREATE TABLE contacts (
++    id           BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
++    client_id    BIGINT NOT NULL REFERENCES clients(id),
++    name         VARCHAR(255) NOT NULL,
++    email        VARCHAR(255) NOT NULL,
++    contact_role VARCHAR(255) NOT NULL
++);
+diff --git a/src/main/resources/officefloor/rest/api/contacts.GET.yml b/src/main/resources/officefloor/rest/api/contacts.GET.yml
+new file mode 100644
+index 0000000..ab0d285
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/contacts.GET.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.ContactsGetLogic
+diff --git a/src/main/resources/officefloor/rest/api/contacts.POST.yml b/src/main/resources/officefloor/rest/api/contacts.POST.yml
+new file mode 100644
+index 0000000..a5a0e91
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/contacts.POST.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.ContactsPostLogic

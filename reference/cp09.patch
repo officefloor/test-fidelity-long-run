@@ -1,0 +1,62 @@
+diff --git a/src/main/frontend/features/dashboard/Dashboard.tsx b/src/main/frontend/features/dashboard/Dashboard.tsx
+index 1db4689..329c114 100644
+--- a/src/main/frontend/features/dashboard/Dashboard.tsx
++++ b/src/main/frontend/features/dashboard/Dashboard.tsx
+@@ -1,3 +1,4 @@
++import { formatMoney } from '../../ui/money';
+ import { useDashboard } from './dashboard';
+ 
+ // The dashboard summary: counts of clients and projects, and how much money is still owed (the sum of
+@@ -20,7 +21,7 @@ export function Dashboard() {
+       <dt>Projects</dt>
+       <dd data-testid="dashboard-projects-count">{data.projectsCount}</dd>
+       <dt>Outstanding</dt>
+-      <dd data-testid="dashboard-outstanding-total">{data.outstandingTotal.toFixed(2)}</dd>
++      <dd data-testid="dashboard-outstanding-total">{formatMoney(data.outstandingTotal)}</dd>
+     </dl>
+   );
+ }
+diff --git a/src/main/frontend/features/invoices/InvoiceList.tsx b/src/main/frontend/features/invoices/InvoiceList.tsx
+index 9decea8..8edee4e 100644
+--- a/src/main/frontend/features/invoices/InvoiceList.tsx
++++ b/src/main/frontend/features/invoices/InvoiceList.tsx
+@@ -1,3 +1,4 @@
++import { formatMoney } from '../../ui/money';
+ import { useInvoices, usePayInvoice } from './invoices';
+ 
+ // A project's invoices and what they add up to. Reads its own query key (scoped to the project) and
+@@ -25,7 +26,7 @@ export function InvoiceList({ projectId }: { projectId: number }) {
+       <tbody>
+         {invoices.map((invoice) => (
+           <tr key={invoice.id} data-testid={`invoice-row-${invoice.id}`}>
+-            <td data-testid="invoice-amount">{Number(invoice.amount).toFixed(2)}</td>
++            <td data-testid="invoice-amount">{formatMoney(invoice.amount)}</td>
+             <td data-testid="invoice-status">{invoice.status}</td>
+             <td>
+               {invoice.status !== 'PAID' && (
+@@ -44,7 +45,7 @@ export function InvoiceList({ projectId }: { projectId: number }) {
+       </tbody>
+       <tfoot>
+         <tr>
+-          <td data-testid="project-invoices-total">{total.toFixed(2)}</td>
++          <td data-testid="project-invoices-total">{formatMoney(total)}</td>
+         </tr>
+       </tfoot>
+     </table>
+diff --git a/src/main/frontend/ui/money.ts b/src/main/frontend/ui/money.ts
+new file mode 100644
+index 0000000..023c44f
+--- /dev/null
++++ b/src/main/frontend/ui/money.ts
+@@ -0,0 +1,11 @@
++// How money is shown across the app: a currency symbol and two decimal places, e.g. $100.00.
++// One shared formatter so every amount — an invoice, a project total, the dashboard outstanding —
++// reads the same way. Amounts arrive from the server as numbers (or numeric strings); coerce first.
++const moneyFormat = new Intl.NumberFormat('en-US', {
++  style: 'currency',
++  currency: 'USD',
++});
++
++export function formatMoney(amount: number | string): string {
++  return moneyFormat.format(Number(amount));
++}

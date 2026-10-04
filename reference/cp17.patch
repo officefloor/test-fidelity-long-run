@@ -1,0 +1,24 @@
+diff --git a/src/main/java/net/officefloor/hq/app/DashboardGetLogic.java b/src/main/java/net/officefloor/hq/app/DashboardGetLogic.java
+index 02a7c78..00ac39c 100644
+--- a/src/main/java/net/officefloor/hq/app/DashboardGetLogic.java
++++ b/src/main/java/net/officefloor/hq/app/DashboardGetLogic.java
+@@ -5,15 +5,16 @@ import net.officefloor.web.ObjectResponse;
+ 
+ /**
+  * {@code GET /api/dashboard} — the cross-feature summary the home dashboard shows: how many clients
+- * and projects exist, and how much money is still owed (the sum of UNPAID invoice amounts across all
+- * projects). Wired by {@code officefloor/rest/api/dashboard.GET.yml}.
++ * and projects exist, and how much money is still owed (the sum of SENT invoice amounts across all
++ * projects — only invoices that have actually been sent count; DRAFT and PAID are excluded). Wired by
++ * {@code officefloor/rest/api/dashboard.GET.yml}.
+  */
+ public class DashboardGetLogic {
+ 
+     public void service(ClientRepository clients, ProjectRepository projects,
+             InvoiceRepository invoices, ObjectResponse<DashboardView> response) {
+         BigDecimal outstanding = invoices.findAll().stream()
+-                .filter(i -> "UNPAID".equals(i.getStatus()))
++                .filter(i -> "SENT".equals(i.getStatus()))
+                 .map(Invoice::getAmount)
+                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+         response.send(new DashboardView(clients.count(), projects.count(), outstanding));

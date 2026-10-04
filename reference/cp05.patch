@@ -1,0 +1,187 @@
+diff --git a/src/main/frontend/features/invoices/InvoiceList.tsx b/src/main/frontend/features/invoices/InvoiceList.tsx
+index 8577e4a..9decea8 100644
+--- a/src/main/frontend/features/invoices/InvoiceList.tsx
++++ b/src/main/frontend/features/invoices/InvoiceList.tsx
+@@ -1,9 +1,11 @@
+-import { useInvoices } from './invoices';
++import { useInvoices, usePayInvoice } from './invoices';
+ 
+ // A project's invoices and what they add up to. Reads its own query key (scoped to the project) and
+ // derives the total from the rows — the aggregate is never stored, so it always matches the list.
++// Each row shows its payment status and, while UNPAID, a control to mark it paid.
+ export function InvoiceList({ projectId }: { projectId: number }) {
+   const { data: invoices } = useInvoices(projectId);
++  const pay = usePayInvoice(projectId);
+ 
+   if (!invoices) {
+     return null;
+@@ -16,12 +18,27 @@ export function InvoiceList({ projectId }: { projectId: number }) {
+       <thead>
+         <tr>
+           <th>Amount</th>
++          <th>Status</th>
++          <th></th>
+         </tr>
+       </thead>
+       <tbody>
+         {invoices.map((invoice) => (
+           <tr key={invoice.id} data-testid={`invoice-row-${invoice.id}`}>
+             <td data-testid="invoice-amount">{Number(invoice.amount).toFixed(2)}</td>
++            <td data-testid="invoice-status">{invoice.status}</td>
++            <td>
++              {invoice.status !== 'PAID' && (
++                <button
++                  type="button"
++                  data-testid={`invoice-pay-${invoice.id}`}
++                  disabled={pay.isPending}
++                  onClick={() => pay.mutate({ id: invoice.id })}
++                >
++                  Mark paid
++                </button>
++              )}
++            </td>
+           </tr>
+         ))}
+       </tbody>
+diff --git a/src/main/frontend/features/invoices/invoices.ts b/src/main/frontend/features/invoices/invoices.ts
+index 5ae99d6..31e0288 100644
+--- a/src/main/frontend/features/invoices/invoices.ts
++++ b/src/main/frontend/features/invoices/invoices.ts
+@@ -3,7 +3,7 @@ import { getJson, postJson } from '../../api/http';
+ 
+ // An invoice raised on a project. Everything that shows a project's invoices shares the key
+ // ['invoices', projectId]; invalidating it after a write refreshes the list and its total together.
+-export type Invoice = { id: number; projectId: number; amount: number };
++export type Invoice = { id: number; projectId: number; amount: number; status: string };
+ 
+ export const invoicesKey = (projectId: number) => ['invoices', projectId] as const;
+ 
+@@ -22,3 +22,14 @@ export function useCreateInvoice(projectId: number) {
+     onSuccess: () => queryClient.invalidateQueries({ queryKey: invoicesKey(projectId) }),
+   });
+ }
++
++// Mark an invoice paid: POSTs {id} and invalidates ['invoices', projectId] so the list reflects the
++// new status from the server. The server also keeps an audit record of every payment.
++export function usePayInvoice(projectId: number) {
++  const queryClient = useQueryClient();
++  return useMutation({
++    mutationFn: (input: { id: number }) =>
++      postJson<Invoice>('/api/invoices/pay', { id: input.id }),
++    onSuccess: () => queryClient.invalidateQueries({ queryKey: invoicesKey(projectId) }),
++  });
++}
+diff --git a/src/main/java/net/officefloor/hq/app/Invoice.java b/src/main/java/net/officefloor/hq/app/Invoice.java
+index 1f50af4..f90cbdc 100644
+--- a/src/main/java/net/officefloor/hq/app/Invoice.java
++++ b/src/main/java/net/officefloor/hq/app/Invoice.java
+@@ -26,6 +26,9 @@ public class Invoice {
+ 
+     private BigDecimal amount;
+ 
++    /** Payment status: UNPAID (default, matching Flyway V5) until the invoice is marked paid. */
++    private String status = "UNPAID";
++
+     public Invoice() {
+     }
+ 
+@@ -57,4 +60,12 @@ public class Invoice {
+     public void setAmount(BigDecimal amount) {
+         this.amount = amount;
+     }
++
++    public String getStatus() {
++        return status;
++    }
++
++    public void setStatus(String status) {
++        this.status = status;
++    }
+ }
+diff --git a/src/main/java/net/officefloor/hq/app/InvoicesPayLogic.java b/src/main/java/net/officefloor/hq/app/InvoicesPayLogic.java
+new file mode 100644
+index 0000000..b53c9a1
+--- /dev/null
++++ b/src/main/java/net/officefloor/hq/app/InvoicesPayLogic.java
+@@ -0,0 +1,44 @@
++package net.officefloor.hq.app;
++
++import java.math.RoundingMode;
++import org.springframework.web.bind.annotation.RequestBody;
++import net.officefloor.server.http.HttpException;
++import net.officefloor.server.http.HttpStatus;
++import net.officefloor.web.ObjectResponse;
++
++/**
++ * {@code POST /api/invoices/pay} — mark an invoice paid from an {id} body and return the updated row.
++ * Wired by {@code officefloor/rest/api/invoices/pay.POST.yml}. Flips the invoice's status to PAID and
++ * appends one {@code INVOICE_PAID} audit record (the kept record the request asks for), so the
++ * payment can be checked back later through the audit file even though the UI only shows the status.
++ */
++public class InvoicesPayLogic {
++
++    public void service(@RequestBody PayInvoice body, InvoiceRepository invoices, Audit audit,
++            ObjectResponse<Invoice> response) {
++        Long id = body.getId();
++        if (id == null) {
++            throw new HttpException(HttpStatus.BAD_REQUEST, "An invoice id is required");
++        }
++        Invoice invoice = invoices.findById(id)
++                .orElseThrow(() -> new HttpException(HttpStatus.NOT_FOUND, "No such invoice"));
++        invoice.setStatus("PAID");
++        Invoice saved = invoices.save(invoice);
++        String amount = saved.getAmount().setScale(2, RoundingMode.HALF_UP).toPlainString();
++        audit.record("INVOICE_PAID id=" + saved.getId() + " amount=" + amount);
++        response.send(saved);
++    }
++
++    /** Request body for marking an invoice paid. */
++    public static class PayInvoice {
++        private Long id;
++
++        public Long getId() {
++            return id;
++        }
++
++        public void setId(Long id) {
++            this.id = id;
++        }
++    }
++}
+diff --git a/src/main/java/net/officefloor/hq/app/TestSupportController.java b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+index 8284f23..5eb7c0c 100644
+--- a/src/main/java/net/officefloor/hq/app/TestSupportController.java
++++ b/src/main/java/net/officefloor/hq/app/TestSupportController.java
+@@ -65,10 +65,13 @@ public class TestSupportController {
+         List<Map<String, Object>> invoices = (List<Map<String, Object>>) fixture.get("invoices");
+         if (invoices != null) {
+             for (Map<String, Object> invoice : invoices) {
+-                jdbc.update("INSERT INTO invoices (id, project_id, amount) VALUES (?, ?, ?)",
++                // status is optional in a fixture; default to UNPAID (matching Flyway V5) when absent.
++                Object status = invoice.get("status");
++                jdbc.update("INSERT INTO invoices (id, project_id, amount, status) VALUES (?, ?, ?, ?)",
+                         ((Number) invoice.get("id")).longValue(),
+                         ((Number) invoice.get("projectId")).longValue(),
+-                        new java.math.BigDecimal(invoice.get("amount").toString()));
++                        new java.math.BigDecimal(invoice.get("amount").toString()),
++                        status != null ? status.toString() : "UNPAID");
+             }
+         }
+     }
+diff --git a/src/main/resources/db/migration/V5__invoices_status.sql b/src/main/resources/db/migration/V5__invoices_status.sql
+new file mode 100644
+index 0000000..2187ee0
+--- /dev/null
++++ b/src/main/resources/db/migration/V5__invoices_status.sql
+@@ -0,0 +1,3 @@
++-- Invoices carry a payment status so a project's detail page can show UNPAID/PAID and mark one paid.
++-- New invoices default to UNPAID; existing rows adopt the same default via the column default.
++ALTER TABLE invoices ADD COLUMN status VARCHAR(16) NOT NULL DEFAULT 'UNPAID';
+diff --git a/src/main/resources/officefloor/rest/api/invoices/pay.POST.yml b/src/main/resources/officefloor/rest/api/invoices/pay.POST.yml
+new file mode 100644
+index 0000000..e17bbad
+--- /dev/null
++++ b/src/main/resources/officefloor/rest/api/invoices/pay.POST.yml
+@@ -0,0 +1,2 @@
++service:
++  class: net.officefloor.hq.app.InvoicesPayLogic
