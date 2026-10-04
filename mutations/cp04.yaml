@@ -6,7 +6,7 @@
 # Three clauses, and the middle one is the interesting mutation: a total that is merely plausible
 # is the classic thing a generated test fails to pin.
 checkpoint: 4
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-total-counts-only-the-first-invoice"

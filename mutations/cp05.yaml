@@ -6,7 +6,7 @@
 # suite that only drives the screen will pass 002 and 003 — and the pipeline would then accept a
 # change that silently stopped auditing payments.
 checkpoint: 5
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-paying-does-not-change-the-status"

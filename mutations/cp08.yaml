@@ -6,7 +6,7 @@
 # NOT included: swapping the two counts. The reference fixture seeds two clients and two
 # projects, so a swap is invisible — a mutation no test can distinguish measures nothing.
 checkpoint: 8
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-outstanding-includes-paid-invoices"

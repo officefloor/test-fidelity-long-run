@@ -6,7 +6,7 @@
 # real a failure as none — it blocks correct work, and a suite that only tries the invalid case
 # never notices.
 checkpoint: 10
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-zero-is-accepted"

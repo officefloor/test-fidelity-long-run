@@ -5,7 +5,7 @@
 # "for them" is the whole request: a page that lists every project is not wrong-looking, it is
 # just not answering the question.
 checkpoint: 7
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-client-detail-lists-every-project"

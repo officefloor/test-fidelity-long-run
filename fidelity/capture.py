@@ -26,21 +26,46 @@ def write_text(path: str, text: str) -> None:
         fh.write(text)
 
 
-def gate_block(outcome) -> dict:
+def gate_block(outcome, repeat_outcomes=(), wall_s=None) -> dict:
     """The raw gate result. `results` is the atom — every pass/fail count here is re-derivable
-    from it, so later analysis never has to trust these aggregates."""
-    failed = sorted(t for t, ok in (outcome.results or {}).items() if not ok)
+    from it, so later analysis never has to trust these aggregates.
+
+    The gate runs more than once by default (DESIGN.md §5), so this also records what the repeats
+    disagreed about. A test that flips between identical runs is FLAKY, and in an unattended
+    pipeline a flake is the most expensive kind of wrong test: it is the one that spends human
+    attention on nothing. A generated suite is more prone to it than a hand-written one — a
+    missing wait, a race on an async render — so it is measured rather than assumed absent.
+
+    `failed` is the union across repeats: a test is only passing if it passed EVERY time. That
+    also keeps the mutation baseline honest — crediting a mutation for a failure that was really
+    a flake would inflate the kill rate."""
+    runs = [outcome, *repeat_outcomes]
+    per_run = [dict(o.results or {}) for o in runs]
+    every = sorted({t for r in per_run for t in r})
+    failed = sorted(t for t in every if not all(r.get(t, False) for r in per_run))
+    flaky = sorted(t for t in every
+                   if len({r.get(t) for r in per_run if t in r}) > 1
+                   or any(t not in r for r in per_run))
+    durations = [sum((d.get("duration_ms") or 0) for d in (o.detail or [])) / 1000.0
+                 for o in runs]
     return {
-        "build_ok": outcome.build_ok,
+        "build_ok": all(o.build_ok for o in runs),
         "total_selected": outcome.total_selected,
-        "passed": sum(1 for ok in (outcome.results or {}).values() if ok),
+        "passed": len(every) - len(failed),
         "failed_count": len(failed),
         "failed": failed,
-        "results": outcome.results,
+        "repeats": len(runs),
+        "flaky": flaky,                      # flipped between identical runs, or appeared in
+                                             #   only some of them
+        "flaky_count": len(flaky),
+        "results": outcome.results,          # the first run's raw map — the atom
+        "results_repeats": per_run[1:],      # the others, so a flip is re-derivable
         "detail": outcome.detail,            # per-test duration + full failure text
-        "error": outcome.error,
-        "gate_invalid": outcome.gate_invalid,
+        "error": outcome.error or next((o.error for o in runs if o.error), ""),
+        "gate_invalid": any(o.gate_invalid for o in runs),
         "gate_attempts": getattr(outcome, "gate_attempts", None),
+        "test_seconds": round(sum(durations) / len(durations), 2),   # mean per repeat
+        "wall_seconds": wall_s,              # build + serve + run, what a round actually costs
     }
 
 

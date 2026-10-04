@@ -1,6 +1,17 @@
 # test-fidelity-long-run configuration. The driver and grader that consume this are not built yet
 # (DESIGN.md §11); the values here record decisions already made, so they are not re-litigated.
 
+# CHAINS: how many independent runs of the whole 60-checkpoint sequence (DESIGN.md §5).
+#
+# Two by default, because ONE agent run can be lucky: the agent is stochastic, so a single
+# sequence cannot tell "this agent writes sound tests" from "this attempt happened to".
+#
+# REPLAY mode collapses this to 1 and says so. Replay is deterministic — the same specs against
+# the same application — so a second chain re-measures nothing but environmental flakiness, and
+# `grading.green.repeats` already measures that per checkpoint, far more cheaply. Pass --chains
+# explicitly to override.
+chains: 2
+
 # MODE (DESIGN.md §4.3). `replay` installs the erosion harness's own authored suite instead of
 # running an agent, commits nothing, and validates the harness, the fixture and the mutation
 # catalogue all at once. It is the first thing to run and the only way to tell a harness bug from
@@ -129,11 +140,24 @@ isolation:
 # verify_denied refuses to start the turn if any of it is not.
 blind:
   # Refuse a turn when the sandbox contains a HARD leak — anything naming a specific checkpoint
-  # or the harness. Off by default because the stack's own base scaffolding carries a couple of
-  # such comments (e.g. pom.xml "Found via the cp01 dry run") that predate this harness and give
-  # away no position in the sequence. Leaks are reported once per run and recorded in the capture
-  # either way, so turning this on is a decision to clean the fixture first.
-  strict: false
+  # or the harness. ON, because the rigorous behaviour belongs in the default and a parameter
+  # should be what trades it away.
+  #
+  # It was briefly off, for a bad reason: the stack's own base scaffolding carries a handful of
+  # such comments that predate this harness, so strict mode refused every run. The fix is not a
+  # loose default — it is to ACKNOWLEDGE those specific hits and keep refusing new ones. Each
+  # entry below is matched on file + substring rather than line number, so it survives the line
+  # moving; anything NOT listed still stops the turn.
+  strict: true
+  known_leaks:
+    - file: pom.xml
+      contains: "Found via the cp01 dry run"
+    - file: src/main/java/net/officefloor/hq/app/Audit.java
+      contains: "Checkpoints assert the exact line(s)"
+    - file: src/main/java/net/officefloor/hq/app/Application.java
+      contains: "checkpoints add migrations"
+    - file: src/main/frontend/vite.config.ts
+      contains: "must never appear in a checkpoint's diff"
   deny:
     - ${erosion_harness}/acceptance/specs    # the experimenter's reference suite — the answer
     - ${erosion_harness}/checkpoints.yaml    # future requests + sequence hints

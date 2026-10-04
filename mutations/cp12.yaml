@@ -5,7 +5,7 @@
 # One clause, broken at each end of the wire: the server ignores the order, or the button never
 # asks for it. A suite can pass with either half working.
 checkpoint: 12
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-server-ignores-the-due-date-sort"

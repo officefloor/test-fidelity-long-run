@@ -85,6 +85,20 @@ def wrap(text: str, indent: str = "    ", width: int = 74) -> str:
 # --- the mutation catalogue ----------------------------------------------------
 
 
+def acknowledged(hit: str, known: list[dict]) -> bool:
+    """Is this leak one of the pre-existing fixture comments the config accepts?
+
+    Matched on file + substring, never line number: these live in the stack's base scaffolding
+    and a line number would go stale the first time anything above them moved, silently turning
+    an acknowledged hit back into a blocking one."""
+    path, _, text = hit.partition(": ")
+    path = path.rsplit(":", 1)[0]
+    for k in known or []:
+        if path == k.get("file") and (k.get("contains") or "") in text:
+            return True
+    return False
+
+
 def report_leaks(hits: dict[str, list[str]], cfg: dict, seen: set[str]) -> None:
     """Print each distinct leak ONCE per run — they are the same at every checkpoint, and
     repeating 60 times would bury the things that do change.
@@ -92,7 +106,10 @@ def report_leaks(hits: dict[str, list[str]], cfg: dict, seen: set[str]) -> None:
     A HARD hit names a specific checkpoint or the harness; `blind.strict` refuses the run on
     one. A SOFT hit only says a checkpointed run exists, which the stack's base scaffolding has
     said in a few comments since before this harness existed."""
-    strict = bool((cfg.get("blind") or {}).get("strict"))
+    blind = cfg.get("blind") or {}
+    strict = bool(blind.get("strict"))
+    known = blind.get("known_leaks") or []
+    hits = {k: [h for h in v if not acknowledged(h, known)] for k, v in hits.items()}
     for kind in ("hard", "soft"):
         fresh = [h for h in hits.get(kind) or [] if h not in seen]
         for h in fresh:
@@ -104,8 +121,10 @@ def report_leaks(hits: dict[str, list[str]], cfg: dict, seen: set[str]) -> None:
                 print(f"             {h}")
     if strict and hits.get("hard"):
         raise RuntimeError(
-            f"blind.strict is set and the sandbox contains {len(hits['hard'])} hard leak(s) "
-            f"naming a checkpoint or the harness; refusing the turn")
+            f"blind.strict is set and the sandbox contains {len(hits['hard'])} UNACKNOWLEDGED "
+            f"hard leak(s) naming a checkpoint or the harness; refusing the turn. Either clean "
+            f"the fixture text, or add the hit to blind.known_leaks if it genuinely gives away "
+            f"no position in the sequence:\n  " + "\n  ".join(hits["hard"][:5]))
 
 
 def replay_suite(harness: str, n: int) -> dict[str, list[str]]:
@@ -389,15 +408,27 @@ def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, agent, lan
             shutil.rmtree(gate_tree, ignore_errors=True)
         return {"record": None, "suite": suite_now, "ids": prev_ids}
 
-    # 4. grade green
+    # 4. grade green — more than once, so a test that flips is caught (DESIGN.md §5)
     tg = time.time()
+    repeats = max(1, int(((cfg.get("grading") or {}).get("green") or {}).get("repeats", 2)))
+    if args.repeats:
+        repeats = max(1, args.repeats)
     outcome = correctness.run_tests(gate_tree, n, gate_cfg)
-    gate = capture.gate_block(outcome)
+    extra = []
+    for i in range(2, repeats + 1):
+        if outcome.gate_invalid or not outcome.build_ok:
+            break                     # no verdict to compare a repeat against
+        print(f"    repeat {i}/{repeats} ...", flush=True)
+        extra.append(correctness.run_tests(gate_tree, n, gate_cfg))
+    gate = capture.gate_block(outcome, extra, wall_s=round(time.time() - tg, 1))
     capture.write_text(os.path.join(out_dir, f"cp{n:02d}.build.log"),
                        outcome.console or "")
     print(f"  gate   : build_ok={gate['build_ok']} selected={gate['total_selected']} "
           f"passed={gate['passed']} failed={gate['failed_count']} "
+          f"flaky={gate['flaky_count']} repeats={gate['repeats']} "
           f"gate_invalid={gate['gate_invalid']}  ({hms(time.time() - tg)})")
+    for t in gate["flaky"]:
+        print(f"    FLAKY  : {t}   <-- flipped between identical runs")
     if gate["error"]:
         print(f"    error  : {gate['error'][:300]}")
     for t in gate["failed"]:
@@ -494,7 +525,13 @@ def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, agent, lan
     zero = next((m for m in muts if m["kind"] == "zero"), None)
     grew = total_tests - prior_count
     verdict = {
+        # A flipped test is not a passing test: `failed` is the union across repeats, so a flake
+        # already costs green. Reported separately too, so a flake is distinguishable from a
+        # hard failure when diagnosing.
         "green": gate["failed_count"] == 0 and gate["build_ok"] and not gate["gate_invalid"],
+        "flaky_tests": gate["flaky"],
+        "test_seconds": gate["test_seconds"],
+        "wall_seconds": gate["wall_seconds"],
         "suite_non_decreasing": grew >= 0,
         "tests_total": total_tests, "tests_delta": grew,
         "tests_added": len(moves["added"]), "tests_revised": len(moves["revised"]),
@@ -507,7 +544,8 @@ def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, agent, lan
         "survived": [m["id"] for m in authored if not m.get("killed")],
     }
     print(f"  verdict: green={'yes' if verdict['green'] else 'NO'}  "
-          f"tests={total_tests} ({grew:+d})  "
+          + (f"flaky={len(gate['flaky'])}  " if gate["flaky"] else "")
+          + f"tests={total_tests} ({grew:+d})  "
           f"zero={verdict['mutation_zero_correct']}  "
           f"kill_rate="
           + (f"{len(killed)}/{len(authored)}" if authored else "n/a (no catalogue)")
@@ -549,6 +587,10 @@ def main() -> int:
     ap.add_argument("--from", dest="first", type=int, default=1)
     ap.add_argument("--to", dest="last", type=int, default=60)
     ap.add_argument("--checkpoint", type=int, help="just this one")
+    ap.add_argument("--repeats", type=int, default=None,
+                    help="how many times to run the gate per checkpoint. The default is the "
+                         "config's grading.green.repeats (2) — running once cannot distinguish "
+                         "a flaky test from a passing one. Pass 1 to trade that away for speed.")
     ap.add_argument("--dry-run", action="store_true",
                     help="stop before building: show the specification, the installed suite and "
                          "what moved, but run no tests. Costs seconds, and is how to check the "
@@ -561,6 +603,11 @@ def main() -> int:
                     help="green phase only — roughly halves the wall clock")
     ap.add_argument("--keep-work", action="store_true",
                     help="keep each checkpoint's materialised tree for inspection")
+    ap.add_argument("--chains", type=int, default=None,
+                    help="independent runs of the whole sequence. Default is the config's "
+                         "`chains` (2), because one agent run can be lucky. Replay collapses to "
+                         "1 unless this is given, since replay is deterministic.")
+    ap.add_argument("--chain", type=int, default=None, help="run only this chain number")
     ap.add_argument("--run-id", default=None)
     ap.add_argument("--model", default=None, help="override the configured agent model")
     args = ap.parse_args()
@@ -579,6 +626,7 @@ def main() -> int:
 
     landlock = None
     suite_repo = None
+    ref = cfg.get("reference") or {}
     if args.mode == "agent":
         if agent is None:
             raise SystemExit("harness.agent could not be imported from the erosion harness")
@@ -591,69 +639,93 @@ def main() -> int:
                 "agent mode needs a long-lived token: export "
                 "CLAUDE_CODE_OAUTH_TOKEN=$(claude setup-token). A 60-checkpoint run spawns an "
                 "agent per checkpoint over hours, and an interactive login expires part-way.")
-        suite_repo = os.path.join(ROOT, "runs", args.run_id, "suite")
-        sb.init_suite_repo(suite_repo, f"agent/{args.run_id}")
+
 
     cps = {c["n"]: c for c in suitemod.checkpoints(cfg["erosion_harness"])}
     todo = [n for n in sorted(cps) if args.first <= n <= args.last]
-    out_dir = os.path.join(ROOT, "results", args.run_id)
-    os.makedirs(out_dir, exist_ok=True)
+
+    # How many independent sequences. The agent is stochastic, so one run can be lucky; replay
+    # is not, so a second chain there buys nothing `repeats` does not already measure.
+    chains = args.chains if args.chains else int(cfg.get("chains", 2))
+    collapsed = False
+    if args.mode == "replay" and not args.chains and chains > 1:
+        chains, collapsed = 1, True
+    chain_list = [args.chain] if args.chain else list(range(1, chains + 1))
 
     print(BAR)
     print(f"test-fidelity-long-run   mode={args.mode}  code_view={args.code_view}  "
           f"run_id={args.run_id}")
-    ref = cfg.get("reference") or {}
+    print(f"  chains    : {chain_list}" + ("  (replay is deterministic, so the configured 2 "
+                                           "collapse to 1 — pass --chains to override)"
+                                           if collapsed else ""))
     print(f"  reference : {ref.get('repo')} {ref.get('branch')}")
     print(f"              {ref.get('origin') or '(no origin recorded)'}")
     print(f"  checkpoints: cp{todo[0]:02d}..cp{todo[-1]:02d} ({len(todo)})")
-    print(f"  results   : results/{args.run_id}/")
+    print(f"  results   : results/{args.run_id}/chain<N>/")
     if args.mode == "replay":
         print("  replay mode: tests come from the erosion harness; NOTHING is committed")
         if args.calibrate:
             print("  --calibrate: mutation manifests will be marked from this run's kill results")
     else:
         print(f"  agent     : {args.model or cfg.get('model')}  code_view={args.code_view}")
-        print(f"  suite repo: runs/{args.run_id}/suite  (branch agent/{args.run_id})")
+        print(f"  suite repo: runs/{args.run_id}/chain<N>/suite  "
+              f"(branch agent/{args.run_id}-chain<N>)")
     print(f"  started   : {now()}")
     print(BAR, flush=True)
 
-    capture.write_json(os.path.join(out_dir, "run.json"), capture.run_manifest(
-        run_id=args.run_id, mode=args.mode, code_view=args.code_view, cfg=cfg,
-        reference={"repo": (cfg.get("reference") or {}).get("repo"),
-                   "origin": (cfg.get("reference") or {}).get("origin"),
-                   "branch": (cfg.get("reference") or {}).get("branch")},
-        checkpoints=todo, started=now()))
-
     t_run = time.time()
-    prev_suite: dict[str, list[str]] = {}
-    prev_ids: set[str] = set()
-    seen_leaks: set[str] = set()
     rows: list[dict] = []
-    for i, n in enumerate(todo, 1):
-        try:
-            res = run_checkpoint(n=n, cp=cps[n], cfg=cfg, args=args, correctness=correctness,
-                                 agent=agent, landlock=landlock, gate_cfg=gate_cfg,
-                                 out_dir=out_dir, prev_ids=prev_ids, prev_suite=prev_suite,
-                                 suite_repo=suite_repo, seen_leaks=seen_leaks)
-        except Exception as e:                       # one bad checkpoint must not end the run
-            print(f"  !! cp{n:02d} aborted: {type(e).__name__}: {e}", flush=True)
-            capture.write_json(os.path.join(out_dir, f"cp{n:02d}.error.json"),
-                               {"checkpoint": n, "error": f"{type(e).__name__}: {e}"})
-            continue
-        if res["record"] is not None:
-            rows.append(res["record"])
-        prev_suite, prev_ids = res["suite"], res["ids"]
-        done = time.time() - t_run
-        print(f"  [{i}/{len(todo)}] elapsed {hms(done)}  eta {hms(done / i * (len(todo) - i))}",
-              flush=True)
+    for ci, chain in enumerate(chain_list, 1):
+        # One directory per chain, always — even for a single chain, so a later run that adds
+        # chains does not have to reshape what the first one wrote.
+        out_dir = os.path.join(ROOT, "results", args.run_id, f"chain{chain}")
+        os.makedirs(out_dir, exist_ok=True)
+        capture.write_json(os.path.join(out_dir, "run.json"), capture.run_manifest(
+            run_id=args.run_id, mode=args.mode, code_view=args.code_view, cfg=cfg,
+            reference={"repo": ref.get("repo"), "origin": ref.get("origin"),
+                       "branch": ref.get("branch")},
+            checkpoints=todo, started=now()))
+        if args.mode == "agent":
+            suite_repo = os.path.join(ROOT, "runs", args.run_id, f"chain{chain}", "suite")
+            sb.init_suite_repo(suite_repo, f"agent/{args.run_id}-chain{chain}")
+        if len(chain_list) > 1:
+            print(f"\n{BAR}\nCHAIN {chain}  ({ci}/{len(chain_list)})\n{BAR}", flush=True)
+
+        prev_suite: dict[str, list[str]] = {}
+        prev_ids: set[str] = set()
+        seen_leaks: set[str] = set()
+        for i, n in enumerate(todo, 1):
+            try:
+                res = run_checkpoint(n=n, cp=cps[n], cfg=cfg, args=args,
+                                     correctness=correctness, agent=agent, landlock=landlock,
+                                     gate_cfg=gate_cfg, out_dir=out_dir, prev_ids=prev_ids,
+                                     prev_suite=prev_suite, suite_repo=suite_repo,
+                                     seen_leaks=seen_leaks)
+            except Exception as e:                   # one bad checkpoint must not end the run
+                print(f"  !! cp{n:02d} aborted: {type(e).__name__}: {e}", flush=True)
+                capture.write_json(os.path.join(out_dir, f"cp{n:02d}.error.json"),
+                                   {"checkpoint": n, "chain": chain,
+                                    "error": f"{type(e).__name__}: {e}"})
+                continue
+            if res["record"] is not None:
+                res["record"]["chain"] = chain
+                rows.append(res["record"])
+            prev_suite, prev_ids = res["suite"], res["ids"]
+            done = time.time() - t_run
+            total_units = len(todo) * len(chain_list)
+            unit = (ci - 1) * len(todo) + i
+            print(f"  [chain {chain} {i}/{len(todo)} | {unit}/{total_units}] "
+                  f"elapsed {hms(done)}  eta {hms(done / unit * (total_units - unit))}",
+                  flush=True)
+        if args.mode == "agent" and suite_repo:
+            commit_capture(suite_repo, out_dir, f"{args.run_id} chain{chain}")
 
     if args.dry_run:
         print(f"\n{BAR}\ndry run: {len(todo)} checkpoint(s) rendered, nothing built. "
               f"results/{args.run_id}/\n{BAR}", flush=True)
         return 0
-    write_summary(out_dir, args, rows, time.time() - t_run)
-    if args.mode == "agent" and suite_repo:
-        commit_capture(suite_repo, out_dir, args.run_id)
+    write_summary(os.path.join(ROOT, "results", args.run_id), args, rows,
+                  time.time() - t_run)
     return 0
 
 
@@ -679,6 +751,9 @@ def commit_capture(suite_repo: str, out_dir: str, run_id: str) -> None:
 
 
 def write_summary(out_dir: str, args, rows: list[dict], elapsed: float) -> None:
+    """Run-level view across every chain. Written at results/<run_id>/summary.md, above the
+    per-chain directories, because the question it answers ("did this run hold up?") is about
+    the run and not about one sequence through it."""
     """A run-level view, and in replay mode a verdict on the fixture: every red here is a
     fixture defect, since the suite installed is known-good (DESIGN.md §4.3)."""
     green = [r for r in rows if r["verdict"]["green"]]
@@ -686,14 +761,18 @@ def write_summary(out_dir: str, args, rows: list[dict], elapsed: float) -> None:
     shrank = [r for r in rows if not r["verdict"]["suite_non_decreasing"]]
     zero_wrong = [r for r in rows if r["verdict"]["mutation_zero_correct"] is False]
     touched = [r for r in rows if r["verdict"]["app_code_touched"]]
+    flaky = [(r["checkpoint"], t) for r in rows for t in (r["verdict"].get("flaky_tests") or [])]
     survived = [(r["checkpoint"], s) for r in rows for s in r["verdict"]["survived"]]
 
+    chains = sorted({r.get("chain", 1) for r in rows})
     L = [f"# test-fidelity-long-run — run `{args.run_id}` ({args.mode})", "",
+         f"- chains: {chains}",
          f"- checkpoints graded: {len(rows)}",
          f"- green: {len(green)}/{len(rows)}",
          f"- suite shrank at: {[r['checkpoint'] for r in shrank] or 'nowhere'}",
          f"- mutation zero wrong at: {[r['checkpoint'] for r in zero_wrong] or 'nowhere'}",
          f"- application code touched at: {[r['checkpoint'] for r in touched] or 'nowhere'}",
+         f"- flaky tests: {len(flaky)}",
          f"- mutations survived: {len(survived)}",
          f"- wall clock: {hms(elapsed)}", ""]
     if not_green:
@@ -701,7 +780,8 @@ def write_summary(out_dir: str, args, rows: list[dict], elapsed: float) -> None:
               "In replay mode the installed suite is known-good, so each of these is a FIXTURE",
               "defect, not a test defect (REFERENCE_CHAIN.md).", ""]
         for r in not_green:
-            L.append(f"- **cp{r['checkpoint']:02d}** {r['checkpoint_id']} "
+            L.append(f"- **cp{r['checkpoint']:02d}** (chain {r.get('chain', 1)}) "
+                     f"{r['checkpoint_id']} "
                      f"({r['gate']['failed_count']}/{r['gate']['total_selected']} failed)")
             for t in r["gate"]["failed"]:
                 L.append(f"    - `{t}`")
@@ -714,6 +794,13 @@ def write_summary(out_dir: str, args, rows: list[dict], elapsed: float) -> None:
             z = next(m for m in r["mutations"] if m["kind"] == "zero")
             L.append(f"- cp{r['checkpoint']:02d}: killed={z['killed']} "
                      f"expected={z['expect_kill']}")
+        L.append("")
+    if flaky:
+        L += ["## Flaky tests", "",
+              "Flipped between two identical runs against the same application. In an "
+              "unattended pipeline this is the most expensive kind of wrong test: it spends "
+              "human attention on nothing.", ""]
+        L += [f"- cp{n:02d}: `{t}`" for n, t in flaky]
         L.append("")
     if survived:
         L += ["## Mutations that survived", "",
@@ -728,6 +815,8 @@ def write_summary(out_dir: str, args, rows: list[dict], elapsed: float) -> None:
         print(f"  NOT GREEN at: {[r['checkpoint'] for r in not_green]}")
     if zero_wrong:
         print(f"  mutation zero WRONG at: {[r['checkpoint'] for r in zero_wrong]}")
+    if flaky:
+        print(f"  FLAKY tests at: {sorted({n for n, _ in flaky})}")
     if touched:
         print(f"  APP CODE TOUCHED at: {[r['checkpoint'] for r in touched]}")
     print(f"  results/{args.run_id}/summary.md")

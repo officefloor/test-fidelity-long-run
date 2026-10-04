@@ -8,7 +8,7 @@
 # suite rather than a bad mutation, and it is left out here so the set stays calibratable —
 # worth fixing in the erosion harness's cp03 spec.
 checkpoint: 3
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-project-shows-the-wrong-client"

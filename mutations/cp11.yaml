@@ -10,7 +10,7 @@
 # `|` literal block. YAML strips a block's common leading indentation, so a `|` block silently
 # loses the source's indentation and the find then matches nothing.
 checkpoint: 11
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-the-two-dates-are-swapped"

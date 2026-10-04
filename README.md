@@ -103,13 +103,30 @@ $V tools/suite.py sizes                      # suite size per checkpoint; checks
 $V -m fidelity.run --mode replay --dry-run
 $V -m fidelity.run --mode replay --checkpoint 25 --dry-run
 
-# The real thing. Each checkpoint builds and serves the app, so budget minutes per checkpoint.
+# The real thing. Each checkpoint builds and serves the app TWICE (flake detection), so budget
+# minutes per checkpoint. A plain invocation is the rigorous run; flags trade that away.
 $V -m fidelity.run --mode replay                      # all 60
+$V -m fidelity.run --mode replay --repeats 1          # faster, cannot see a flake
 $V -m fidelity.run --mode replay --from 1 --to 8      # a prefix
 $V -m fidelity.run --mode replay --checkpoint 25      # one
 $V -m fidelity.run --mode replay --no-mutations       # green phase only, ~half the wall clock
 $V -m fidelity.run --mode replay --keep-work          # keep each materialised tree to poke at
 ```
+
+### Analysing a finished run
+
+```sh
+$V -m fidelity.analyse --run-id <id>          # fidelity rate, churn, degradation slope
+$V -m fidelity.analyse --run-id <id> --csv    # also records.csv
+```
+
+Separate from the run on purpose: everything it produces is derived, so it can be re-run and
+corrected for free against a finished run — whereas the run itself produces the irreproducible
+material and should not also be deciding how to summarise itself.
+
+With one chain it reports slopes without confidence intervals, because checkpoints within a chain
+are not independent. Two or more chains get a chain-level bootstrap — which is why `chains`
+defaults to 2 for agent runs.
 
 ### Agent mode
 

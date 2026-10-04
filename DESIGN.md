@@ -250,17 +250,23 @@ the fixture.
 ## §5 Grading: fidelity testing
 
 **Step 1 — green, and not shrinking.** Run the whole accumulated suite against checkpoint N's
-code. Every test must pass: a failure here is a false alarm, which in the pipeline blocks a correct
-change. The suite must also hold **at least as many tests as at N-1** — new functionality should
+code **twice** (`grading.green.repeats`, default 2). Every test must pass every time: a failure
+here is a false alarm, which in the pipeline blocks a correct change — and a test that passes once
+and fails once is not a passing test. The union of failures across repeats is what counts, which
+also keeps the mutation baseline honest: crediting a mutation for what was really a flake would
+inflate the kill rate. The suite must also hold **at least as many tests as at N-1** — new functionality should
 mean new tests, and the suite must never shrink.
 
 Equal is allowed, and deliberately so: a **mutative** checkpoint may be served by rewriting tests
 rather than adding any, and a §2 no-code checkpoint may already be covered by the suite. What is
 never allowed is a smaller suite — that is a test deleted to make a round go green (step 3).
 
-Run the suite **twice**. A test whose result flips between identical runs is **flaky**, and is
-reported separately — in an unattended pipeline a flake is the most expensive kind of wrong test,
-because it spends human attention on nothing.
+A test whose result flips between identical runs is **flaky**, and is reported separately from a
+hard failure so the two are distinguishable when diagnosing. In an unattended pipeline a flake is
+the most expensive kind of wrong test, because it spends human attention on nothing — and a
+generated suite is more prone to it than a hand-written one (a missing wait, a race on an async
+render). Running once cannot tell a flake from a pass, which is why twice is the default rather
+than an option.
 
 **Step 2 — mutation, one at a time.** For each mutation authored for checkpoint N (§6): apply
 that mutation alone to the checkpoint's application, run the suite, and require **at least one
@@ -365,6 +371,23 @@ the confined area access to the patches.
 
 ## §8 Test-suite erosion
 
+### §8.1 Analysis is post-hoc, not part of the run
+
+`fidelity/analyse.py` reads a finished run and derives suite cost, suite churn and the
+degradation slope. Deliberately separate from the driver: a run's job is to produce the
+irreproducible material — the prompts, the agent turns, the pass/fail maps, the mutation verdicts
+— and a ten-hour run should not also be deciding how to summarise itself. Everything analysis
+produces is derived, so it can be re-run, corrected and re-run again against a finished run at no
+cost. That matters most for the part most likely to need changing.
+
+The degradation slope carries one deliberate restraint. With **one** chain it reports a slope and
+**no confidence interval**: checkpoints within a chain are not independent — cp30's suite is
+cp29's plus one — so resampling them would report an interval far narrower than the evidence
+supports. With two or more chains it resamples **chains**, which is the same reason the erosion
+harness aggregates to chain level before testing anything. This is also why `chains` defaults
+to 2.
+
+
 The secondary question, and the one that decides whether 300–500 changes is realistic: does the
 generated suite rot? A suite that doubles in runtime every 20 changes, or whose each round rewrites
 swathes of earlier tests, will not survive unattended even at perfect fidelity.
@@ -411,6 +434,30 @@ See REFERENCE_CHAIN.md.
 This matters here because §5 step 3 leans on `type`/`mutates` to know which priors *should* have
 been revised. Those declarations have to be repaired before the maintenance metric means anything.
 
+## §10.1 Defaults are the rigorous setting
+
+A run with no arguments is the *proper* measurement; every flag trades rigour away for speed or
+cost, never towards it. That principle settles several choices that would otherwise be arbitrary:
+
+| default | why | the flag that trades it away |
+| --- | --- | --- |
+| `repeats: 2` | running once cannot distinguish a flake from a pass | `--repeats 1` |
+| `chains: 2` | one agent run can be lucky; the agent is stochastic | `--chains 1`, `--chain N` |
+| mutations on | kill rate is the depth oracle | `--no-mutations` |
+| `code_view: previous` | the pipeline's own information state (§4.2) | `--code-view none/current` |
+| `require_calibrated: true` | an uncalibrated set cannot grade anything | config only |
+| `one_at_a_time: true` | batched mutations are indistinguishable (§5) | config only |
+| `blind.strict: true` | a leak should stop the turn, not be noted in passing | `blind.known_leaks` |
+
+`blind.strict` was briefly off, for a bad reason: the stack's base scaffolding carries a handful
+of pre-existing `cpNN` comments, so strict mode refused every run. A loose default was the wrong
+fix. The right one is to **acknowledge those specific hits** (`blind.known_leaks`, matched on
+file + substring so they survive the line moving) and keep refusing everything else.
+
+**Replay collapses `chains` to 1** and says so. Replay is deterministic — the same specs against
+the same application — so a second chain re-measures nothing but environmental flakiness, which
+`repeats` already measures per checkpoint at a fraction of the cost. `--chains` overrides it.
+
 ## §11 Status
 
 **Built and verified**
@@ -439,8 +486,8 @@ been revised. Those declarations have to be repaired before the maintenance metr
 
 **Not built**: nothing structural. What remains is the work the harness exists to do — a full
 replay (which calibrates the catalogue and proves the fixture), the two outstanding fixture
-repairs, and then agent runs. Plus the smaller gaps in §5's metric table: flake detection, suite
-runtime and churn, and the run-level degradation slope.
+repairs, and then agent runs. Flake detection, suite runtime and churn, and the degradation slope are
+now in place — the last three in `fidelity/analyse.py` rather than in the run (§8.1).
 
 ### §11.1 What the agent's area actually contains
 

@@ -5,7 +5,7 @@
 # The request is entirely about presentation, so both mutations keep the VALUE correct and get the
 # format wrong — which is the only way to test that the suite pins what was actually asked.
 checkpoint: 9
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-money-has-no-currency-symbol"

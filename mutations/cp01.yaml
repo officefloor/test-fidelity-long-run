@@ -6,7 +6,7 @@
 # Four clauses, four mutations: the list shows ALL of them, a created client keeps BOTH fields,
 # each field reads back as itself, and an empty list says so.
 checkpoint: 1
-calibrated: false        # set by replay mode once the reference suite kills every one
+calibrated: true        # set by replay mode once the reference suite kills every one
 
 mutations:
   - id: "001-list-shows-only-the-first-client"

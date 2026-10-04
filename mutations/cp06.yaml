@@ -6,7 +6,7 @@
 # The reference spec types 'glob' against a client named 'Globex', so case-folding is genuinely
 # load-bearing here rather than incidental.
 checkpoint: 6
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-search-is-ignored"
