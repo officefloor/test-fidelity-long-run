@@ -8,7 +8,7 @@
 # suite rather than a bad mutation, and it is left out here so the set stays calibratable —
 # worth fixing in the erosion harness's cp03 spec.
 checkpoint: 3
-calibrated: true
+calibrated: false
 
 mutations:
   - id: "001-project-shows-the-wrong-client"
@@ -37,3 +37,12 @@ mutations:
       actually creates a project through the form; survived by one that only seeds data.
     find: "        {(clients ?? []).map((client) => ("
     replace: "        {(clients ?? []).slice(0, 0).map((client) => ("
+
+  - id: "004-list-shows-only-the-first-project"
+    clause: "Show each project"
+    file: src/main/frontend/features/projects/ProjectList.tsx
+    breaks: |
+      Only the first project renders. Unlocked by cp03 now asserting a row count — without it a
+      truncating list is indistinguishable from a correct one on a single-row fixture.
+    find: "        {projects.map((project) => ("
+    replace: "        {projects.slice(0, 1).map((project) => ("

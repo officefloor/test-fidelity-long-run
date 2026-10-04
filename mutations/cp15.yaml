@@ -2,7 +2,7 @@
 #
 # "Let me narrow that list to one stage. For example only the ones I have sent."
 checkpoint: 15
-calibrated: false
+calibrated: true
 
 mutations:
   - id: "001-filter-is-ignored"

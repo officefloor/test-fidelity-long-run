@@ -8,7 +8,7 @@ oracle: a generated suite is credited for each mutation it turns red.
 > that revises earlier behaviour. "Mutation", "mutant" and "kill rate" here are mutation testing
 > in the usual sense.
 
-**128 mutations across all 60 checkpoints.** `tools/mutate.py coverage` shows the spread;
+**133 mutations across all 60 checkpoints.** `tools/mutate.py coverage` shows the spread;
 `tools/mutate.py list` shows each one and the clause it breaks.
 
 ## Why substitutions, not patches
@@ -67,18 +67,29 @@ whether a mutation is any good.
 
 cp02 is marked calibrated from a real run (3/3 killed). The rest await the full replay.
 
-## Reference-suite holes found while authoring
+## Reference-suite holes — found, then closed
 
-Several checkpoints could have had another mutation, except the reference spec has nothing that
-would catch it. Those are **holes in the erosion harness's specs**, not bad mutations, and they
-are left out so each set stays calibratable. Each is recorded in the relevant manifest's header:
+Four checkpoints asserted less than their request promised, so a mutation I wanted had to be left
+out: the spec that should have killed it would not have. Each was a hole in the fixture rather
+than a bad mutation.
 
-| checkpoint | the mutation that would survive |
-| --- | --- |
-| cp03 | the project list showing only the first project — no row count is asserted |
-| cp21 | a line's amount ignoring its quantity — qty, unit price and line amount are never asserted (cp46 does assert them, so the mutation lives there) |
-| cp26 | dropping the `PROJECT_TAGGED` / `PROJECT_UNTAGGED` audit records — the spec never reads the audit channel |
-| cp55 | removing the "top five" cap — the fixture has only three owing clients |
+They are now **closed** — the specs assert the missing thing, and the mutation that exposed the
+gap is in the catalogue, which is how they stay closed. A spec that stops asserting one of these
+shows up as a mutation that survives.
+
+| checkpoint | the hole | the mutation it now supports |
+| --- | --- | --- |
+| cp03 | no project row count asserted | `004-list-shows-only-the-first-project` |
+| cp21 | a line's own qty / unit price / amount never asserted | `003-line-amount-ignores-the-quantity` |
+| cp26 | the audit channel never read | `003-tagging-is-not-recorded`, `004-untagging-is-not-recorded` |
+| cp55 | only three owing clients, so the "top five" cap was unobservable | `002-top-clients-is-not-capped-at-five` |
+
+The cp21 case is the sharpest illustration of why this mattered: a line amount computed *without*
+the quantity is correct whenever the quantity is 1, and the spec only ever asserted the
+description and the invoice total. The defect was unobservable through the suite that existed.
+
+The spec changes are additions to existing tests, not new tests, so the test ids are unchanged
+and runs stay comparable across the change (erosion harness commit `3a8b947`).
 
 ## Checkpoints with no code of their own
 

@@ -29,3 +29,11 @@ mutations:
     find: "            <td data-testid=\"lineitem-description\">{line.description}</td>"
     replace: "            <td data-testid=\"lineitem-description\">{line.qty}</td>"
 
+  - id: "003-line-amount-ignores-the-quantity"
+    clause: "how many, and the price each"
+    file: src/main/frontend/features/invoices/LineItemList.tsx
+    breaks: |
+      A line's amount is its unit price, ignoring how many. Correct whenever the quantity is 1,
+      which is why cp21 had to start asserting a line's own figures for this to be catchable.
+    find: "              {formatMoney(Number(line.qty) * Number(line.unitPrice))}"
+    replace: "              {formatMoney(Number(line.unitPrice))}"

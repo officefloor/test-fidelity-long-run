@@ -29,3 +29,19 @@ mutations:
     find: "        {assigned.map((tag) => ("
     replace: "        {allTags.map((tag) => ("
 
+  - id: "003-tagging-is-not-recorded"
+    clause: "put labels on projects"
+    file: src/main/java/net/officefloor/hq/app/ProjectTagsAddLogic.java
+    breaks: |
+      The label is applied and nothing is written to the audit file. Invisible through the UI —
+      unlocked by cp26 now reading the audit channel at all.
+    find: "            audit.record(\"PROJECT_TAGGED project=\" + projectId + \" tag=\" + tagId);"
+    replace: "            // mutation: no audit record is written"
+
+  - id: "004-untagging-is-not-recorded"
+    clause: "so I can group them"
+    file: src/main/java/net/officefloor/hq/app/ProjectTagsRemoveLogic.java
+    breaks: |
+      The label is removed and the removal is not recorded. The other half of the same channel.
+    find: "            audit.record(\"PROJECT_UNTAGGED project=\" + projectId + \" tag=\" + tagId);"
+    replace: "            // mutation: no audit record is written"

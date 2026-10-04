@@ -75,6 +75,7 @@ available_audit_records:
   - 'INVOICE_SENT id=<id> amount=<amount>'
 # Fields /__test__/seed HONOURS here. A field absent from this list is IGNORED,
 # not rejected: seeding it looks like it worked and the assertion fails later.
+# Includes fixture repair(s): 005-seed-advances-the-clients-identity
 seed_accepts:
   clients: [email, id, name]
   invoices: [amount, dueDate, id, issuedDate, projectId, status]

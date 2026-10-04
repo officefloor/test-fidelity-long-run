@@ -200,7 +200,7 @@ available_audit_records:
   - 'TASK_TOGGLED id=<id> done=<done>'
 # Fields /__test__/seed HONOURS here. A field absent from this list is IGNORED,
 # not rejected: seeding it looks like it worked and the assertion fails later.
-# Includes fixture repair(s): 003-clients-archived
+# Includes fixture repair(s): 003-clients-archived, 005-seed-advances-the-clients-identity
 seed_accepts:
   asOf: []
   clients: [archived, email, id, name]

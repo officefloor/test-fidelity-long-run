@@ -327,7 +327,7 @@ aspect of one request's behaviour.
 mutations/cp08.yaml     the set for checkpoint 08: find/replace, the clause each breaks, and why
 ```
 
-**128 mutations across all 60 checkpoints**, every one verified to apply exactly once
+**133 mutations across all 60 checkpoints**, every one verified to apply exactly once
 (`tools/mutate.py validate`). Authored once by the experimenter and reused by every run —
 deterministic on purpose. Generating defects with an LLM per run would make the instrument
 non-repeatable, and a measuring instrument that moves is not one.
@@ -337,9 +337,13 @@ taught the lesson: a unified diff applies against surrounding context, so it can
 place, apply with fuzz, or silently no-op when a neighbouring line moves. A substitution either
 matches once or raises, and the whole catalogue can be checked without building anything.
 
-Where a mutation would have been unkillable by the experimenter's own spec, it was left out and
-the **reference-suite hole** recorded instead (`mutations/README.md` lists all four) — a mutation
-no test could catch measures the harness, not the suite.
+Four mutations were initially unkillable by the experimenter's own spec, because four checkpoints
+asserted less than their request promised. Those **reference-suite holes** are now closed — the
+specs assert the missing thing and the mutations are in the catalogue, which is how they stay
+closed: a spec that stops asserting one shows up as a mutation that survives.
+`mutations/README.md` records which, and the sharpest was cp21, where a line amount computed
+without its quantity is correct whenever the quantity is 1 and the spec asserted only the
+description and the invoice total.
 
 Rules for a usable mutation: it applies cleanly; the app **still builds and serves** (a mutation
 that breaks the build is killed by everything and scores the compiler, not the suite); it changes
@@ -480,7 +484,7 @@ the same application — so a second chain re-measures nothing but environmental
   Confinement verified on this host (Landlock ABI 8): all six withheld paths denied, the sandbox
   reachable.
 
-- `mutations/` + `tools/mutate.py` — **the catalogue**: 128 mutations across all 60 checkpoints,
+- `mutations/` + `tools/mutate.py` — **the catalogue**: 133 mutations across all 60 checkpoints,
   each tied to a clause of its request, all verified to apply exactly once. cp02 is calibrated
   against a real gate run (3/3 killed, each by exactly the test it should be).
 

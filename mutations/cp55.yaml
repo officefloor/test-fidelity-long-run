@@ -19,3 +19,11 @@ mutations:
     find: "                .sorted(Comparator.comparing(TopClientView::getOutstanding).reversed()"
     replace: "                .sorted(Comparator.comparing(TopClientView::getOutstanding)"
 
+  - id: "002-top-clients-is-not-capped-at-five"
+    clause: "my top five clients"
+    file: src/main/java/net/officefloor/hq/app/DashboardTopClientsGetLogic.java
+    breaks: |
+      The list is not capped, so every owing client appears. Unlocked by cp55 now seeding six
+      owing clients — with three, a cap of five is unobservable.
+    find: "                .limit(TOP_N)"
+    replace: "                .limit(Long.MAX_VALUE)"
