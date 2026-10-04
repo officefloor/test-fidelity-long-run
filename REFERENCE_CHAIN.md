@@ -24,100 +24,114 @@ request* at every one of the 60 steps. The problem is only with **priors**.
 `strict-pass 48/120` and `Zero-Regression Rate 0.000` in the erosion summaries are harsher than
 the underlying reality: `strict_pass` requires every selected test id to pass, and at a mutative
 checkpoint the updated prior specs change test *titles*, so the old ids vanish and count as
-regressions. 56 of 62 regressions in the best run are classified `intended`.
+regressions. Most regressions in the best run classify as `intended`.
 
-The honest measure for our purpose is: **at how many steps does a prior test fail without that
-prior being declared in the step's `mutates`?** Ranked:
+The honest measure for our purpose is: **at how many steps does a prior checkpoint's test fail?**
+`mutates` does not excuse it — what `mutates` excuses is a prior test the checkpoint *replaced*,
+and a replaced test is gone from the suite, not failing in it (§3). Ranked:
 
 | repair sites | dirty steps | run | condition | stack | chain |
 | --- | --- | --- | --- | --- | --- |
-| **4** | 35 | 202610020135 | just-solve | officehq-tanstack-officefloor | **2** |
-| 5 | 35 | 202609301425 | gated | officehq-tanstack-officefloor | 1 |
-| 5 | 35 | 202610021156 | just-solve | officehq-react-officefloor | 1 |
-| 5 | 37 | 202610020135 | just-solve | officehq-tanstack-officefloor | 1 |
+| **4** | 36 | 202610020135 | just-solve | officehq-tanstack-officefloor | **2** |
+| 5 | 36 | 202610021156 | just-solve | officehq-react-officefloor | 1 |
+| 5 | 36 | 202609301425 | gated | officehq-tanstack-officefloor | 1 |
+| 5 | 38 | 202610020135 | just-solve | officehq-tanstack-officefloor | 1 |
 | 5 | 40 | 202609291349 | gated | officehq-react-officefloor | 1 |
-| 6–7 | 35–42 | (the remaining five) | | | |
+| 6–7 | 36–42 | (the remaining five) | | | |
 
-## 3. Six breakages are experimenter-side, not agent-side
+The chosen chain's four sites are `cp25 -> cp03, cp07`, `cp29 -> cp01, cp06`, `cp49 -> cp21` and
+`cp60 -> cp41`. "Dirty steps" is high because a single unrepaired prior stays failing for the rest
+of the chain — 36 dirty steps come from 4 defects, not 36.
 
-These (step → prior) pairs recur in 9 or 10 of the 10 chains — across three stacks, two
-conditions and five runs:
+## 3. The breakages are experimenter-side, and they are failing REPLACEMENT SPECS
 
-| step | breaks | chains | the step's request |
+Earlier this section attributed the recurring breakages to cp26, cp30 and cp50. That was **one
+checkpoint late in every case**, because scoring treated `mutates` as a blanket excuse: a prior
+test failing at the mutative checkpoint that declared it was recorded as `intended`, and the same
+still-failing test only became visible at the *next* checkpoint, which declared nothing. The
+corrected attribution (`reference_chain.py`, and `unsatisfied_replacement` in the erosion harness):
+
+| step | prior it breaks | chains | kind |
 | --- | --- | --- | --- |
-| cp26 | cp03, cp07 | 10/10 | "put labels on projects so I can group them" |
-| cp30 | cp01, cp06 | 10/10 | "record what a client has paid on an invoice" |
-| cp50 | cp21 | 9/10 | "filter by two things at once" — but see below: the site is cp49 |
-| cp60 | cp41 | 10/10 | "different clients pay me in different currencies" |
+| cp25 | cp03, cp07 | 10/10 | replacement failed |
+| cp29 | cp01, cp06 | 10/10 | replacement failed |
+| cp49 | cp21 | 9/10 | replacement failed |
+| cp44 | cp01 | 8/10 | replacement failed |
+| cp48 | cp31 | 4/10 | replacement failed |
+| cp60 | cp41 | 10/10 | undeclared |
 
-Independent stacks under different conditions do not break the same prior at the same step by
-chance. Each is one of: an under-declared `mutates`, a stale updated-prior spec copy that did not
-carry forward an earlier mutation, or a request every stack implements the same wrong way.
+"Replacement failed" means the checkpoint **shipped an updated copy of that prior spec, and the
+copy failed from the moment it was installed**. Such a test is invisible to every existing
+measure: never having passed it cannot be a regression, and because it carries the prior's
+basename it scores in the regression category rather than against the checkpoint's own request —
+so cp49 reports `func_p 1/1`, its own request solved, while the cp21 spec it shipped to define the
+effect on invoices fails.
 
-### cp50 → cp21 is really cp49, and reveals an accounting bug
+### Root cause: a seed-contract gap
 
-Correcting the table above: cp50 is **not** the repair site for cp21. The reference chain's cp50
-commit changes **no code at all** (zero-byte agent diff, 14 turns, own test passed) — so it cannot
-have broken anything. The cp21 failure it shows was already failing at **cp49**, which ships its
-own updated `cp21_invoice_line_items.spec.ts` asserting tax in the invoice amount. That replacement
-spec fails at cp49: expected `$1,200.00`, got `$1,000.00`.
+cp25's updated `cp03_projects.spec.ts` arranges its fixture like this:
 
-It is not reported as a regression because cp49 declares `mutates: [21, 47]`, and the erosion
-harness classifies *any* cp21 failure at cp49 as `intended`. So:
+```ts
+projects: [
+  { id: 1, name: 'Website Rebuild', clientId: 1 },
+  { id: 2, name: 'Old Site', clientId: 1, archived: true },
+],
+...
+await expect(page.getByTestId(/^project-row-/)).toHaveCount(1);
+```
 
-> **A mutative checkpoint's own shipped replacement spec can fail, and the harness forgives it.**
-> `intended` should excuse a prior test that was *replaced*; a failure of the *replacement* is a
-> plain failure.
+It gets 2. The application's archiving works — cp25's own acceptance test passed in every chain —
+but **`/__test__/seed` never honoured an `archived` field**, so the record seeds unarchived and the
+list correctly shows both. Nothing ever asked an implementation to support it: the request says
+"tuck it away" (a UI action), the agent sees only its own spec, and that spec archives through the
+UI. The updated prior specs then arrange the same state through a seed field that does not exist.
 
-That undercounts `true_regressions` in every run, and it is worth fixing in
-`~/ui-long-degradation-test/harness/correctness.py` independently of this harness: the
-`_classify` / `count_true_regressions` path should exempt only prior test *ids* that the
-checkpoint's updated copies replaced, not every test belonging to a `mutates` checkpoint.
+cp29 → cp01/cp06 and cp44 → cp01 are the same shape for archived *clients*. cp49 → cp21 is
+different and genuinely behavioural: the updated cp21 spec expects tax in the invoice amount
+(`$1,200.00`) and gets `$1,000.00`.
 
-### Two checkpoints were never implemented
+**This is good news for the fixture.** Five of the six sites are spec-side: the application is
+fine, and the repair is to the erosion harness's `acceptance/specs/cp25|cp29|cp44/` copies — either
+arrange archived state through the UI action, or extend the seed contract in
+`docs/SUT_CONTRACT.md` and have the checkpoints that introduce archiving exercise it in their own
+specs. No application change and no re-run.
+
+## 4. Two checkpoints were never implemented
 
 cp40 (thousands separator) and cp50 (combined filter) both produced a **zero-byte diff** — the
 agent ran, changed nothing, and its own acceptance test passed, because earlier code already
-satisfied the request. Fine for the erosion harness. For this one they have no feature to remove
-and no behaviour to mutate, so they are excluded from the relevance and mutation oracles
-(DESIGN.md §2).
+satisfied the request. Their specs therefore do not test what they claim to: each is satisfiable
+without the change it describes.
 
-It also means those two acceptance specs do not test what they claim to: each is satisfiable
-without the change it describes. Worth knowing if the erosion checkpoints are ever reused as a
-specification of behaviour.
+For this harness they are **kept and graded** (DESIGN.md §2): they test whether the agent
+recognises a request its suite already covers. Only mutation zero inverts there.
 
-**cp60 → cp41 is clear-cut and is a metadata defect.** cp60 asks to "keep the totals separate for
-each currency"; cp41's spec asserts `dashboard-outstanding-total` has text `$100.00`, and the
-element is gone — correctly, because cp60 replaced it with per-currency totals. cp60 declares
-`mutates: [8, 17, 33, 40, 48, 55]` and owes cp41 the same treatment: declare it and ship an
-updated `cp41_invoice_cancel_audit.spec.ts` in `acceptance/specs/cp60/`.
+## 5. cp60 → cp41 is the one metadata defect
 
-The other three show as off-by-one row counts (`Expected 1, Received 2` on
-`project-row-`/`client-row-` locators, in specs titled "excluding archived"), i.e. the archive
-filter stops being applied on a list. That reads as a real behaviour loss rather than stale
-expectations — but it is reproducible in every stack, which points at the *request* at cp26/cp30
-leading every implementation down the same path. Needs one look at the running app to settle;
-the diagnosis changes the fix, not the plan.
+cp60 asks to "keep the totals separate for each currency"; cp41's spec asserts
+`dashboard-outstanding-total` has text `$100.00`, and the element is gone — correctly, because
+cp60 replaced it with per-currency totals. cp60 declares `mutates: [8, 17, 33, 40, 48, 55]` and
+owes cp41 the same: declare it and ship an updated `cp41_invoice_cancel_audit.spec.ts` in
+`acceptance/specs/cp60/`.
 
-## 4. A non-blind run will not fix this
+## 6. A non-blind run will not fix any of this
 
-Re-running non-blind (agent sees all prior specs) cannot produce a clean chain while cp60
-under-declares its mutations: the agent would be shown cp41's stale spec and either fail it, or
-satisfy it by keeping a single-currency total — contradicting cp60's own request. The spec
-metadata has to be repaired first, whatever else is done.
+Re-running non-blind cannot produce a clean chain. The dominant defect is a spec arranging state
+through a seed field the contract does not define — an agent shown that spec would have to invent
+the seed behaviour — and cp60 → cp41 would still force a choice between failing cp41's stale spec
+and contradicting cp60's own request. The fixtures have to be repaired first, whatever else is done.
 
-## 5. Plan
+## 7. Plan
 
-1. **Repair the metadata**: cp60 declares `mutates: [41]` + ships the updated cp41 spec copy.
-   Cheap, and correct independent of this harness — the erosion harness is miscounting a true
-   regression today.
-2. **Diagnose cp26 / cp30 / cp50** against the running reference app. If behaviour loss, repair
-   the app at those three steps on the chosen chain (the `cpNN reset` commit) and re-run the
-   erosion gate from that step to confirm the chain goes green and stays green.
-3. **Adopt** `officehq-tanstack-officefloor evolve/202610020135/just-solve/chain2` — the fewest
+1. **Fix the seed-contract gap** in `acceptance/specs/cp25|cp29|cp44/` (five of six sites). Either
+   arrange archived state through the UI action, or declare `archived` in the seed contract and
+   make cp25/cp29 exercise it in their own specs so an implementation is actually asked for it.
+2. **Declare cp60's mutation of cp41** and ship the updated copy.
+3. **Diagnose cp49 → cp21** (tax in the invoice amount) — the one genuinely behavioural site.
+4. **Adopt** `officehq-tanstack-officefloor evolve/202610020135/just-solve/chain2`: the fewest
    repair sites, and the TanStack + OfficeFloor combination this work is standardising on. Pin it
    in `config.yaml`; the harness refuses to run until `reference_chain.py` grades it 0 sites.
 
-Step 1 is minutes. Step 2 is the real work, and it is bounded: three steps, one app, and the
-erosion harness already rebuilds and re-gates a single checkpoint on demand. Far cheaper than a
-fresh 60-checkpoint non-blind run, which would not have settled it anyway.
+Steps 1 and 2 are spec edits. Step 3 is the only one that may touch the application, and the
+erosion harness can rebuild and re-gate a single checkpoint on demand — far cheaper than a fresh
+60-checkpoint run, which would not have settled it anyway.

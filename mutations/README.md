@@ -46,5 +46,10 @@ either way it cannot grade an agent until resolved. Grading refuses an uncalibra
 
 ## Checkpoints with no code
 
-cp40 and cp50 changed no code in the reference chain (DESIGN.md §2), so they have no behaviour to
-mutate and get no set. They are excluded from the mutation oracle, not scored zero.
+cp40 and cp50 changed no code in the reference chain (DESIGN.md §2). They still get mutation sets:
+the behaviour their requests describe exists, it was just built earlier. cp40 is about comma
+formatting, and the formatting code is there to break — so a test that genuinely pins it can be
+made to fail, and one that does not will survive.
+
+What differs is only mutation zero, which is not in this catalogue: N-1 is the same application,
+so the round's tests must PASS against it.

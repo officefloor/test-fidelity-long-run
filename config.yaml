@@ -17,9 +17,10 @@ checkpoints_file: ${erosion_harness}/checkpoints.yaml
 # otherwise change what every score here meant. reference/manifest.yaml holds the provenance.
 reference:
   dir: reference
-  # checkpoints whose patch is empty: the chain implements the request already, so there is no
-  # feature to remove and no behaviour to mutate. Flagged at import; excluded from the relevance
-  # and mutation oracles, still graded for soundness.
+  # Checkpoints whose patch is empty: the chain already satisfied the request. GRADED like any
+  # other — they test whether the agent recognises a request its suite already covers, or writes
+  # tests for it that pass with no code change. Only mutation zero inverts: N-1 is the same
+  # application, so this round's tests must PASS against it (DESIGN.md §2, §5).
   no_code_change: [40, 50]
 
 # The interface contract handed to the agent with each request (DESIGN.md §3), so its anchors
@@ -39,14 +40,15 @@ generated_suite:
 grading:
   green:
     repeats: 2                     # identical runs; a test that flips is flaky (DESIGN.md §5)
-    require_growth: true           # more tests than the previous checkpoint ...
-    growth_exempt:                 # ... except where that rule would fire on the harness's own
-      mutative: changed_or_added   #   artefacts: a mutative checkpoint may rewrite rather than
-      no_code_change: true         #   add, and a no-code checkpoint has nothing new to cover
+    suite_size: non_decreasing     # at least as many tests as the previous checkpoint. Equal is
+                                   #   allowed — a mutative checkpoint may rewrite rather than
+                                   #   add, and a no-code checkpoint may already be covered. A
+                                   #   SMALLER suite is a test deleted to go green.
   mutation:
     catalogue: mutations/
     require_calibrated: true       # refuse an uncalibrated set rather than report a soft number
     zero: previous_checkpoint      # mutation zero is free: the app at N-1 is the feature removed
+    zero_inverted_on_no_code: true #   ... except where N-1 is the same app: then it must SURVIVE
   maintenance:
     track_deletions: true          # a deleted prior is the cheap way out; counted separately
 

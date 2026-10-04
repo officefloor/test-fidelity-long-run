@@ -82,9 +82,25 @@ def discover_chains(stacks_dir: str, only_run: str | None) -> list[dict]:
 
 
 def grade_chain(chain: dict, checkpoints: dict[int, dict], last: int) -> dict:
-    dirty: dict[int, set[int]] = {}
+    """Where this chain needs repair before it can be a fixture.
+
+    A step is DIRTY when a prior checkpoint's test fails there. `mutates` does NOT excuse it:
+    what `mutates` excuses is a prior test the checkpoint REPLACED, and a replaced test is gone
+    from the suite, not failing in it. A test that runs and fails is a failure whoever declared
+    it — and the two kinds are distinguished so the fix is obvious:
+
+      replacement_failed  the step declared this prior and shipped an updated spec for it, and
+                          that spec fails. Usually the updated spec asserts something no
+                          implementation was asked for. Fix the spec.
+      undeclared          the step broke a prior it never declared. Fix the step, or declare it.
+
+    Attributing to the step where a prior FIRST fails matters: scoring `mutates` as a blanket
+    excuse pushed every site one checkpoint late (cp25's failure surfaced as cp26's, cp29's as
+    cp30's), which pointed the diagnosis at the wrong change entirely."""
+    dirty: dict[int, dict[int, str]] = {}
     own_fail: list[int] = []
     missing: list[int] = []
+    prev_selected: set[str] | None = None
     for n in range(1, last + 1):
         cp = checkpoints.get(n)
         if cp is None:
@@ -97,24 +113,31 @@ def grade_chain(chain: dict, checkpoints: dict[int, dict], last: int) -> dict:
             continue
         tests = json.loads(raw).get("tests") or {}
         declared = {int(x) for x in (cp.get("mutates") or [])}
-        broken = set()
+        broken: dict[int, str] = {}
         for row in tests.get("detail") or []:
             if row.get("passed"):
                 continue
-            owner = test_checkpoint(row["test_id"])
+            tid = row["test_id"]
+            owner = test_checkpoint(tid)
             if owner == n:
                 own_fail.append(n)
-            elif owner is not None and owner not in declared:
-                broken.add(owner)
+            elif owner is not None:
+                arrived_now = prev_selected is not None and tid not in prev_selected
+                kind = ("replacement_failed" if (owner in declared and arrived_now)
+                        else "undeclared" if owner not in declared
+                        else "replacement_failed")
+                broken[owner] = kind
         if broken:
             dirty[n] = broken
+        prev_selected = set((tests.get("results") or {}).keys()) or prev_selected
 
     seen: set[int] = set()
     sites: list[dict] = []
     for n in sorted(dirty):
-        new = sorted(dirty[n] - seen)
+        new = {p: k for p, k in dirty[n].items() if p not in seen}
         if new:
-            sites.append({"step": n, "breaks": new})
+            sites.append({"step": n, "breaks": sorted(new),
+                          "kinds": {str(p): k for p, k in sorted(new.items())}})
             seen |= set(new)
     return {**chain, "dirty_steps": sorted(dirty), "repair_sites": sites,
             "own_test_failures": sorted(set(own_fail)), "missing_capture": missing,
@@ -149,7 +172,9 @@ def main() -> int:
         print(f"{g['run']} {g['condition']:<10} {g['stack']:<24} chain{g['chain']}: "
               f"{len(g['repair_sites'])} repair sites, {len(g['dirty_steps'])} dirty steps")
         for s in g["repair_sites"]:
-            print(f"    cp{s['step']:02d} breaks {['cp%02d' % b for b in s['breaks']]}")
+            detail = ", ".join(f"cp{int(p):02d} ({k.replace('_', ' ')})"
+                               for p, k in sorted(s["kinds"].items(), key=lambda kv: int(kv[0])))
+            print(f"    cp{s['step']:02d} breaks {detail}")
         if g["own_test_failures"]:
             print(f"    !! own-test failures at {g['own_test_failures']} "
                   f"(application never implemented these requests)")

@@ -46,15 +46,26 @@ Two paths are excluded on import because they would hand the agent the answers: 
 (the erosion harness's capture — it carries the reference specs' test titles and failure text) and
 `e2e/specs/` (where it installed those specs).
 
-### Two checkpoints have no code
+### Two checkpoints have no code — and they are kept
 
 cp40 (thousands separator) and cp50 (combined filter) imported as **zero-file patches**: the agent
-ran, produced a zero-byte diff, and its own acceptance test passed anyway — earlier code already
-satisfied the request. They are legitimate for the erosion harness and unscoreable here: there is
-no feature to remove and no behaviour to mutate. They are flagged by `reference.py import`,
-recorded as `no_code_change` in the contract, and **excluded from the relevance and mutation
-oracles** while still counting for soundness. Any new no-op checkpoint must be excluded the same
-way rather than scored as a failure.
+ran, produced a zero-byte diff, and its own acceptance test passed anyway, because earlier code
+already satisfied the request.
+
+These are **graded like any other checkpoint**, and they test something the others cannot: that
+the agent recognises a request the existing suite already covers, or writes tests for it that pass
+without any code change. Getting that wrong is a real pipeline failure — a suite that demands a
+change where none is needed blocks correct work.
+
+What changes at a no-code checkpoint is only the *direction* of mutation zero (§5). The
+application at N-1 is byte-identical to N, so a test written here MUST pass against it. Mutation
+zero is therefore expected to **survive**, and a test that fails at N-1 is the error: it asserts
+behaviour the application does not have. The authored mutations of §6 still apply in full — cp40's
+request is about comma formatting, and formatting code exists to break, so a test that pins it can
+be made to fail.
+
+`reference.py import` flags these at import time and the contract records `no_code_change: true`,
+so the grader inverts mutation zero rather than reporting a phantom failure.
 
 ## §3 The interface contract
 
@@ -103,15 +114,14 @@ writing.
 
 ## §5 Grading: fidelity testing
 
-**Step 1 — green, and growing.** Run the whole accumulated suite against checkpoint N's code.
-Every test must pass: a failure here is a false alarm, which in the pipeline blocks a correct
-change. The suite must also have **more tests than at N-1** — new functionality should mean new
-tests.
+**Step 1 — green, and not shrinking.** Run the whole accumulated suite against checkpoint N's
+code. Every test must pass: a failure here is a false alarm, which in the pipeline blocks a correct
+change. The suite must also hold **at least as many tests as at N-1** — new functionality should
+mean new tests, and the suite must never shrink.
 
-Two caveats the rule has to carry, or it will fire on the harness's own artefacts rather than the
-agent's work: at a **mutative** checkpoint the right move may be to *rewrite* tests rather than add
-any, so the requirement there is non-decreasing count plus at least one test added or changed; and
-at a §2 no-code-change checkpoint there is nothing new to cover.
+Equal is allowed, and deliberately so: a **mutative** checkpoint may be served by rewriting tests
+rather than adding any, and a §2 no-code checkpoint may already be covered by the suite. What is
+never allowed is a smaller suite — that is a test deleted to make a round go green (step 3).
 
 Run the suite **twice**. A test whose result flips between identical runs is **flaky**, and is
 reported separately — in an unattended pipeline a flake is the most expensive kind of wrong test,
@@ -130,6 +140,9 @@ and after the change. The authored mutations in §6 then test depth: mutation ze
 notices the feature is gone, and `expect(total).toBeGreaterThan(0)` passes that while pinning
 nothing.
 
+At a §2 no-code checkpoint mutation zero inverts: N-1 is the same application, so this round's
+tests must **pass** against it, and failing is the defect.
+
 **Step 3 — maintenance.** Prior tests must be *updated*, not deleted. A prior test the agent
 removed rather than revised is tracked separately from one it correctly rewrote: deleting the
 failing test is the cheap way out, and it is exactly what must not happen across 500 changes.
@@ -139,15 +152,15 @@ failing test is the cheap way out, and it is exactly what must not happen across
 | metric | step | meaning |
 | --- | --- | --- |
 | `green` | 1 | the whole suite passes on correct code |
-| `tests_total`, `tests_added`, `tests_changed` | 1 | the suite grew, and how |
+| `tests_total`, `tests_added`, `tests_changed` | 1 | the suite did not shrink, and how it moved |
 | `flaky_tests` | 1 ×2 | results that flipped between identical runs |
 | `kill_rate` | 2 | mutations killed / mutations authored |
 | `survived` | 2 | which mutations no test caught — the actionable list |
-| `feature_absent_killed` | 2 (zero) | this round's tests fail at N-1 |
+| `feature_absent_killed` | 2 (zero) | this round's tests fail at N-1 (inverted where `no_code_change`) |
 | `priors_deleted` | 3 | prior tests removed rather than updated |
 | `suite_runtime_s`, `test_churn_lines` | 1, §8 | cost and churn as the suite grows |
 
-The headline is the share of checkpoints that are green ∧ growing ∧ feature-absent-killed, with
+The headline is the share of checkpoints that are green ∧ not-shrinking ∧ mutation-zero-correct, with
 mean kill rate beside it. The run-level question is whether fidelity **degrades with suite size** —
 the same slope-with-CI treatment the erosion harness applies over checkpoint index.
 
@@ -213,11 +226,17 @@ extractor, and a driver that can move the application *backwards* for mutation z
 
 ## §10 A caveat inherited from the source data
 
-`checkpoints.yaml`'s `mutates` declarations are incomplete, and the erosion harness forgives more
-than it should: a failure of a mutative checkpoint's **own shipped replacement spec** is classified
-`intended` and never counted. cp49 is the clearest case — it ships an updated cp21 spec asserting
-tax in the invoice amount, that spec fails at cp49 ($1,000 against an expected $1,200), and the
-failure is recorded as intended. See REFERENCE_CHAIN.md.
+`checkpoints.yaml`'s `mutates` declarations are incomplete, and the erosion harness could not see
+the dominant defect in its own fixtures: a mutative checkpoint's **own shipped replacement spec**
+can fail from the moment it is installed. Never having passed, it cannot be a regression; and
+because it carries the prior checkpoint's basename it scores in the regression category rather
+than against the checkpoint's request, so the checkpoint still reports its own test solved.
+
+That is now measured there as `unsatisfied_replacement`, and it accounts for nearly every repair
+site: cp25's updated cp03 and cp07 specs and cp29's updated cp01 and cp06 specs fail on arrival in
+**10 of 10 chains**. The cause is a seed-contract gap — those specs arrange archived records by
+passing `archived: true` to `/__test__/seed`, which no implementation was ever asked to honour.
+See REFERENCE_CHAIN.md.
 
 This matters here because §5 step 3 leans on `type`/`mutates` to know which priors *should* have
 been revised. Those declarations have to be repaired before the maintenance metric means anything.

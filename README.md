@@ -18,9 +18,10 @@ changes that is the failure that compounds.
    far and that suite's git history, so it can revise earlier tests as requests change earlier
    behaviour.
 3. Its suite is copied back and committed.
-4. **Fidelity testing**: the whole suite must pass on checkpoint N's code and contain more tests
-   than at N-1; then each authored **mutation** for N is applied in turn and the suite must go red
-   every time. A mutation that survives is a part of the request no test pins.
+4. **Fidelity testing**: the whole suite must pass on checkpoint N's code and hold at least as
+   many tests as at N-1 (equal is fine — a revising checkpoint may rewrite rather than add — but
+   it must never shrink); then each authored **mutation** for N is applied in turn and the suite
+   must go red every time. A mutation that survives is a part of the request no test pins.
 
 Mutation zero is free — the application at N-1 *is* the feature removed, one patch back along the
 chain — and it catches the dominant failure mode of writing tests against existing code: tests that
@@ -65,13 +66,20 @@ $V tools/contract.py show --checkpoint 8
 **Not built**: the driver, the grader, the mutation catalogue (format and one worked manifest only).
 
 **Prerequisite**: the reference chain is not yet all-green. Until it is, a failing generated test
-is ambiguous — the agent or the fixture. The best chain needs 4 repair sites, not a fresh run;
-own-test failures are **zero across all 10 chains**, so the application always implements the
-current request. REFERENCE_CHAIN.md has the diagnosis.
+is ambiguous — the agent or the fixture. The best chain needs **4 repair sites**, not a fresh run,
+and own-test failures are **zero across all 10 chains**, so the application always implements the
+current request.
 
-**Two checkpoints (cp40, cp50) changed no code** in the reference chain and are excluded from the
-relevance and mutation oracles — their acceptance specs are satisfiable without the change they
-describe.
+Five of the six recurring defects are **failing replacement specs**: a mutative checkpoint shipped
+an updated copy of a prior spec that fails the moment it is installed. The root cause for most of
+them is a seed-contract gap — those specs arrange archived records by passing `archived: true` to
+`/__test__/seed`, which no implementation was ever asked to honour. So the repair is spec-side: no
+application change, no re-run. REFERENCE_CHAIN.md has the full diagnosis.
+
+**Two checkpoints (cp40, cp50) changed no code** in the reference chain — earlier code already
+satisfied the request. They are **kept and graded**: they test whether the agent recognises a
+request its suite already covers. Only mutation zero inverts there (N-1 is the same application,
+so the round's tests must pass against it).
 
 ## Terminology
 
