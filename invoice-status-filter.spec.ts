@@ -1,0 +1,165 @@
+// Acceptance tests for the change request:
+//   "Let me narrow that list to one stage. For example only the ones I have sent."
+//
+// The all-invoices page (invoices-page, at /invoices) lists every invoice from every project across
+// all three stages (DRAFT / SENT / PAID). This change adds a control (invoice-status-filter) that
+// narrows that list to ONE stage: pick a stage and only the invoices at that stage remain — the rest
+// are hidden. With nothing picked (the default) every invoice is still shown, exactly as before, so
+// this is a pure narrowing on top of the existing list.
+//
+// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed; the filter is driven
+// through the invoice-status-filter control. Seed honours clients: { id, name, email },
+// projects: { id, clientId, name } and invoices: { id, projectId, amount, status }.
+//
+// The filter is a single control (one testid), so it is a <select> of the stages. We do not assume
+// the casing of its option labels or values: for a wanted stage we locate the option whose visible
+// text OR value matches the stage case-insensitively and select it by its own value, and to clear we
+// select the all-stages option (value === '' or an "all" label). So a correct implementation passes
+// whether it renders stages as 'SENT'/'Sent' and whatever value it carries. Status cells are asserted
+// case-insensitively (/^sent$/i etc.) to match how the other invoice-stage tests assert status.
+//
+// The fixture puts invoices at every stage, with TWO at SENT across two different projects — so
+// narrowing to "sent" must keep a SET of invoices (not a single hard-coded row) and drop the draft
+// and the paid one. Narrowing to DRAFT and to PAID in turn proves the control reads the chosen stage
+// rather than always filtering to one stage. This SHOULD FAIL before the change: there is no
+// invoice-status-filter on the invoices page today.
+import { test, expect, type Page } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+// Invoices at every stage. ids 2 and 4 are both SENT (and sit under different projects), so a genuine
+// "narrow to sent" keeps both while hiding the DRAFT (1) and the PAID (3).
+const FIXTURE = {
+  clients: [
+    { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
+    { id: 2, name: 'Globex', email: 'hello@globex.example' },
+  ],
+  projects: [
+    { id: 1, clientId: 1, name: 'Website redesign' },
+    { id: 2, clientId: 2, name: 'Warehouse automation' },
+  ],
+  invoices: [
+    { id: 1, projectId: 1, amount: 120, status: 'DRAFT' },
+    { id: 2, projectId: 1, amount: 300, status: 'SENT' },
+    { id: 3, projectId: 2, amount: 999, status: 'PAID' },
+    { id: 4, projectId: 2, amount: 450, status: 'SENT' },
+  ],
+};
+
+// The <option> value whose visible text OR value matches `stage` (case-insensitive). Selecting by the
+// option's own value keeps us agnostic to the label/value casing the feature chose.
+async function optionValueFor(page: Page, stage: RegExp): Promise<string> {
+  const value = await page
+    .getByTestId('invoice-status-filter')
+    .locator('option')
+    .evaluateAll((opts, src) => {
+      const re = new RegExp(src as string, 'i');
+      const match = (opts as HTMLOptionElement[]).find(
+        (o) => re.test((o.textContent ?? '').trim()) || re.test(o.value),
+      );
+      return match ? match.value : null;
+    }, stage.source);
+  if (value === null) {
+    throw new Error(`invoice-status-filter has no option matching ${stage}`);
+  }
+  return value;
+}
+
+// Narrow the list to a single stage through the control.
+async function narrowTo(page: Page, stage: RegExp): Promise<void> {
+  await page.getByTestId('invoice-status-filter').selectOption(await optionValueFor(page, stage));
+}
+
+// The "show every stage" option: an empty value by convention, or an option labelled "all".
+async function showAllStages(page: Page): Promise<void> {
+  const value = await page
+    .getByTestId('invoice-status-filter')
+    .locator('option')
+    .evaluateAll((opts) => {
+      const match = (opts as HTMLOptionElement[]).find(
+        (o) => o.value === '' || /all/i.test((o.textContent ?? '').trim()),
+      );
+      return match ? match.value : null;
+    });
+  if (value === null) {
+    throw new Error('invoice-status-filter has no "all stages" option');
+  }
+  await page.getByTestId('invoice-status-filter').selectOption(value);
+}
+
+test.describe('narrow all-invoices to one stage', () => {
+  test.beforeEach(async () => {
+    await resetAndSeed(FIXTURE);
+  });
+
+  test('with nothing picked, the filter is present and every invoice is shown', async ({ page }) => {
+    await page.goto('/invoices');
+
+    await expect(page.getByTestId('invoices-page')).toBeVisible();
+    await expect(page.getByTestId('invoice-status-filter')).toBeVisible();
+
+    // Default view: all four invoices, across both projects and all stages.
+    await expect(page.getByTestId('invoice-row-1')).toBeVisible();
+    await expect(page.getByTestId('invoice-row-2')).toBeVisible();
+    await expect(page.getByTestId('invoice-row-3')).toBeVisible();
+    await expect(page.getByTestId('invoice-row-4')).toBeVisible();
+    await expect(page.locator('[data-testid^="invoice-row-"]')).toHaveCount(4);
+  });
+
+  test('narrowing to SENT keeps only the sent invoices', async ({ page }) => {
+    await page.goto('/invoices');
+    await expect(page.getByTestId('invoice-row-1')).toBeVisible();
+
+    // "Only the ones I have sent."
+    await narrowTo(page, /^sent$/);
+
+    // The two SENT invoices (2 and 4) remain; the DRAFT (1) and the PAID (3) are gone.
+    await expect(page.getByTestId('invoice-row-2')).toBeVisible();
+    await expect(page.getByTestId('invoice-row-4')).toBeVisible();
+    await expect(page.getByTestId('invoice-row-1')).toHaveCount(0);
+    await expect(page.getByTestId('invoice-row-3')).toHaveCount(0);
+    await expect(page.locator('[data-testid^="invoice-row-"]')).toHaveCount(2);
+
+    // Every row still showing is at the SENT stage.
+    await expect(page.getByTestId('invoice-row-2').getByTestId('invoice-status')).toHaveText(/^sent$/i);
+    await expect(page.getByTestId('invoice-row-4').getByTestId('invoice-status')).toHaveText(/^sent$/i);
+  });
+
+  test('narrowing to DRAFT, then to PAID, follows the chosen stage', async ({ page }) => {
+    await page.goto('/invoices');
+    await expect(page.getByTestId('invoice-row-1')).toBeVisible();
+
+    // DRAFT: only invoice 1 remains.
+    await narrowTo(page, /^draft$/);
+    await expect(page.getByTestId('invoice-row-1')).toBeVisible();
+    await expect(page.getByTestId('invoice-row-1').getByTestId('invoice-status')).toHaveText(/^draft$/i);
+    await expect(page.getByTestId('invoice-row-2')).toHaveCount(0);
+    await expect(page.getByTestId('invoice-row-3')).toHaveCount(0);
+    await expect(page.getByTestId('invoice-row-4')).toHaveCount(0);
+    await expect(page.locator('[data-testid^="invoice-row-"]')).toHaveCount(1);
+
+    // PAID: only invoice 3 remains — a different single stage, proving the control reads the choice.
+    await narrowTo(page, /^paid$/);
+    await expect(page.getByTestId('invoice-row-3')).toBeVisible();
+    await expect(page.getByTestId('invoice-row-3').getByTestId('invoice-status')).toHaveText(/^paid$/i);
+    await expect(page.getByTestId('invoice-row-1')).toHaveCount(0);
+    await expect(page.getByTestId('invoice-row-2')).toHaveCount(0);
+    await expect(page.getByTestId('invoice-row-4')).toHaveCount(0);
+    await expect(page.locator('[data-testid^="invoice-row-"]')).toHaveCount(1);
+  });
+
+  test('clearing the filter brings every invoice back', async ({ page }) => {
+    await page.goto('/invoices');
+    await expect(page.getByTestId('invoice-row-1')).toBeVisible();
+
+    await narrowTo(page, /^sent$/);
+    await expect(page.locator('[data-testid^="invoice-row-"]')).toHaveCount(2);
+
+    // Back to all stages: the draft and the paid invoice return alongside the two sent ones.
+    await showAllStages(page);
+    await expect(page.getByTestId('invoice-row-1')).toBeVisible();
+    await expect(page.getByTestId('invoice-row-2')).toBeVisible();
+    await expect(page.getByTestId('invoice-row-3')).toBeVisible();
+    await expect(page.getByTestId('invoice-row-4')).toBeVisible();
+    await expect(page.locator('[data-testid^="invoice-row-"]')).toHaveCount(4);
+  });
+});
