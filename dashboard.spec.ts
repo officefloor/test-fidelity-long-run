@@ -6,9 +6,10 @@
 //   - how many CLIENTS there are              -> dashboard-clients-count
 //   - how many PROJECTS there are             -> dashboard-projects-count
 //   - how much money is STILL OWED            -> dashboard-outstanding-total
-// "Still owed" is the sum of the amounts not yet paid across every project — invoices already marked
-// PAID are not owed and must not count. Invoices now move through stages DRAFT -> SENT -> PAID (see
-// invoice-send.spec.ts); a SENT invoice has gone out but not been paid, so it is money still owed.
+// "Still owed" is the sum of the amounts for invoices I have actually SENT but not yet been paid for.
+// Invoices move through stages DRAFT -> SENT -> PAID (see invoice-send.spec.ts): a SENT invoice has
+// gone out but not been paid, so it is money still owed; a PAID invoice is already in, and a DRAFT
+// has not gone out yet — neither counts (see invoice-owed-sent-only.spec.ts for the draft rule).
 //
 // Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed. Seed honours
 // clients: { id, name, email }, projects: { id, clientId, name } and invoices: { id, projectId,
@@ -63,6 +64,8 @@ test.describe('dashboard home screen', () => {
         { id: 3, projectId: 3, amount: 55, status: 'SENT' },
         // Already PAID -> not owed, must NOT be counted into the outstanding total.
         { id: 4, projectId: 2, amount: 999, status: 'PAID' },
+        // Still a DRAFT -> not sent yet, so not owed either; must NOT be counted.
+        { id: 5, projectId: 2, amount: 777, status: 'DRAFT' },
       ],
     });
 
@@ -76,10 +79,11 @@ test.describe('dashboard home screen', () => {
     await expect(page.getByTestId('dashboard-clients-count')).toContainText('2');
     await expect(page.getByTestId('dashboard-projects-count')).toContainText('3');
 
-    // Still owed is the sum of the not-yet-paid amounts only (475), not including the paid 999 —
-    // shown as money, with a dollar sign and cents.
+    // Still owed is the sum of the SENT amounts only (475) — not the paid 999, and not the draft 777
+    // (a draft has not been sent, so it is not owed) — shown as money, with a dollar sign and cents.
     await expect(page.getByTestId('dashboard-outstanding-total')).toContainText('$475.00');
     await expect(page.getByTestId('dashboard-outstanding-total')).not.toContainText('999');
+    await expect(page.getByTestId('dashboard-outstanding-total')).not.toContainText('777');
   });
 
   test('a paid invoice is not money still owed', async ({ page }) => {
