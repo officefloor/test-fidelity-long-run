@@ -14,9 +14,10 @@
 // amount, status }.
 //
 // Counts are whole numbers asserted with toContainText so a label ("2 clients") still passes; the
-// figures are chosen distinct so none is a substring of another. The outstanding total is asserted
-// with toContainText so whatever display format the feature chooses (plain / decimal / currency)
-// passes — amounts are picked so the owed total is not a substring of any other figure on the page.
+// figures are chosen distinct so none is a substring of another. The outstanding total is MONEY, so
+// it is asserted in the app's money format — a dollar sign and two decimals, "$475.00" — per the
+// "show money properly everywhere" change (see money-format.spec.ts). Amounts are picked so the owed
+// total is not a substring of any other figure on the page.
 import { test, expect } from '@playwright/test';
 import { resetAndSeed } from '../support/seed';
 
@@ -74,8 +75,9 @@ test.describe('dashboard home screen', () => {
     await expect(page.getByTestId('dashboard-clients-count')).toContainText('2');
     await expect(page.getByTestId('dashboard-projects-count')).toContainText('3');
 
-    // Still owed is the sum of the UNPAID amounts only (475), not including the paid 999.
-    await expect(page.getByTestId('dashboard-outstanding-total')).toContainText('475');
+    // Still owed is the sum of the UNPAID amounts only (475), not including the paid 999 — shown as
+    // money, with a dollar sign and cents.
+    await expect(page.getByTestId('dashboard-outstanding-total')).toContainText('$475.00');
     await expect(page.getByTestId('dashboard-outstanding-total')).not.toContainText('999');
   });
 
@@ -95,8 +97,8 @@ test.describe('dashboard home screen', () => {
     await expect(page.getByTestId('dashboard-clients-count')).toContainText('1');
     await expect(page.getByTestId('dashboard-projects-count')).toContainText('1');
 
-    // Nothing is owed: the total reflects 0 and does not include any paid amount.
-    await expect(page.getByTestId('dashboard-outstanding-total')).toContainText('0');
+    // Nothing is owed: the total reflects 0 and does not include any paid amount — shown as money.
+    await expect(page.getByTestId('dashboard-outstanding-total')).toContainText('$0.00');
     await expect(page.getByTestId('dashboard-outstanding-total')).not.toContainText('120');
     await expect(page.getByTestId('dashboard-outstanding-total')).not.toContainText('300');
     await expect(page.getByTestId('dashboard-outstanding-total')).not.toContainText('420');
@@ -111,6 +113,6 @@ test.describe('dashboard home screen', () => {
 
     await expect(page.getByTestId('dashboard-clients-count')).toContainText('0');
     await expect(page.getByTestId('dashboard-projects-count')).toContainText('0');
-    await expect(page.getByTestId('dashboard-outstanding-total')).toContainText('0');
+    await expect(page.getByTestId('dashboard-outstanding-total')).toContainText('$0.00');
   });
 });

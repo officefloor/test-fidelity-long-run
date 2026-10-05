@@ -11,9 +11,10 @@
 // driven through the form. Seed honours clients: { id, name, email }, projects: { id, clientId,
 // name } and invoices: { id, projectId, amount }.
 //
-// Amounts are asserted with toContainText so the test tolerates the display format the feature
-// chooses (plain, decimal or currency-prefixed) — the amounts are picked so no value is a substring
-// of another or of the total.
+// Amounts are MONEY, so they are asserted in the app's money format — a dollar sign and two decimals,
+// "$120.00" — per the "show money properly everywhere" change (see money-format.spec.ts). The amounts
+// are picked so no value is a substring of another or of the total, and all stay below 1000 so no
+// thousands separator is involved.
 import { test, expect } from '@playwright/test';
 import { resetAndSeed } from '../support/seed';
 
@@ -42,17 +43,17 @@ test.describe('project invoices', () => {
     // Project 1's own invoices, each showing its amount.
     const first = page.getByTestId('invoice-row-1');
     await expect(first).toBeVisible();
-    await expect(first.getByTestId('invoice-amount')).toContainText('120');
+    await expect(first.getByTestId('invoice-amount')).toContainText('$120.00');
 
     const second = page.getByTestId('invoice-row-2');
     await expect(second).toBeVisible();
-    await expect(second.getByTestId('invoice-amount')).toContainText('300');
+    await expect(second.getByTestId('invoice-amount')).toContainText('$300.00');
 
     // The other project's invoice is not shown here.
     await expect(page.getByTestId('invoice-row-3')).toHaveCount(0);
 
     // What they add up to: 120 + 300 = 420 (and NOT including the other project's 999).
-    await expect(page.getByTestId('project-invoices-total')).toContainText('420');
+    await expect(page.getByTestId('project-invoices-total')).toContainText('$420.00');
     await expect(page.getByTestId('project-invoices-total')).not.toContainText('999');
   });
 
@@ -77,10 +78,10 @@ test.describe('project invoices', () => {
     // Reset RESTART IDENTITY + empty invoices seed => the first created invoice has id 1.
     const row = page.getByTestId('invoice-row-1');
     await expect(row).toBeVisible();
-    await expect(row.getByTestId('invoice-amount')).toContainText('250');
+    await expect(row.getByTestId('invoice-amount')).toContainText('$250.00');
 
     // The newly added amount is what the invoices add up to.
-    await expect(page.getByTestId('project-invoices-total')).toContainText('250');
+    await expect(page.getByTestId('project-invoices-total')).toContainText('$250.00');
   });
 
   test('a freshly added invoice adds onto the existing total', async ({ page }) => {
@@ -94,15 +95,15 @@ test.describe('project invoices', () => {
     await page.getByTestId('project-open-1').click();
 
     await expect(page.getByTestId('project-detail-page')).toBeVisible();
-    await expect(page.getByTestId('invoice-row-1').getByTestId('invoice-amount')).toContainText('120');
-    await expect(page.getByTestId('project-invoices-total')).toContainText('120');
+    await expect(page.getByTestId('invoice-row-1').getByTestId('invoice-amount')).toContainText('$120.00');
+    await expect(page.getByTestId('project-invoices-total')).toContainText('$120.00');
 
     await page.getByTestId('invoice-form-amount').fill('300');
     await page.getByTestId('invoice-form-submit').click();
 
     // Both invoices now listed, and the total is 120 + 300 = 420.
-    await expect(page.getByTestId('invoice-row-1').getByTestId('invoice-amount')).toContainText('120');
-    await expect(page.getByTestId('invoice-row-2').getByTestId('invoice-amount')).toContainText('300');
-    await expect(page.getByTestId('project-invoices-total')).toContainText('420');
+    await expect(page.getByTestId('invoice-row-1').getByTestId('invoice-amount')).toContainText('$120.00');
+    await expect(page.getByTestId('invoice-row-2').getByTestId('invoice-amount')).toContainText('$300.00');
+    await expect(page.getByTestId('project-invoices-total')).toContainText('$420.00');
   });
 });
