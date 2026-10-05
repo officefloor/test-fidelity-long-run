@@ -1,0 +1,69 @@
+// Acceptance tests for the change request:
+//   "My client list is getting long. Give me a box to search for a client by name."
+//
+// The clients page gains a search box (client-search). Typing into it narrows the list to the
+// clients whose NAME matches what was typed; the rest are hidden. Clearing the box shows every
+// client again.
+//
+// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed; the search is
+// driven through the box. Seed honours clients: { id, name, email }.
+import { test, expect } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+test.describe('client search', () => {
+  const clients = [
+    { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
+    { id: 2, name: 'Globex', email: 'hello@globex.example' },
+    { id: 3, name: 'Initech', email: 'accounts@initech.example' },
+  ];
+
+  test('narrows the list to clients whose name matches what is typed', async ({ page }) => {
+    await resetAndSeed({ clients });
+
+    await page.goto('/clients');
+
+    // With the box empty, every client is shown.
+    await expect(page.getByTestId('client-search')).toBeVisible();
+    await expect(page.getByTestId('client-row-1')).toBeVisible();
+    await expect(page.getByTestId('client-row-2')).toBeVisible();
+    await expect(page.getByTestId('client-row-3')).toBeVisible();
+
+    // Searching by (a case-insensitive substring of) a name leaves only the matching client.
+    await page.getByTestId('client-search').fill('glob');
+
+    await expect(page.getByTestId('client-row-2')).toBeVisible();
+    await expect(page.getByTestId('client-row-2').getByTestId('client-name')).toHaveText('Globex');
+    await expect(page.getByTestId('client-row-1')).toHaveCount(0);
+    await expect(page.getByTestId('client-row-3')).toHaveCount(0);
+  });
+
+  test('clearing the box shows every client again', async ({ page }) => {
+    await resetAndSeed({ clients });
+
+    await page.goto('/clients');
+
+    await page.getByTestId('client-search').fill('Initech');
+    await expect(page.getByTestId('client-row-3')).toBeVisible();
+    await expect(page.getByTestId('client-row-1')).toHaveCount(0);
+    await expect(page.getByTestId('client-row-2')).toHaveCount(0);
+
+    await page.getByTestId('client-search').fill('');
+
+    await expect(page.getByTestId('client-row-1')).toBeVisible();
+    await expect(page.getByTestId('client-row-2')).toBeVisible();
+    await expect(page.getByTestId('client-row-3')).toBeVisible();
+  });
+
+  test('a search that matches no client hides every row', async ({ page }) => {
+    await resetAndSeed({ clients });
+
+    await page.goto('/clients');
+
+    await page.getByTestId('client-search').fill('nonesuch');
+
+    await expect(page.getByTestId('client-name')).toHaveCount(0);
+    await expect(page.getByTestId('client-row-1')).toHaveCount(0);
+    await expect(page.getByTestId('client-row-2')).toHaveCount(0);
+    await expect(page.getByTestId('client-row-3')).toHaveCount(0);
+  });
+});
