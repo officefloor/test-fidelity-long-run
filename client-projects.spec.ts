@@ -1,0 +1,70 @@
+// Acceptance tests for the change request:
+//   "When I open a client show me the projects I am doing for them."
+//
+// Opening a client (client-open-<id> from the clients list) reaches that client's detail page.
+// The detail page lists the projects being done FOR THAT CLIENT (each project with its name), and
+// shows an empty state when the client has no projects of their own.
+//
+// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed. Seed honours
+// clients: { id, name, email } and projects: { id, clientId, name }.
+import { test, expect } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+test.describe('client projects', () => {
+  test('opening a client shows the projects being done for them', async ({ page }) => {
+    await resetAndSeed({
+      clients: [
+        { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
+        { id: 2, name: 'Globex', email: 'hello@globex.example' },
+      ],
+      projects: [
+        { id: 1, clientId: 1, name: 'Website redesign' },
+        { id: 2, clientId: 1, name: 'Mobile app' },
+        // Belongs to a DIFFERENT client — it must not appear on client 1's detail page.
+        { id: 3, clientId: 2, name: 'Warehouse automation' },
+      ],
+    });
+
+    await page.goto('/clients');
+    await page.getByTestId('client-open-1').click();
+
+    await expect(page.getByTestId('client-detail-page')).toBeVisible();
+    await expect(page.getByTestId('client-projects-table')).toBeVisible();
+    await expect(page.getByTestId('client-projects-empty')).toHaveCount(0);
+
+    // Client 1's own projects, each showing its name.
+    const first = page.getByTestId('project-row-1');
+    await expect(first).toBeVisible();
+    await expect(first.getByTestId('project-name')).toHaveText('Website redesign');
+
+    const second = page.getByTestId('project-row-2');
+    await expect(second).toBeVisible();
+    await expect(second.getByTestId('project-name')).toHaveText('Mobile app');
+
+    // The other client's project is not shown here.
+    await expect(page.getByTestId('project-row-3')).toHaveCount(0);
+    await expect(page.getByTestId('project-name')).toHaveCount(2);
+  });
+
+  test('a client with no projects of their own shows an empty state', async ({ page }) => {
+    await resetAndSeed({
+      clients: [
+        { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
+        { id: 2, name: 'Globex', email: 'hello@globex.example' },
+      ],
+      projects: [
+        // Project belongs to the OTHER client, so client 1's detail page must still be empty.
+        { id: 1, clientId: 2, name: 'Warehouse automation' },
+      ],
+    });
+
+    await page.goto('/clients');
+    await page.getByTestId('client-open-1').click();
+
+    await expect(page.getByTestId('client-detail-page')).toBeVisible();
+    await expect(page.getByTestId('client-projects-empty')).toBeVisible();
+    // None of the other client's projects leak onto this client's page.
+    await expect(page.getByTestId('project-name')).toHaveCount(0);
+    await expect(page.getByTestId('project-row-1')).toHaveCount(0);
+  });
+});
