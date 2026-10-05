@@ -6,8 +6,9 @@
 //   - how many CLIENTS there are              -> dashboard-clients-count
 //   - how many PROJECTS there are             -> dashboard-projects-count
 //   - how much money is STILL OWED            -> dashboard-outstanding-total
-// "Still owed" is the sum of the UNPAID invoice amounts across every project — invoices already
-// marked PAID are not owed and must not count (status is UNPAID/PAID, see invoice-paid.spec.ts).
+// "Still owed" is the sum of the amounts not yet paid across every project — invoices already marked
+// PAID are not owed and must not count. Invoices now move through stages DRAFT -> SENT -> PAID (see
+// invoice-send.spec.ts); a SENT invoice has gone out but not been paid, so it is money still owed.
 //
 // Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed. Seed honours
 // clients: { id, name, email }, projects: { id, clientId, name } and invoices: { id, projectId,
@@ -56,10 +57,10 @@ test.describe('dashboard home screen', () => {
         { id: 3, clientId: 2, name: 'Warehouse automation' },
       ],
       invoices: [
-        // Unpaid invoices across several projects -> still owed = 120 + 300 + 55 = 475.
-        { id: 1, projectId: 1, amount: 120, status: 'UNPAID' },
-        { id: 2, projectId: 1, amount: 300, status: 'UNPAID' },
-        { id: 3, projectId: 3, amount: 55, status: 'UNPAID' },
+        // Sent-but-unpaid invoices across several projects -> still owed = 120 + 300 + 55 = 475.
+        { id: 1, projectId: 1, amount: 120, status: 'SENT' },
+        { id: 2, projectId: 1, amount: 300, status: 'SENT' },
+        { id: 3, projectId: 3, amount: 55, status: 'SENT' },
         // Already PAID -> not owed, must NOT be counted into the outstanding total.
         { id: 4, projectId: 2, amount: 999, status: 'PAID' },
       ],
@@ -75,8 +76,8 @@ test.describe('dashboard home screen', () => {
     await expect(page.getByTestId('dashboard-clients-count')).toContainText('2');
     await expect(page.getByTestId('dashboard-projects-count')).toContainText('3');
 
-    // Still owed is the sum of the UNPAID amounts only (475), not including the paid 999 — shown as
-    // money, with a dollar sign and cents.
+    // Still owed is the sum of the not-yet-paid amounts only (475), not including the paid 999 —
+    // shown as money, with a dollar sign and cents.
     await expect(page.getByTestId('dashboard-outstanding-total')).toContainText('$475.00');
     await expect(page.getByTestId('dashboard-outstanding-total')).not.toContainText('999');
   });

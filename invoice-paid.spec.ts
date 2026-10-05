@@ -1,11 +1,15 @@
 // Acceptance tests for the change request:
 //   "Let me mark an invoice as paid. Keep a record every time I do so I can check back later."
 //
-// On a project's detail page each invoice shows its status (invoice-status) and offers a control to
-// mark it paid (invoice-pay-<id>). Marking an invoice paid flips THAT invoice's status to paid and
-// appends one audit record — INVOICE_PAID id=<id> amount=<amount> — so the action can be checked
-// back later. Marking one invoice must not touch its siblings, and each marking writes its own
-// record ("every time I do").
+// On a project's detail page each invoice shows its status (invoice-status) and, once it has been
+// SENT, offers a control to mark it paid (invoice-pay-<id>). Marking an invoice paid flips THAT
+// invoice's status to paid and appends one audit record — INVOICE_PAID id=<id> amount=<amount> — so
+// the action can be checked back later. Marking one invoice must not touch its siblings, and each
+// marking writes its own record ("every time I do").
+//
+// Invoices now move through stages (DRAFT -> SENT -> PAID) and payment is only allowed once an
+// invoice has been sent (see invoice-send.spec.ts). So these tests seed invoices already at the SENT
+// stage (status: 'SENT') — the point where they are payable — and drive the pay flow from there.
 //
 // Asserts ONLY through the two public channels: the UI (data-testid) and the audit file
 // (auditLines()). Data is arranged via resetAndSeed; the pay flow is driven through the UI.
@@ -24,7 +28,7 @@ test.describe('mark invoice paid', () => {
     await resetAndSeed({
       clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
       projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
-      invoices: [{ id: 1, projectId: 1, amount: 120, status: 'UNPAID' }],
+      invoices: [{ id: 1, projectId: 1, amount: 120, status: 'SENT' }],
     });
 
     await page.goto('/projects');
@@ -58,8 +62,8 @@ test.describe('mark invoice paid', () => {
       clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
       projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
       invoices: [
-        { id: 1, projectId: 1, amount: 120, status: 'UNPAID' },
-        { id: 2, projectId: 1, amount: 80, status: 'UNPAID' },
+        { id: 1, projectId: 1, amount: 120, status: 'SENT' },
+        { id: 2, projectId: 1, amount: 80, status: 'SENT' },
       ],
     });
 

@@ -26,9 +26,9 @@ test.describe('money is shown with a dollar sign and cents', () => {
       clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
       projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
       invoices: [
-        { id: 1, projectId: 1, amount: 120, status: 'UNPAID' },
+        { id: 1, projectId: 1, amount: 120, status: 'SENT' },
         // A non-whole amount: cents must still be padded to two places -> $99.50.
-        { id: 2, projectId: 1, amount: 99.5, status: 'UNPAID' },
+        { id: 2, projectId: 1, amount: 99.5, status: 'SENT' },
       ],
     });
 
@@ -45,8 +45,8 @@ test.describe('money is shown with a dollar sign and cents', () => {
       clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
       projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
       invoices: [
-        { id: 1, projectId: 1, amount: 120, status: 'UNPAID' },
-        { id: 2, projectId: 1, amount: 99.5, status: 'UNPAID' },
+        { id: 1, projectId: 1, amount: 120, status: 'SENT' },
+        { id: 2, projectId: 1, amount: 99.5, status: 'SENT' },
       ],
     });
 
@@ -63,9 +63,9 @@ test.describe('money is shown with a dollar sign and cents', () => {
       clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
       projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
       invoices: [
-        { id: 1, projectId: 1, amount: 120, status: 'UNPAID' },
-        { id: 2, projectId: 1, amount: 300, status: 'UNPAID' },
-        { id: 3, projectId: 1, amount: 55, status: 'UNPAID' },
+        { id: 1, projectId: 1, amount: 120, status: 'SENT' },
+        { id: 2, projectId: 1, amount: 300, status: 'SENT' },
+        { id: 3, projectId: 1, amount: 55, status: 'SENT' },
         // PAID -> not owed, not counted.
         { id: 4, projectId: 1, amount: 999, status: 'PAID' },
       ],
