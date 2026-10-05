@@ -1,0 +1,112 @@
+// Acceptance tests for the change request:
+//   "Contacts need a good email too. Do not let me save one with a bad email."
+//
+// Like a client, a contact must not be saved unless a PROPER email address is supplied. Saving with
+// a missing or malformed email is rejected: the contact form surfaces `contact-form-email-error` and
+// no contact is created. A valid email still saves (see client-contacts.spec.ts "adds a contact ...",
+// which remains correct).
+//
+// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed; the add flow is
+// driven through the contact form on the client's detail page. Seed honours clients: { id, name,
+// email } and contacts: { id, clientId, name, email, role }.
+import { test, expect } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+test.describe('contact email must be valid', () => {
+  test('does not show the email error before the user tries to save', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+      contacts: [],
+    });
+
+    await page.goto('/clients');
+    await page.getByTestId('client-open-1').click();
+
+    await expect(page.getByTestId('client-detail-page')).toBeVisible();
+    await expect(page.getByTestId('contact-form')).toBeVisible();
+    await expect(page.getByTestId('contact-form-email-error')).toHaveCount(0);
+  });
+
+  test('refuses to save a contact with no email', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+      contacts: [],
+    });
+
+    await page.goto('/clients');
+    await page.getByTestId('client-open-1').click();
+
+    await expect(page.getByTestId('contact-form')).toBeVisible();
+    await expect(page.getByTestId('contact-name')).toHaveCount(0);
+
+    await page.getByTestId('contact-form-name').fill('Dana Wells');
+    await page.getByTestId('contact-form-role').fill('Billing lead');
+    // Leave email blank.
+    await page.getByTestId('contact-form-submit').click();
+
+    // The feature surfaces the email error and refuses to save.
+    await expect(page.getByTestId('contact-form-email-error')).toBeVisible();
+
+    // Nothing was created: no contact row exists for this client.
+    await expect(page.getByTestId('contact-row-1')).toHaveCount(0);
+    await expect(page.getByTestId('contact-name')).toHaveCount(0);
+  });
+
+  test('refuses to save a contact with a malformed email', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+      contacts: [],
+    });
+
+    await page.goto('/clients');
+    await page.getByTestId('client-open-1').click();
+
+    await expect(page.getByTestId('contact-form')).toBeVisible();
+    await expect(page.getByTestId('contact-name')).toHaveCount(0);
+
+    await page.getByTestId('contact-form-name').fill('Omar Reed');
+    await page.getByTestId('contact-form-email').fill('not-an-email');
+    await page.getByTestId('contact-form-role').fill('Engineering');
+    await page.getByTestId('contact-form-submit').click();
+
+    await expect(page.getByTestId('contact-form-email-error')).toBeVisible();
+
+    await expect(page.getByTestId('contact-row-1')).toHaveCount(0);
+    await expect(page.getByTestId('contact-name')).toHaveCount(0);
+  });
+
+  test('saves the contact once a proper email is provided, clearing the error', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+      contacts: [],
+    });
+
+    await page.goto('/clients');
+    await page.getByTestId('client-open-1').click();
+
+    await expect(page.getByTestId('contact-form')).toBeVisible();
+    await expect(page.getByTestId('contact-name')).toHaveCount(0);
+
+    // First attempt with a bad email is rejected.
+    await page.getByTestId('contact-form-name').fill('Dana Wells');
+    await page.getByTestId('contact-form-email').fill('dana');
+    await page.getByTestId('contact-form-role').fill('Billing lead');
+    await page.getByTestId('contact-form-submit').click();
+
+    await expect(page.getByTestId('contact-form-email-error')).toBeVisible();
+    await expect(page.getByTestId('contact-row-1')).toHaveCount(0);
+
+    // Correcting to a proper email lets it save, and the error goes away.
+    await page.getByTestId('contact-form-email').fill('dana@acme.example');
+    await page.getByTestId('contact-form-submit').click();
+
+    // Reset RESTART IDENTITY + empty contacts seed => the first created contact has id 1.
+    const row = page.getByTestId('contact-row-1');
+    await expect(row).toBeVisible();
+    await expect(row.getByTestId('contact-name')).toHaveText('Dana Wells');
+    await expect(row.getByTestId('contact-email')).toHaveText('dana@acme.example');
+    await expect(row.getByTestId('contact-role')).toHaveText('Billing lead');
+
+    await expect(page.getByTestId('contact-form-email-error')).toHaveCount(0);
+  });
+});
