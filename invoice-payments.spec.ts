@@ -1,0 +1,140 @@
+// Acceptance tests for the change request:
+//   "Let me record what a client has paid on an invoice. Store the amount and the date. Show it on
+//    the invoice."
+//
+// An invoice can now carry a record of what the client has PAID against it. On the invoice's own
+// detail page (invoice-detail-page, reached by navigating to /invoices/<id> — the same public URL
+// surface the invoice specs already use) a payments region (invoice-payments) lists every payment
+// recorded on THAT invoice in a table (invoice-payments-table). Each payment row (payment-row-<id>)
+// shows the two things stored for it: the AMOUNT paid (payment-amount) and the DATE it was paid
+// (payment-date). A form (payment-form) records a new payment from those two fields
+// (payment-form-amount / payment-form-date, submitted with payment-form-submit), refusing an
+// incomplete one with payment-form-error.
+//
+// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed, which honours
+// payments: { id, invoiceId, amount, date } (alongside clients / projects / invoices). This change
+// introduces NO new audit record, so nothing is asserted through the audit channel here.
+//
+// The payment amount is MONEY but payment-amount is a NEW anchor, not one of the three money-format
+// anchors the money-format spec pins exactly; so it is matched leniently (a leading "$" and a
+// trailing ".00" both optional) — the exact presentation is not what this change pins. The date is
+// asserted format-tolerantly the way invoice-dates does: a date rendering ("2025-06-15",
+// "Jun 15, 2025", "15 June 2025") CONTAINS its day-of-month number. Amounts (200 / 120 / 777) and
+// day-of-month values (15 / 28 / 09) are chosen so none is a substring of another, of a year, of a
+// month, or of another amount — so each per-row assertion pins its own value and a swap or a leak
+// from a sibling (or a different invoice) would fail. This test SHOULD FAIL before the change:
+// there is no payments region, table or form on the invoice today.
+import { test, expect } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+test.describe('record what a client has paid on an invoice', () => {
+  test('an invoice shows each payment recorded on it, with its amount and date', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
+      invoices: [
+        { id: 1, projectId: 1, amount: 500, status: 'SENT' },
+        // A second invoice with its own payment, to prove the first invoice shows only ITS payments.
+        { id: 2, projectId: 1, amount: 900, status: 'SENT' },
+      ],
+      payments: [
+        { id: 1, invoiceId: 1, amount: 200, date: '2025-06-15' },
+        { id: 2, invoiceId: 1, amount: 120, date: '2025-08-28' },
+        // Belongs to invoice 2 — must NOT appear on invoice 1's detail page.
+        { id: 3, invoiceId: 2, amount: 777, date: '2025-01-09' },
+      ],
+    });
+
+    await page.goto('/invoices/1');
+    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
+
+    // The invoice surfaces a payments region with a table of what has been paid on it.
+    const payments = page.getByTestId('invoice-payments');
+    await expect(payments).toBeVisible();
+    await expect(page.getByTestId('invoice-payments-table')).toBeVisible();
+
+    // First payment: $200.00 on 2025-06-15 (day 15).
+    const first = page.getByTestId('payment-row-1');
+    await expect(first).toBeVisible();
+    await expect(first.getByTestId('payment-amount')).toHaveText(/^\$?200(\.00)?$/);
+    await expect(first.getByTestId('payment-date')).toContainText('15');
+    await expect(first.getByTestId('payment-date')).not.toContainText('28');
+
+    // Second payment: $120.00 on 2025-08-28 (day 28). Its own amount and date, not a sibling's.
+    const second = page.getByTestId('payment-row-2');
+    await expect(second).toBeVisible();
+    await expect(second.getByTestId('payment-amount')).toHaveText(/^\$?120(\.00)?$/);
+    await expect(second.getByTestId('payment-date')).toContainText('28');
+    await expect(second.getByTestId('payment-date')).not.toContainText('15');
+
+    // Payment 3 belongs to invoice 2 — it is not shown here. "Record what a client has paid on an
+    // invoice" scopes payments to the invoice they were recorded against.
+    await expect(page.getByTestId('payment-row-3')).toHaveCount(0);
+    await expect(payments.getByTestId('payment-amount')).toHaveCount(2);
+  });
+
+  test('records a payment through the form; it appears on the invoice with its amount and date', async ({ page }) => {
+    // An invoice with nothing paid on it yet. RESTART IDENTITY on reset + no payments seeded means
+    // the first payment recorded through the UI is id 1.
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
+      invoices: [{ id: 1, projectId: 1, amount: 500, status: 'SENT' }],
+      payments: [],
+    });
+
+    await page.goto('/invoices/1');
+    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
+    await expect(page.getByTestId('invoice-payments')).toBeVisible();
+    await expect(page.getByTestId('payment-form')).toBeVisible();
+    // Nothing recorded yet, so no payment rows.
+    await expect(page.getByTestId('payment-amount')).toHaveCount(0);
+
+    // Record what the client paid: $350.00 on 2025-07-11.
+    await page.getByTestId('payment-form-amount').fill('350');
+    await page.getByTestId('payment-form-date').fill('2025-07-11');
+    await page.getByTestId('payment-form-submit').click();
+
+    // It appears as the first payment row, carrying the amount and date that were stored.
+    const row = page.getByTestId('payment-row-1');
+    await expect(row).toBeVisible();
+    await expect(row.getByTestId('payment-amount')).toHaveText(/^\$?350(\.00)?$/);
+    await expect(row.getByTestId('payment-date')).toContainText('11');
+    // A valid record is not an error.
+    await expect(page.getByTestId('payment-form-error')).toHaveCount(0);
+  });
+
+  test('refuses an incomplete payment, surfacing an error and recording nothing', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
+      invoices: [{ id: 1, projectId: 1, amount: 500, status: 'SENT' }],
+      payments: [],
+    });
+
+    await page.goto('/invoices/1');
+    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
+    await expect(page.getByTestId('payment-form')).toBeVisible();
+    // No error before the user tries anything.
+    await expect(page.getByTestId('payment-form-error')).toHaveCount(0);
+
+    // Submitting an empty form — no amount, no date — cannot describe a payment: it is rejected and
+    // nothing is recorded.
+    await page.getByTestId('payment-form-submit').click();
+
+    await expect(page.getByTestId('payment-form-error')).toBeVisible();
+    await expect(page.getByTestId('payment-row-1')).toHaveCount(0);
+    await expect(page.getByTestId('payment-amount')).toHaveCount(0);
+
+    // A complete payment is then accepted, clearing the error and appearing as the first row (id 1).
+    await page.getByTestId('payment-form-amount').fill('350');
+    await page.getByTestId('payment-form-date').fill('2025-07-11');
+    await page.getByTestId('payment-form-submit').click();
+
+    const row = page.getByTestId('payment-row-1');
+    await expect(row).toBeVisible();
+    await expect(row.getByTestId('payment-amount')).toHaveText(/^\$?350(\.00)?$/);
+    await expect(row.getByTestId('payment-date')).toContainText('11');
+    await expect(page.getByTestId('payment-form-error')).toHaveCount(0);
+  });
+});
