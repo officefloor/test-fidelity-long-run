@@ -1,0 +1,71 @@
+// Acceptance tests for the change request:
+//   "Let me delete a project I no longer need. Keep a record that I did."
+//
+// Each project in the projects list offers a control to DELETE it (project-delete-<id>). Deleting a
+// project removes THAT project from the list, leaving its siblings untouched, and appends exactly one
+// audit record — PROJECT_DELETED id=<id> — so the deletion can be checked back later (the UI only
+// stops showing the project; it cannot show that it was deleted). Deleting the last project leaves
+// the list empty.
+//
+// Asserts ONLY through the two public channels: the UI (data-testid) and the audit file
+// (auditLines()). Data is arranged via resetAndSeed; the delete is driven through the UI. Seed honours
+// clients: { id, name, email } and projects: { id, clientId, name }.
+//
+// This test SHOULD FAIL before the change: today a project row has no delete control and nothing is
+// recorded when one is removed.
+import { test, expect } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+import { auditLines } from '../support/audit';
+
+test.describe('delete a project', () => {
+  test('deletes a project, removing it from the list and keeping a record', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+      projects: [
+        { id: 1, clientId: 1, name: 'Website redesign' },
+        { id: 2, clientId: 1, name: 'Warehouse automation' },
+      ],
+    });
+
+    await page.goto('/projects');
+    await expect(page.getByTestId('projects-page')).toBeVisible();
+
+    const first = page.getByTestId('project-row-1');
+    const second = page.getByTestId('project-row-2');
+    await expect(first).toBeVisible();
+    await expect(second).toBeVisible();
+
+    // reset cleared the audit file — nothing has been deleted yet.
+    expect(auditLines()).toEqual([]);
+
+    // Delete the first project.
+    await page.getByTestId('project-delete-1').click();
+
+    // It is gone from the list; its sibling is untouched.
+    await expect(first).toHaveCount(0);
+    await expect(second).toBeVisible();
+    await expect(second.getByTestId('project-name')).toHaveText('Warehouse automation');
+
+    // Exactly one record was kept, naming the deleted project — and only that one.
+    await expect.poll(() => auditLines()).toEqual(['PROJECT_DELETED id=1']);
+  });
+
+  test('deleting the last project leaves the list empty, with a record of the deletion', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
+    });
+
+    await page.goto('/projects');
+    await expect(page.getByTestId('project-row-1')).toBeVisible();
+    await expect(page.getByTestId('projects-empty')).toHaveCount(0);
+
+    await page.getByTestId('project-delete-1').click();
+
+    // No projects left: the row is gone and the empty state is shown.
+    await expect(page.getByTestId('project-row-1')).toHaveCount(0);
+    await expect(page.getByTestId('projects-empty')).toBeVisible();
+
+    await expect.poll(() => auditLines()).toEqual(['PROJECT_DELETED id=1']);
+  });
+});
