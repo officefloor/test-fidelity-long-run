@@ -1,0 +1,204 @@
+// Acceptance test for the change request:
+//   "Let me keep a task list on each project. Let me tick things off as I finish them."
+//
+// A project keeps a list of tasks. On a project's detail page (/projects/<id>) that list is shown:
+// each task is its own row (task-row-<id>) carrying its title (task-title) and whether it is done
+// (task-status). A project with no tasks shows an empty state (project-tasks-empty) instead of the
+// table (project-tasks-table). Each task offers a control to tick it off / untick it
+// (task-toggle-<id>); toggling flips whether the task is done, persists across a fresh load, and —
+// so the change can be checked back later — appends exactly one audit record
+// `TASK_TOGGLED id=<id> done=<done>` per toggle, carrying the task's id and its NEW done state.
+// Toggling one task must not touch its siblings. A task's list belongs to ITS project: a task on a
+// different project is not shown here.
+//
+// Asserts ONLY through the two public channels: the UI (data-testid) and the audit file
+// (auditLines()). Data is arranged via resetAndSeed (the app's /__test__ endpoint): `clients`
+// honours { id, name, email }, `projects` honours { id, name, clientId } and `tasks` honours
+// { id, title, projectId, done }.
+import { test, expect, type Page, type Locator } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+import { auditLines } from '../support/audit';
+
+// A task's status cell reads "done" when it has been ticked off — matched by the WORD, case
+// -insensitively, so the test binds to the MEANING and not one capitalisation ("Done"/"DONE"/"done"
+// all count). A task that is NOT done reads some other way ("To do"/"Pending"/…); the test only
+// requires that it does NOT read done, rather than pinning that wording.
+const DONE = /\bdone\b/i;
+
+const taskRows = (page: Page) => page.locator('[data-testid^="task-row-"]');
+const statusOf = (page: Page, id: number): Locator =>
+  page.getByTestId(`task-row-${id}`).getByTestId('task-status');
+
+// The audit record for one toggle. The new done state is written as a boolean, accepted as either
+// true/false or 1/0 so the test binds to the MEANING; everything else is matched exactly.
+const toggledRecord = (id: number, done: boolean) =>
+  new RegExp(`^TASK_TOGGLED id=${id} done=${done ? '(?:true|1)' : '(?:false|0)'}$`);
+
+const toggledRecordsFor = (id: number, done: boolean): string[] =>
+  auditLines().filter((line) => toggledRecord(id, done).test(line));
+
+test.describe('A task list on each project', () => {
+  test('a project with no tasks shows an empty state, not the table', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
+      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
+      tasks: [],
+    });
+
+    await page.goto('/projects/1');
+
+    await expect(page.getByTestId('project-detail-page')).toBeVisible();
+    await expect(page.getByTestId('project-tasks-empty')).toBeVisible();
+    // No tasks yet: no rows, and the table is not shown.
+    await expect(taskRows(page)).toHaveCount(0);
+    await expect(page.getByTestId('project-tasks-table')).toHaveCount(0);
+  });
+
+  test('every task on the project is shown with its title and whether it is done', async ({
+    page,
+  }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
+      projects: [
+        { id: 1, name: 'Website Redesign', clientId: 1 },
+        { id: 2, name: 'Mobile App', clientId: 1 },
+      ],
+      tasks: [
+        { id: 1, title: 'Draft the brief', projectId: 1, done: false },
+        { id: 2, title: 'Build the homepage', projectId: 1, done: true },
+        { id: 3, title: 'Review with client', projectId: 1, done: false },
+        // A task on a DIFFERENT project must not show on this project's list.
+        { id: 4, title: 'Ship to the store', projectId: 2, done: false },
+      ],
+    });
+
+    await page.goto('/projects/1');
+
+    await expect(page.getByTestId('project-detail-page')).toBeVisible();
+    await expect(page.getByTestId('project-tasks-table')).toBeVisible();
+    await expect(page.getByTestId('project-tasks-empty')).toHaveCount(0);
+
+    // Only this project's three tasks are shown, each carrying its own title.
+    await expect(taskRows(page)).toHaveCount(3);
+    await expect(page.getByTestId('task-row-1').getByTestId('task-title')).toHaveText(
+      'Draft the brief',
+    );
+    await expect(page.getByTestId('task-row-2').getByTestId('task-title')).toHaveText(
+      'Build the homepage',
+    );
+    await expect(page.getByTestId('task-row-3').getByTestId('task-title')).toHaveText(
+      'Review with client',
+    );
+
+    // The seeded done state is reflected: the ticked-off task reads done, the others do not.
+    await expect(statusOf(page, 2)).toHaveText(DONE);
+    await expect(statusOf(page, 1)).not.toHaveText(DONE);
+    await expect(statusOf(page, 3)).not.toHaveText(DONE);
+
+    // The other project's task is nowhere on this page.
+    await expect(page.getByTestId('task-row-4')).toHaveCount(0);
+    await expect(page.getByTestId('project-detail-page')).not.toContainText('Ship to the store');
+
+    // Merely loading the list records nothing — a record is kept when a task is toggled, not on view.
+    expect(auditLines()).toEqual([]);
+  });
+
+  test('ticking a task off marks it done, persists, and records it once', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
+      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
+      tasks: [{ id: 1, title: 'Draft the brief', projectId: 1, done: false }],
+    });
+
+    await page.goto('/projects/1');
+    await expect(page.getByTestId('project-detail-page')).toBeVisible();
+
+    // The task is not yet done, and offers a control to tick it off.
+    await expect(statusOf(page, 1)).not.toHaveText(DONE);
+    const toggle = page.getByTestId('task-toggle-1');
+    await expect(toggle).toBeVisible();
+
+    // Nothing has been recorded yet — reset clears the audit file, so the record below is proof the
+    // toggle (not the seeding) wrote it.
+    expect(auditLines()).toEqual([]);
+
+    await toggle.click();
+
+    // It now reads done.
+    await expect(statusOf(page, 1)).toHaveText(DONE);
+
+    // Exactly one record was kept for this toggle, carrying the task's id and its new done state.
+    expect(toggledRecordsFor(1, true)).toHaveLength(1);
+    expect(auditLines()).toHaveLength(1);
+
+    // The done state is held by the server, not just the page: it survives a fresh load, and
+    // reloading does not record the toggle a second time.
+    await page.reload();
+    await expect(statusOf(page, 1)).toHaveText(DONE);
+    expect(toggledRecordsFor(1, true)).toHaveLength(1);
+    expect(auditLines()).toHaveLength(1);
+  });
+
+  test('a task already done can be unticked, which records its new state', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
+      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
+      tasks: [{ id: 1, title: 'Draft the brief', projectId: 1, done: true }],
+    });
+
+    await page.goto('/projects/1');
+
+    // Seeded as done, so it reads done from the start — and merely loading it records nothing.
+    await expect(statusOf(page, 1)).toHaveText(DONE);
+    expect(auditLines()).toEqual([]);
+
+    // Toggling it flips it back to not-done, and keeps a record of that new state.
+    await page.getByTestId('task-toggle-1').click();
+    await expect(statusOf(page, 1)).not.toHaveText(DONE);
+
+    expect(toggledRecordsFor(1, false)).toHaveLength(1);
+    expect(auditLines()).toHaveLength(1);
+
+    // The not-done state persists across a fresh load without recording anything more.
+    await page.reload();
+    await expect(statusOf(page, 1)).not.toHaveText(DONE);
+    expect(auditLines()).toHaveLength(1);
+  });
+
+  test('toggling one task leaves the others untouched, and each toggle keeps its own record', async ({
+    page,
+  }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
+      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
+      tasks: [
+        { id: 1, title: 'Draft the brief', projectId: 1, done: false },
+        { id: 2, title: 'Build the homepage', projectId: 1, done: false },
+      ],
+    });
+
+    await page.goto('/projects/1');
+    await expect(taskRows(page)).toHaveCount(2);
+    await expect(statusOf(page, 1)).not.toHaveText(DONE);
+    await expect(statusOf(page, 2)).not.toHaveText(DONE);
+
+    // Tick the first task off.
+    await page.getByTestId('task-toggle-1').click();
+
+    // Only that task changed; its sibling is still not done.
+    await expect(statusOf(page, 1)).toHaveText(DONE);
+    await expect(statusOf(page, 2)).not.toHaveText(DONE);
+
+    // Exactly one record so far, for the task that was ticked off.
+    expect(toggledRecordsFor(1, true)).toHaveLength(1);
+    expect(auditLines()).toHaveLength(1);
+
+    // Tick the second task off too — a record is kept for it as well.
+    await page.getByTestId('task-toggle-2').click();
+    await expect(statusOf(page, 2)).toHaveText(DONE);
+
+    expect(toggledRecordsFor(1, true)).toHaveLength(1);
+    expect(toggledRecordsFor(2, true)).toHaveLength(1);
+    expect(auditLines()).toHaveLength(2);
+  });
+});
