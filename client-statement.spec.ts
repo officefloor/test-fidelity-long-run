@@ -1,0 +1,213 @@
+// Acceptance tests for the change request:
+//   "Give me a statement for a client. Put all their invoices in one place. Show the total they
+//    still owe me."
+//
+// A client now has a STATEMENT. It is reached from the client's own detail page
+// (client-detail-page, at /clients/<id>) through a control that opens it (client-statement-open) —
+// the per-client drill-in surface the client specs already use. The statement (client-statement)
+// gathers in ONE place EVERY invoice belonging to that client, drawn from ALL of the client's
+// projects (an invoice belongs to a project, a project belongs to a client — see
+// client-projects.spec.ts / all-invoices.spec.ts), in a table (client-statement-table). Each row
+// (statement-invoice-row-<id>) surfaces, for that invoice: its id (statement-invoice-id), the
+// amount billed (statement-invoice-amount), how much has been paid against it
+// (statement-invoice-paid = the sum of its payments — see invoice-payments.spec.ts), how much is
+// still left to pay on it (statement-invoice-due = amount MINUS what has been paid — the same
+// after-payments remainder as invoice-due-amount.spec.ts), and what stage it is at
+// (statement-invoice-status: DRAFT / SENT / PAID).
+//
+// The statement also shows the TOTAL the client still owes (client-outstanding-total). "Still owe"
+// carries the app's established owed meaning (dashboard-outstanding-total / invoice-owed-sent-only
+// .spec.ts): it counts only invoices that have actually been SENT and not yet paid, and it is net
+// of payments — i.e. the sum of each sent-but-unpaid invoice's REMAINING balance. A DRAFT has not
+// gone out, so it is not yet owed; a PAID invoice is already in, so it adds nothing; and another
+// client's invoices never leak into this client's statement or total.
+//
+// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed, which honours
+// clients { id, name, email }, projects { id, clientId, name }, invoices { id, projectId, amount,
+// status } and payments { id, invoiceId, amount, date }. This change introduces NO new audit
+// record, so nothing is asserted through the audit channel here.
+//
+// The money values are NEW anchors, not among the three the money-format spec pins exactly, so they
+// are matched leniently — a leading "$" and a trailing ".00" both optional — exactly as the sibling
+// invoice-due-amount / payment-amount anchors are. Status labels are matched case-insensitively
+// (/^sent$/i etc.) as the other invoice-stage specs do. Amounts, paid figures, remainders and the
+// resulting owed totals are chosen so no value is a substring of another, of a wrong total a buggy
+// implementation would produce (e.g. one that forgot to subtract payments, or counted a draft, a
+// paid invoice, or another client's invoice), so each assertion pins its own value. This test
+// SHOULD FAIL before the change: there is no client statement today.
+import { test, expect } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+// "$300.00", "300.00" or "300" all pass — the "$" and the ".00" cents are both optional. This is
+// how the other NEW money anchors are asserted; exact presentation is pinned by money-format.spec.
+function money(amount: number): RegExp {
+  return new RegExp(`^\\$?${amount}(\\.00)?$`);
+}
+
+// Reach a client's statement the way a user does: open the client from the list, then open the
+// statement from the client's detail page. The concrete URL of the statement is the feature's own
+// choice; the stable contract is client-statement-open leading to client-statement.
+async function openStatement(page: import('@playwright/test').Page, clientId: number) {
+  await page.goto('/clients');
+  await page.getByTestId(`client-open-${clientId}`).click();
+  await expect(page.getByTestId('client-detail-page')).toBeVisible();
+  await page.getByTestId('client-statement-open').click();
+  await expect(page.getByTestId('client-statement')).toBeVisible();
+}
+
+test.describe('a client statement with all their invoices and the total still owed', () => {
+  test('lists every invoice across the client\'s projects, each with amount, paid, due and stage', async ({ page }) => {
+    await resetAndSeed({
+      clients: [
+        { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
+        { id: 2, name: 'Globex', email: 'hello@globex.example' },
+      ],
+      projects: [
+        // Two projects for client 1 — the statement must gather invoices from BOTH, in one place.
+        { id: 1, clientId: 1, name: 'Website redesign' },
+        { id: 2, clientId: 1, name: 'Mobile app' },
+        // A project for a DIFFERENT client — its invoice must not appear on client 1's statement.
+        { id: 3, clientId: 2, name: 'Warehouse automation' },
+      ],
+      invoices: [
+        // Client 1, project 1: 500 billed, 200 paid -> 300 still due, still SENT (part paid).
+        { id: 1, projectId: 1, amount: 500, status: 'SENT' },
+        // Client 1, project 2 (a different project): 400 billed, 400 paid -> 0 due, PAID.
+        { id: 2, projectId: 2, amount: 400, status: 'PAID' },
+        // Client 2's invoice — must NOT appear on client 1's statement.
+        { id: 3, projectId: 3, amount: 777, status: 'SENT' },
+      ],
+      payments: [
+        { id: 1, invoiceId: 1, amount: 200, date: '2025-06-15' },
+        { id: 2, invoiceId: 2, amount: 400, date: '2025-07-01' },
+        // Belongs to client 2's invoice — must not touch client 1's figures.
+        { id: 3, invoiceId: 3, amount: 777, date: '2025-02-02' },
+      ],
+    });
+
+    await openStatement(page, 1);
+    await expect(page.getByTestId('client-statement-table')).toBeVisible();
+
+    // Invoice 1 (project 1): billed 500, 200 paid, 300 still due, stage SENT.
+    const row1 = page.getByTestId('statement-invoice-row-1');
+    await expect(row1).toBeVisible();
+    await expect(row1.getByTestId('statement-invoice-id')).toContainText('1');
+    await expect(row1.getByTestId('statement-invoice-amount')).toHaveText(money(500));
+    await expect(row1.getByTestId('statement-invoice-paid')).toHaveText(money(200));
+    await expect(row1.getByTestId('statement-invoice-due')).toHaveText(money(300));
+    await expect(row1.getByTestId('statement-invoice-status')).toHaveText(/^sent$/i);
+
+    // Invoice 2 (a DIFFERENT project of the same client): billed 400, fully paid, 0 due, stage PAID.
+    // Its presence is what makes the statement span every project, not just one.
+    const row2 = page.getByTestId('statement-invoice-row-2');
+    await expect(row2).toBeVisible();
+    await expect(row2.getByTestId('statement-invoice-id')).toContainText('2');
+    await expect(row2.getByTestId('statement-invoice-amount')).toHaveText(money(400));
+    await expect(row2.getByTestId('statement-invoice-paid')).toHaveText(money(400));
+    await expect(row2.getByTestId('statement-invoice-due')).toHaveText(money(0));
+    await expect(row2.getByTestId('statement-invoice-status')).toHaveText(/^paid$/i);
+
+    // Client 2's invoice never leaks in: no third row, and exactly the client's own two rows.
+    await expect(page.getByTestId('statement-invoice-row-3')).toHaveCount(0);
+    await expect(page.getByTestId('statement-invoice-amount')).toHaveCount(2);
+
+    // Still owed = only the sent-but-unpaid remainder: invoice 1's 300 (invoice 2 is paid -> 0).
+    const total = page.getByTestId('client-outstanding-total');
+    await expect(total).toBeVisible();
+    await expect(total).toContainText('300');
+    // Not 500 (would mean invoice 1's 200 payment was not subtracted).
+    await expect(total).not.toContainText('500');
+    // Not 900 (would mean the full billed amounts of both were summed, ignoring payments).
+    await expect(total).not.toContainText('900');
+    // Not the other client's 777.
+    await expect(total).not.toContainText('777');
+  });
+
+  test('the total still owed is the sum of what remains on sent invoices, net of payments', async ({ page }) => {
+    await resetAndSeed({
+      clients: [
+        { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
+        { id: 2, name: 'Globex', email: 'hello@globex.example' },
+      ],
+      projects: [
+        { id: 1, clientId: 1, name: 'Website redesign' },
+        { id: 2, clientId: 1, name: 'Mobile app' },
+        { id: 3, clientId: 2, name: 'Warehouse automation' },
+      ],
+      invoices: [
+        // Two SENT invoices, each PART paid, on two different projects of client 1:
+        //   500 - 200 = 300 still owed, and 400 - 150 = 250 still owed.
+        { id: 1, projectId: 1, amount: 500, status: 'SENT' },
+        { id: 2, projectId: 2, amount: 400, status: 'SENT' },
+        // A PAID invoice: already in, so it adds nothing to what is still owed.
+        { id: 3, projectId: 1, amount: 90, status: 'PAID' },
+        // Client 2's SENT invoice — must not count toward client 1's owed total.
+        { id: 4, projectId: 3, amount: 777, status: 'SENT' },
+      ],
+      payments: [
+        { id: 1, invoiceId: 1, amount: 200, date: '2025-06-15' },
+        { id: 2, invoiceId: 2, amount: 150, date: '2025-07-01' },
+        { id: 3, invoiceId: 3, amount: 90, date: '2025-08-01' },
+        { id: 4, invoiceId: 4, amount: 777, date: '2025-02-02' },
+      ],
+    });
+
+    await openStatement(page, 1);
+
+    // Per-invoice remainders are shown so the total is the sum of this column: 300 + 250 + 0 = 550.
+    await expect(page.getByTestId('statement-invoice-row-1').getByTestId('statement-invoice-due')).toHaveText(money(300));
+    await expect(page.getByTestId('statement-invoice-row-2').getByTestId('statement-invoice-due')).toHaveText(money(250));
+    await expect(page.getByTestId('statement-invoice-row-3').getByTestId('statement-invoice-due')).toHaveText(money(0));
+    // Client 2's invoice is not even on the statement.
+    await expect(page.getByTestId('statement-invoice-row-4')).toHaveCount(0);
+
+    const total = page.getByTestId('client-outstanding-total');
+    await expect(total).toBeVisible();
+    await expect(total).toContainText('550');
+    // Not 900 (500 + 400, the full sent amounts with payments ignored).
+    await expect(total).not.toContainText('900');
+    // Not 990 (500 + 400 + 90, also counting the already-paid invoice at its full amount).
+    await expect(total).not.toContainText('990');
+    // Not 640 (550 + 90, counting the paid invoice on top of the correct remainder).
+    await expect(total).not.toContainText('640');
+    // Not the other client's 777.
+    await expect(total).not.toContainText('777');
+  });
+
+  test('a draft invoice is listed on the statement but is not counted in the total still owed', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
+      invoices: [
+        // Sent-but-unpaid: 500 - 200 = 300 still owed.
+        { id: 1, projectId: 1, amount: 500, status: 'SENT' },
+        // Still a DRAFT: it belongs on the statement (it is one of the client's invoices), but it
+        // has not gone out, so it is NOT yet owed and must not swell the owed total.
+        { id: 2, projectId: 1, amount: 600, status: 'DRAFT' },
+      ],
+      payments: [{ id: 1, invoiceId: 1, amount: 200, date: '2025-06-15' }],
+    });
+
+    await openStatement(page, 1);
+
+    // Both invoices appear in the one place, each showing its stage.
+    const sent = page.getByTestId('statement-invoice-row-1');
+    await expect(sent).toBeVisible();
+    await expect(sent.getByTestId('statement-invoice-status')).toHaveText(/^sent$/i);
+
+    const draft = page.getByTestId('statement-invoice-row-2');
+    await expect(draft).toBeVisible();
+    await expect(draft.getByTestId('statement-invoice-amount')).toHaveText(money(600));
+    await expect(draft.getByTestId('statement-invoice-status')).toHaveText(/^draft$/i);
+
+    // Owed = only the sent invoice's remainder (300). The draft (600) has not been sent, so it is
+    // not owed.
+    const total = page.getByTestId('client-outstanding-total');
+    await expect(total).toBeVisible();
+    await expect(total).toContainText('300');
+    // Not 600 (the draft on its own), nor 900 (300 + the draft), nor 800 (500 + draft... ) — any
+    // value that counted the un-sent draft as money owed.
+    await expect(total).not.toContainText('600');
+    await expect(total).not.toContainText('900');
+  });
+});
