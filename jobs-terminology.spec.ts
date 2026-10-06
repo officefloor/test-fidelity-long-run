@@ -1,0 +1,161 @@
+// Acceptance tests for the change request:
+//   "I call these jobs, not projects. Please use that word everywhere."
+//
+// The concept the app calls a "project" is renamed in the UI to a "job": every user-visible place
+// that reads "Project"/"Projects"/"project"/"projects" must now read "Job"/"Jobs"/"job"/"jobs".
+// This is a wording change only — the data-testid anchors are an immutable public API and keep
+// their existing `project-*` / `nav-projects` names (they are not user-visible), and the seeded data
+// (client names, job names) is unchanged. So the existing specs, which assert through those testids
+// and through seeded values, keep passing unchanged; what changes is the static labels, headings,
+// button text, column headers, empty states and placeholders the app renders around them.
+//
+// Asserts ONLY through the UI (data-testid). Each assertion scopes to an anchored element and checks
+// that it now carries the new word and no longer carries the old one. The old word is matched with a
+// case-insensitive regex (/project/i) so BOTH "Project" (headings/labels) and "project" (button /
+// empty-state copy) are caught; the new word likewise (/job/i, or /jobs/i where the plural is used).
+// Seeded names are chosen so none contains the string "project" or "job" — a negative assertion
+// cannot be defeated, nor a positive one satisfied, by accident through the data.
+//
+// These SHOULD FAIL before the change: the app says "project(s)" in all these places today.
+import { test, expect } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+const CLIENTS = [
+  { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
+  { id: 2, name: 'Globex', email: 'hello@globex.example' },
+];
+const JOBS = [
+  { id: 1, clientId: 1, name: 'Website redesign' },
+  { id: 2, clientId: 2, name: 'Warehouse automation' },
+];
+
+test.describe('jobs terminology (renamed from projects)', () => {
+  test('the nav link reads "Jobs"', async ({ page }) => {
+    await resetAndSeed({ clients: [], projects: [] });
+
+    await page.goto('/');
+    await expect(page.getByTestId('app-root')).toBeVisible();
+
+    // The nav entry keeps its stable testid (nav-projects) but its visible label is now "Jobs".
+    await expect(page.getByTestId('nav-projects')).toHaveText('Jobs');
+  });
+
+  test('the jobs list page heading and add button say "job(s)", not "project(s)"', async ({ page }) => {
+    await resetAndSeed({ clients: CLIENTS, projects: JOBS });
+
+    await page.goto('/projects');
+
+    const listPage = page.getByTestId('projects-page');
+    await expect(listPage).toBeVisible();
+    // The heading (and everything else on the page) now uses the new word; nothing reads "project".
+    await expect(listPage).toContainText(/jobs/i);
+    await expect(listPage).not.toContainText(/project/i);
+
+    // "Add project" -> "Add job".
+    const submit = page.getByTestId('project-form-submit');
+    await expect(submit).toContainText(/job/i);
+    await expect(submit).not.toContainText(/project/i);
+  });
+
+  test('the empty jobs list says "No jobs"', async ({ page }) => {
+    // A client exists so the list is empty of JOBS specifically, not of all data.
+    await resetAndSeed({ clients: [CLIENTS[0]], projects: [] });
+
+    await page.goto('/projects');
+
+    const empty = page.getByTestId('projects-empty');
+    await expect(empty).toBeVisible();
+    await expect(empty).toContainText(/jobs/i);
+    await expect(empty).not.toContainText(/project/i);
+  });
+
+  test('the job detail page heading says "Job"', async ({ page }) => {
+    await resetAndSeed({ clients: [CLIENTS[0]], projects: [JOBS[0]] });
+
+    await page.goto('/projects');
+    await page.getByTestId('project-open-1').click();
+
+    const detail = page.getByTestId('project-detail-page');
+    await expect(detail).toBeVisible();
+    await expect(detail).toContainText(/job/i);
+    await expect(detail).not.toContainText(/project/i);
+  });
+
+  test('a client page shows its "Jobs" count label and "Show all jobs" toggle', async ({ page }) => {
+    await resetAndSeed({ clients: CLIENTS, projects: [JOBS[0]] });
+
+    await page.goto('/clients');
+    await page.getByTestId('client-open-1').click();
+    await expect(page.getByTestId('client-detail-page')).toBeVisible();
+
+    // The counts region's "Projects" label becomes "Jobs" (the count value is a number, unaffected).
+    const counts = page.getByTestId('client-counts');
+    await expect(counts).toContainText(/jobs/i);
+    await expect(counts).not.toContainText(/project/i);
+
+    // "Show all projects" -> "Show all jobs".
+    const showAll = page.getByTestId('client-projects-show-all');
+    await expect(showAll).toContainText(/jobs/i);
+    await expect(showAll).not.toContainText(/project/i);
+  });
+
+  test('a client with no jobs shows a "No jobs" empty state', async ({ page }) => {
+    // Client 1 owns nothing; the job belongs to client 2.
+    await resetAndSeed({ clients: CLIENTS, projects: [JOBS[1]] });
+
+    await page.goto('/clients');
+    await page.getByTestId('client-open-1').click();
+    await expect(page.getByTestId('client-detail-page')).toBeVisible();
+
+    const empty = page.getByTestId('client-projects-empty');
+    await expect(empty).toBeVisible();
+    await expect(empty).toContainText(/jobs/i);
+    await expect(empty).not.toContainText(/project/i);
+  });
+
+  test('the dashboard shows a "Jobs" figure, not "Projects"', async ({ page }) => {
+    await resetAndSeed({ clients: CLIENTS, projects: JOBS, invoices: [] });
+
+    await page.goto('/');
+    await expect(page.getByTestId('app-root')).toBeVisible();
+    await page.getByTestId('nav-dashboard').click();
+
+    const dashboard = page.getByTestId('dashboard');
+    await expect(dashboard).toBeVisible();
+    await expect(dashboard).toContainText(/jobs/i);
+    await expect(dashboard).not.toContainText(/project/i);
+  });
+
+  test('global search uses "jobs" in its prompt and the results column header', async ({ page }) => {
+    await resetAndSeed({ clients: CLIENTS, projects: JOBS });
+
+    await page.goto('/');
+
+    // Placeholder "Search clients and projects" -> "... and jobs". (A placeholder is an attribute,
+    // not text content, so it is asserted via the attribute.)
+    const search = page.getByTestId('global-search');
+    await expect(search).toHaveAttribute('placeholder', /jobs/i);
+    await expect(search).not.toHaveAttribute('placeholder', /projects/i);
+
+    // The results table's "Project" column header -> "Job".
+    const results = page.getByTestId('search-projects');
+    await expect(results).toContainText(/job/i);
+    await expect(results).not.toContainText(/project/i);
+  });
+
+  test('the all-invoices table column header says "Job"', async ({ page }) => {
+    await resetAndSeed({
+      clients: CLIENTS,
+      projects: JOBS,
+      invoices: [{ id: 1, projectId: 1, amount: 120, status: 'DRAFT' }],
+    });
+
+    await page.goto('/invoices');
+
+    const table = page.getByTestId('all-invoices-table');
+    await expect(table).toBeVisible();
+    // The "Project" column header -> "Job"; the row value is the job's own name (unchanged).
+    await expect(table).toContainText(/job/i);
+    await expect(table).not.toContainText(/project/i);
+  });
+});
