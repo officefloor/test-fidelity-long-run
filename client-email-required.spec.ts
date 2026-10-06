@@ -1,0 +1,120 @@
+// Acceptance test for the change request:
+//   "Every client needs an email. Do not let me save one without a proper email address."
+//
+// Saving a client is only allowed when a PROPER email address is supplied. A missing email, or one
+// that is not a valid address, must be rejected: the form surfaces `client-form-email-error` and no
+// client is created. A valid email still saves (covered by clients.spec.ts and reconfirmed here once
+// a rejected attempt is corrected).
+//
+// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed; the only seedable
+// domain is `clients`, honouring { id, name, email }.
+import { test, expect } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+const rows = (page: import('@playwright/test').Page) =>
+  page.locator('[data-testid^="client-row-"]');
+
+test.describe('A client cannot be saved without a proper email', () => {
+  test('submitting with an empty email is rejected and saves nothing', async ({ page }) => {
+    await resetAndSeed({ clients: [] });
+
+    await page.goto('/clients');
+    await expect(page.getByTestId('clients-empty')).toBeVisible();
+
+    // A name is given but the email is left blank.
+    await page.getByTestId('client-form-name').fill('Wayne Enterprises');
+    await page.getByTestId('client-form-email').fill('');
+    await page.getByTestId('client-form-submit').click();
+
+    // The email error is surfaced...
+    await expect(page.getByTestId('client-form-email-error')).toBeVisible();
+
+    // ...and nothing was saved: the list stays empty, even after a fresh load from the server.
+    await expect(rows(page)).toHaveCount(0);
+    await expect(page.getByTestId('clients-empty')).toBeVisible();
+
+    await page.reload();
+    await expect(rows(page)).toHaveCount(0);
+    await expect(page.getByTestId('clients-empty')).toBeVisible();
+  });
+
+  test('submitting with a malformed email is rejected and saves nothing', async ({ page }) => {
+    await resetAndSeed({ clients: [] });
+
+    await page.goto('/clients');
+    await expect(page.getByTestId('clients-empty')).toBeVisible();
+
+    // A plainly invalid address (no domain, no @) must not be accepted as an email.
+    await page.getByTestId('client-form-name').fill('Globex');
+    await page.getByTestId('client-form-email').fill('not-an-email');
+    await page.getByTestId('client-form-submit').click();
+
+    await expect(page.getByTestId('client-form-email-error')).toBeVisible();
+
+    await expect(rows(page)).toHaveCount(0);
+
+    // The reject is about the email, not the whole form: nothing is persisted.
+    await page.reload();
+    await expect(rows(page)).toHaveCount(0);
+    await expect(page.getByTestId('clients-empty')).toBeVisible();
+  });
+
+  test('a rejected submit does not disturb the clients already in the list', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
+    });
+
+    await page.goto('/clients');
+    await expect(rows(page)).toHaveCount(1);
+
+    // Attempt to add a client with a bad email.
+    await page.getByTestId('client-form-name').fill('Initech');
+    await page.getByTestId('client-form-email').fill('initech@');
+    await page.getByTestId('client-form-submit').click();
+
+    await expect(page.getByTestId('client-form-email-error')).toBeVisible();
+
+    // The existing client is untouched and no new row appeared.
+    await expect(rows(page)).toHaveCount(1);
+    await expect(page.getByTestId('client-row-1').getByTestId('client-name')).toHaveText('Acme Corp');
+
+    await page.reload();
+    await expect(rows(page)).toHaveCount(1);
+    await expect(page.getByTestId('client-row-1').getByTestId('client-email')).toHaveText(
+      'hello@acme.test',
+    );
+  });
+
+  test('correcting the email to a proper address then saves the client', async ({ page }) => {
+    await resetAndSeed({ clients: [] });
+
+    await page.goto('/clients');
+
+    // First a rejected attempt with a bad email.
+    await page.getByTestId('client-form-name').fill('Wayne Enterprises');
+    await page.getByTestId('client-form-email').fill('bruce');
+    await page.getByTestId('client-form-submit').click();
+    await expect(page.getByTestId('client-form-email-error')).toBeVisible();
+    await expect(rows(page)).toHaveCount(0);
+
+    // Correct the email to a proper address and submit again.
+    await page.getByTestId('client-form-email').fill('bruce@wayne.test');
+    await page.getByTestId('client-form-submit').click();
+
+    // Now it saves: the client appears and the email error is gone.
+    const newRow = page
+      .locator('[data-testid^="client-row-"]')
+      .filter({ has: page.getByTestId('client-name').getByText('Wayne Enterprises', { exact: true }) });
+    await expect(newRow).toHaveCount(1);
+    await expect(newRow.getByTestId('client-email')).toHaveText('bruce@wayne.test');
+    await expect(page.getByTestId('client-form-email-error')).toHaveCount(0);
+
+    // And it survives a fresh load from the server.
+    await page.reload();
+    await expect(
+      page
+        .locator('[data-testid^="client-row-"]')
+        .filter({ has: page.getByTestId('client-name').getByText('Wayne Enterprises', { exact: true }) }),
+    ).toHaveCount(1);
+  });
+});
