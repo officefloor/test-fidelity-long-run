@@ -1,0 +1,209 @@
+// Acceptance tests for the change request:
+//   "Let me add sales tax on top. Work it out after the discount. The amount shown for each invoice
+//    should include the tax."
+//
+// An invoice can already carry a PERCENTAGE discount (seed field `discountPct`) and its detail page
+// already breaks the money into subtotal / discount / final total (invoice-discount.spec.ts,
+// invoice-summary). This change adds SALES TAX ON TOP, worked out AFTER the discount:
+//   - subtotal            -> invoice-subtotal  — the sum of the line items, before anything.
+//   - discount            -> invoice-discount  — subtotal * discountPct / 100, taken OFF.
+//   - (discounted total)                       — subtotal MINUS the discount; the base the tax is on.
+//   - tax                 -> invoice-tax        — the DISCOUNTED total * taxPct / 100, added on top
+//                                                 (NEW anchor this change introduces).
+//   - final amount        -> invoice-amount     — the discounted total PLUS the tax; i.e. the amount
+//                                                 shown for the invoice now INCLUDES the tax.
+// The percentage lives on the invoice (seed field `taxPct`); every money figure is DERIVED on the
+// server, never typed, so the breakdown always adds up. Crucially the tax is worked out on the
+// DISCOUNTED total, not the raw subtotal — "after the discount".
+//
+// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed, which honours
+// invoices with `discountPct`, the NEW `taxPct`, and a `lineItems` array whose elements carry
+// { id, description, qty, unitPrice } (alongside clients / projects). The subtotal is worked out
+// from the lines (not seeded), so a stored figure cannot pass without the feature. This change adds
+// NO new audit record, so nothing is asserted through the audit channel.
+//
+// invoice-tax is a NEW anchor — like the sibling invoice-discount it is matched leniently (a leading
+// "$" and a trailing ".00" both optional, and any "%" the cell may also show is ignored). The
+// established invoice-amount anchor keeps its EXACT money format ("$440.00", per money-format.spec.ts).
+// Values are chosen so the CORRECT (tax-after-discount) figure is never a substring of the WRONG
+// (tax-on-the-raw-subtotal, or discount-ignored) one a buggy implementation would produce, and every
+// figure stays below 1000 so no thousands separator is involved. This test SHOULD FAIL before the
+// change: there is no invoice-tax today and the amount shown ignores any tax.
+import { test, expect } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+// A NEW money anchor (invoice-tax / the summary cells): a leading "$" and trailing ".00" are both
+// optional, and the cell may also carry the percent — so match the money value leniently, as a
+// substring, exactly the way invoice-discount.spec.ts matches its own new anchors.
+function hasMoney(amount: number): RegExp {
+  return new RegExp(`\\$?${amount}(\\.00)?`);
+}
+
+test.describe('sales tax added on top of an invoice, worked out after the discount', () => {
+  test('adds the tax on the DISCOUNTED total, and the amount shown includes it', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
+      invoices: [
+        {
+          id: 1,
+          projectId: 1,
+          status: 'DRAFT',
+          // 20% off, then 10% sales tax ON TOP of the discounted total.
+          discountPct: 20,
+          taxPct: 10,
+          lineItems: [
+            { id: 1, description: 'Design work', qty: 2, unitPrice: 150 }, // 2 * 150 = 300
+            { id: 2, description: 'Hosting setup', qty: 2, unitPrice: 100 }, // 2 * 100 = 200
+          ],
+        },
+      ],
+    });
+
+    await page.goto('/invoices/1');
+    const detail = page.getByTestId('invoice-detail-page');
+    await expect(detail).toBeVisible();
+
+    const summary = page.getByTestId('invoice-summary');
+    await expect(summary).toBeVisible();
+
+    // Subtotal = sum of the lines: 300 + 200 = 500.
+    await expect(summary.getByTestId('invoice-subtotal')).toContainText(hasMoney(500));
+    // Discount = 20% of 500 = 100 off; discounted total = 500 - 100 = 400.
+    await expect(summary.getByTestId('invoice-discount')).toContainText(hasMoney(100));
+    // Tax = 10% of the DISCOUNTED 400 = 40 (NOT 10% of the raw 500 = 50).
+    const tax = summary.getByTestId('invoice-tax');
+    await expect(tax).toBeVisible();
+    await expect(tax).toContainText(hasMoney(40));
+    // Pins "after the discount": the tax must not be the 50 a before-discount calculation gives
+    // (10% of the raw 500). Matched leniently so a labelled cell still catches the wrong figure.
+    await expect(tax).not.toContainText(hasMoney(50));
+
+    // Final total = discounted total + tax = 400 + 40 = 440.
+    await expect(summary.getByTestId('invoice-total')).toContainText(hasMoney(440));
+
+    // The amount shown for the invoice now INCLUDES the tax: 440. Not the pre-tax discounted 400,
+    // and not the undiscounted subtotal 500.
+    const amount = detail.getByTestId('invoice-amount');
+    await expect(amount).toHaveText('$440.00');
+    await expect(amount).not.toHaveText('$400.00');
+    await expect(amount).not.toHaveText('$500.00');
+  });
+
+  test('a different tax rate tracks the discounted total, not a fixed figure', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
+      invoices: [
+        {
+          id: 1,
+          projectId: 1,
+          status: 'DRAFT',
+          // 25% off, then 5% tax on the discounted total.
+          discountPct: 25,
+          taxPct: 5,
+          lineItems: [
+            { id: 1, description: 'Build', qty: 2, unitPrice: 400 }, // 2 * 400 = 800
+          ],
+        },
+      ],
+    });
+
+    await page.goto('/invoices/1');
+    const detail = page.getByTestId('invoice-detail-page');
+    await expect(detail).toBeVisible();
+
+    const summary = page.getByTestId('invoice-summary');
+    await expect(summary).toBeVisible();
+
+    // Subtotal 800; 25% off = 200; discounted total = 600.
+    await expect(summary.getByTestId('invoice-subtotal')).toContainText(hasMoney(800));
+    await expect(summary.getByTestId('invoice-discount')).toContainText(hasMoney(200));
+    // Tax = 5% of the discounted 600 = 30 (NOT 5% of the raw 800 = 40).
+    const tax = summary.getByTestId('invoice-tax');
+    await expect(tax).toContainText(hasMoney(30));
+    await expect(tax).not.toContainText(hasMoney(40));
+    // Final total = 600 + 30 = 630.
+    await expect(summary.getByTestId('invoice-total')).toContainText(hasMoney(630));
+
+    // Amount shown includes the tax: 630.
+    await expect(detail.getByTestId('invoice-amount')).toHaveText('$630.00');
+  });
+
+  test('with no discount, the tax is worked on the full subtotal and the amount includes it', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
+      invoices: [
+        {
+          id: 1,
+          projectId: 1,
+          status: 'DRAFT',
+          // No discountPct => 0% off; the tax falls on the whole subtotal.
+          taxPct: 10,
+          lineItems: [
+            { id: 1, description: 'Consulting', qty: 3, unitPrice: 100 }, // 3 * 100 = 300
+          ],
+        },
+      ],
+    });
+
+    await page.goto('/invoices/1');
+    const detail = page.getByTestId('invoice-detail-page');
+    await expect(detail).toBeVisible();
+
+    const summary = page.getByTestId('invoice-summary');
+    await expect(summary).toBeVisible();
+
+    // Subtotal 300, nothing discounted, so the tax base is the full 300.
+    await expect(summary.getByTestId('invoice-subtotal')).toContainText(hasMoney(300));
+    await expect(summary.getByTestId('invoice-discount')).toContainText(/\$?0(\.00)?|0%/);
+    // Tax = 10% of 300 = 30.
+    await expect(summary.getByTestId('invoice-tax')).toContainText(hasMoney(30));
+    // Final total = 300 + 30 = 330.
+    await expect(summary.getByTestId('invoice-total')).toContainText(hasMoney(330));
+
+    // Amount shown includes the tax: 330, not the pre-tax 300.
+    const amount = detail.getByTestId('invoice-amount');
+    await expect(amount).toHaveText('$330.00');
+    await expect(amount).not.toHaveText('$300.00');
+  });
+
+  test('with no tax, nothing is added on top and the amount is the discounted total', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
+      invoices: [
+        {
+          id: 1,
+          projectId: 1,
+          status: 'DRAFT',
+          // 25% discount but NO taxPct seeded => 0% tax, the state every pre-existing invoice is in.
+          discountPct: 25,
+          lineItems: [
+            { id: 1, description: 'Retainer', qty: 4, unitPrice: 100 }, // 4 * 100 = 400
+          ],
+        },
+      ],
+    });
+
+    await page.goto('/invoices/1');
+    const detail = page.getByTestId('invoice-detail-page');
+    await expect(detail).toBeVisible();
+
+    const summary = page.getByTestId('invoice-summary');
+    await expect(summary).toBeVisible();
+
+    // Subtotal 400; 25% off = 100; discounted total 300.
+    await expect(summary.getByTestId('invoice-subtotal')).toContainText(hasMoney(400));
+    await expect(summary.getByTestId('invoice-discount')).toContainText(hasMoney(100));
+    // No tax => nothing added on top. The invoice-tax anchor still exists (this change introduced it)
+    // and shows zero.
+    await expect(summary.getByTestId('invoice-tax')).toContainText(/\$?0(\.00)?|0%/);
+    // Final total is the discounted total unchanged: 300.
+    await expect(summary.getByTestId('invoice-total')).toContainText(hasMoney(300));
+
+    // With no tax to add, the amount shown is just the discounted total: 300.
+    await expect(detail.getByTestId('invoice-amount')).toHaveText('$300.00');
+  });
+});
