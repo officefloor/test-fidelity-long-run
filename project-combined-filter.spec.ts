@@ -1,0 +1,183 @@
+// Acceptance tests for the change request:
+//   "Let me filter by two things at once. For example active projects that have a certain label."
+//
+// The projects page (projects-page, at /projects) already carries two independent narrowing
+// controls over the SAME list: project-status-filter (lifecycle status — active / on hold /
+// finished) and project-tag-filter (a label). Each on its own keeps only the projects matching that
+// one dimension. This change lets the two apply AT ONCE: pick a status AND a label and only the
+// projects that match BOTH remain — the classic "active projects that have a certain label". It is a
+// pure composition on top of the existing controls, so it adds no new anchors; it reuses
+// project-status-filter, project-tag-filter and project-row-<id>.
+//
+// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed; the two filters are
+// driven through their existing controls. Seed honours clients: { id, name, email },
+// projects: { id, clientId, name, status }, tags: { id, name } and the join
+// projectTags: { projectId, tagId }. Statuses are seeded with the canonical codes the schema stores
+// ('ACTIVE' / 'ON_HOLD', per the project form's option values), because a FILTER compares the stored
+// status exactly.
+//
+// THE FIXTURE is built so that neither filter alone produces the combined answer — the two sets
+// genuinely overlap rather than nest, so the test cannot be faked by applying only one filter:
+//   status ACTIVE   -> { 1, 2, 5 }
+//   label  Frontend -> { 1, 3, 5 }
+//   BOTH             -> { 1, 5 }   (strictly smaller than either single set)
+// Project 2 (ACTIVE + Backend) survives a status-only filter but must drop once the label is also
+// applied; project 3 (ON_HOLD + Frontend) survives a label-only filter but must drop once the status
+// is also applied. Keeping TWO projects (1 and 5) in the combined answer proves the result is a SET,
+// not a single hard-coded row. This SHOULD FAIL before the change: today the two controls do not
+// compose into a single two-dimensional narrowing.
+import { test, expect, type Page } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+const FIXTURE = {
+  clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+  tags: [
+    { id: 1, name: 'Frontend' },
+    { id: 2, name: 'Backend' },
+  ],
+  projects: [
+    { id: 1, clientId: 1, name: 'Website redesign', status: 'ACTIVE' }, // Frontend  -> both
+    { id: 2, clientId: 1, name: 'Billing portal', status: 'ACTIVE' }, // Backend   -> active only
+    { id: 3, clientId: 1, name: 'Mobile app', status: 'ON_HOLD' }, // Frontend  -> frontend only
+    { id: 4, clientId: 1, name: 'Warehouse automation', status: 'ON_HOLD' }, // Backend   -> neither
+    { id: 5, clientId: 1, name: 'Marketing site', status: 'ACTIVE' }, // Frontend  -> both
+  ],
+  projectTags: [
+    { projectId: 1, tagId: 1 }, // Frontend
+    { projectId: 2, tagId: 2 }, // Backend
+    { projectId: 3, tagId: 1 }, // Frontend
+    { projectId: 4, tagId: 2 }, // Backend
+    { projectId: 5, tagId: 1 }, // Frontend
+  ],
+};
+
+const ACTIVE = /active/i;
+const HOLD = /hold/i;
+const FINISHED = /finish|complete|done/i;
+const FRONTEND = /^frontend$/i;
+
+// Select the <option> in `testid` whose visible text OR value matches `want` (case-insensitive), by
+// its own value — agnostic to whether options are valued by name/id/code or how they are cased.
+async function pick(page: Page, testid: string, want: RegExp): Promise<void> {
+  const value = await page
+    .getByTestId(testid)
+    .locator('option')
+    .evaluateAll((opts, src) => {
+      const re = new RegExp(src as string, 'i');
+      const match = (opts as HTMLOptionElement[]).find(
+        (o) => re.test((o.textContent ?? '').trim()) || re.test(o.value),
+      );
+      return match ? match.value : null;
+    }, want.source);
+  if (value === null) {
+    throw new Error(`${testid} has no option matching ${want}`);
+  }
+  await page.getByTestId(testid).selectOption(value);
+}
+
+// Clear a filter back to "show everything": an empty value by convention, or an "all" label.
+async function clear(page: Page, testid: string): Promise<void> {
+  const value = await page
+    .getByTestId(testid)
+    .locator('option')
+    .evaluateAll((opts) => {
+      const match = (opts as HTMLOptionElement[]).find(
+        (o) => o.value === '' || /all/i.test((o.textContent ?? '').trim()),
+      );
+      return match ? match.value : null;
+    });
+  if (value === null) {
+    throw new Error(`${testid} has no "all" option`);
+  }
+  await page.getByTestId(testid).selectOption(value);
+}
+
+// The ids of the project rows currently shown, sorted ascending, read purely from the DOM.
+async function shownRowIds(page: Page): Promise<number[]> {
+  const ids = await page
+    .locator('[data-testid^="project-row-"]')
+    .evaluateAll((rows) =>
+      rows.map((r) => Number((r.getAttribute('data-testid') ?? '').replace('project-row-', ''))),
+    );
+  return ids.sort((a, b) => a - b);
+}
+
+test.describe('filter projects by status and label at once', () => {
+  test.beforeEach(async () => {
+    await resetAndSeed(FIXTURE);
+  });
+
+  test('both filter controls sit on the projects page and all projects show by default', async ({ page }) => {
+    await page.goto('/projects');
+
+    await expect(page.getByTestId('projects-page')).toBeVisible();
+    await expect(page.getByTestId('project-status-filter')).toBeVisible();
+    await expect(page.getByTestId('project-tag-filter')).toBeVisible();
+
+    // Nothing picked: every project is listed, across both dimensions.
+    expect(await shownRowIds(page)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  test('active projects that have a certain label keeps only the projects matching BOTH', async ({ page }) => {
+    await page.goto('/projects');
+    await expect(page.getByTestId('project-row-1')).toBeVisible();
+
+    // "active projects that have a certain label": narrow by status AND by label together.
+    await pick(page, 'project-status-filter', ACTIVE);
+    await pick(page, 'project-tag-filter', FRONTEND);
+
+    // Only 1 and 5 are BOTH active AND Frontend. Project 2 (active, Backend) and project 3
+    // (Frontend, on hold) each satisfy ONE filter but not the other, so both must be gone — this is
+    // what single-dimension filtering could never produce.
+    expect(await shownRowIds(page)).toEqual([1, 5]);
+    await expect(page.getByTestId('project-row-2')).toHaveCount(0);
+    await expect(page.getByTestId('project-row-3')).toHaveCount(0);
+    await expect(page.getByTestId('project-row-4')).toHaveCount(0);
+
+    // Every surviving row genuinely reads as active (the status dimension really applied), and the
+    // names are intact.
+    for (const id of [1, 5]) {
+      const status = page.getByTestId(`project-row-${id}`).getByTestId('project-status');
+      await expect(status).toContainText(ACTIVE);
+      await expect(status).not.toContainText(HOLD);
+      await expect(status).not.toContainText(FINISHED);
+    }
+    await expect(page.getByTestId('project-row-1').getByTestId('project-name')).toHaveText('Website redesign');
+    await expect(page.getByTestId('project-row-5').getByTestId('project-name')).toHaveText('Marketing site');
+  });
+
+  test('the two filters compose regardless of the order they are applied', async ({ page }) => {
+    await page.goto('/projects');
+    await expect(page.getByTestId('project-row-1')).toBeVisible();
+
+    // Label first, then status — the combined answer is identical to status-then-label.
+    await pick(page, 'project-tag-filter', FRONTEND);
+    await pick(page, 'project-status-filter', ACTIVE);
+    expect(await shownRowIds(page)).toEqual([1, 5]);
+  });
+
+  test('clearing one filter widens to the other dimension, proving each stays independently active', async ({ page }) => {
+    await page.goto('/projects');
+    await expect(page.getByTestId('project-row-1')).toBeVisible();
+
+    // Both applied: the strict intersection.
+    await pick(page, 'project-status-filter', ACTIVE);
+    await pick(page, 'project-tag-filter', FRONTEND);
+    expect(await shownRowIds(page)).toEqual([1, 5]);
+
+    // Drop the status filter: the label filter is STILL on, so we widen to every Frontend project
+    // (1, 3, 5) — project 3 returns because it is Frontend though on hold.
+    await clear(page, 'project-status-filter');
+    expect(await shownRowIds(page)).toEqual([1, 3, 5]);
+
+    // Re-apply status, then drop the label filter instead: the status filter is STILL on, so we
+    // widen to every active project (1, 2, 5) — project 2 returns because it is active though Backend.
+    await pick(page, 'project-status-filter', ACTIVE);
+    await clear(page, 'project-tag-filter');
+    expect(await shownRowIds(page)).toEqual([1, 2, 5]);
+
+    // Clear the last filter too: the whole list is back.
+    await clear(page, 'project-status-filter');
+    expect(await shownRowIds(page)).toEqual([1, 2, 3, 4, 5]);
+  });
+});
