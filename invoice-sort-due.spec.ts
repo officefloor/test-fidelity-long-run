@@ -1,0 +1,112 @@
+// Acceptance test for the change request:
+//   "Let me sort a project's invoices by their due date."
+//
+// The project detail page gains a control (data-testid="invoice-sort-due") that re-orders the
+// project's invoice list by each invoice's DUE date. Activating it takes the list out of its default
+// order (the server lists a project's invoices oldest-id first) and into due-date order. The request
+// names no direction, so a list is "sorted by due date" when the rows run monotonically by due date
+// — either earliest-due first (ascending) or latest-due first (descending). What the test pins down
+// is that the ordering key is the DUE DATE: not the id order, and not the amount order (both seeded
+// to a DIFFERENT permutation), so only a genuine due-date sort can produce the observed order.
+//
+// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed (the app's /__test__
+// endpoint): `clients` honours { id, name, email }, `projects` honours { id, name, clientId } and
+// `invoices` honours { id, amount, projectId, status, issuedDate, dueDate }.
+import { test, expect, type Page } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+// Four invoices on one project. The three orderings are deliberately all DIFFERENT permutations so
+// the resulting row order tells us unambiguously which key the list was sorted by:
+//   - by id (the server default)      : [1, 2, 3, 4]
+//   - by due date, earliest first     : [4, 2, 1, 3]   (2019, 2020, 2021, 2022)
+//   - by amount, smallest first       : [2, 4, 3, 1]   (100, 200, 300, 400)
+// Due-date order matches neither the id order nor the amount order, so observing it proves the sort
+// is by due date specifically.
+const SEED = {
+  clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
+  projects: [
+    { id: 1, name: 'Website Redesign', clientId: 1 },
+    // A second project whose invoice must never leak into project 1's sorted list.
+    { id: 2, name: 'Mobile App', clientId: 1 },
+  ],
+  invoices: [
+    { id: 1, amount: 400, projectId: 1, status: 'UNPAID', issuedDate: '2018-01-01', dueDate: '2021-03-01' },
+    { id: 2, amount: 100, projectId: 1, status: 'UNPAID', issuedDate: '2018-01-01', dueDate: '2020-01-15' },
+    { id: 3, amount: 300, projectId: 1, status: 'UNPAID', issuedDate: '2018-01-01', dueDate: '2022-11-20' },
+    { id: 4, amount: 200, projectId: 1, status: 'UNPAID', issuedDate: '2018-01-01', dueDate: '2019-06-10' },
+    { id: 9, amount: 999, projectId: 2, status: 'UNPAID', issuedDate: '2018-01-01', dueDate: '2000-01-01' },
+  ],
+};
+
+const ID_ORDER = [1, 2, 3, 4];
+const DUE_ASCENDING = [4, 2, 1, 3];
+const DUE_DESCENDING = [3, 1, 2, 4];
+
+// The ids of the invoice rows in the order the DOM renders them (top to bottom).
+async function rowOrder(page: Page): Promise<number[]> {
+  return page
+    .locator('[data-testid^="invoice-row-"]')
+    .evaluateAll((els) =>
+      els.map((el) => Number(el.getAttribute('data-testid')!.replace('invoice-row-', ''))),
+    );
+}
+
+test.describe('Sort a project\'s invoices by due date', () => {
+  test('the project detail page offers a control to sort invoices by due date', async ({ page }) => {
+    await resetAndSeed(SEED);
+
+    await page.goto('/projects/1');
+    await expect(page.getByTestId('project-detail-page')).toBeVisible();
+
+    // The new sort control is present on the page.
+    await expect(page.getByTestId('invoice-sort-due')).toBeVisible();
+
+    // Only this project's four invoices are listed (the other project's invoice does not leak in),
+    // and before the user sorts they are in the server's default order (oldest id first).
+    await expect(page.locator('[data-testid^="invoice-row-"]')).toHaveCount(4);
+    await expect(page.getByTestId('invoice-row-9')).toHaveCount(0);
+    expect(await rowOrder(page)).toEqual(ID_ORDER);
+  });
+
+  test('activating the control re-orders the invoices by their due date', async ({ page }) => {
+    await resetAndSeed(SEED);
+
+    await page.goto('/projects/1');
+    await expect(page.getByTestId('project-detail-page')).toBeVisible();
+    // Precondition: the list starts in its default (not due-date) order, so the reorder below is a
+    // real effect of activating the control and not something that was already true.
+    expect(await rowOrder(page)).toEqual(ID_ORDER);
+
+    await page.getByTestId('invoice-sort-due').click();
+
+    // The rows now run monotonically by due date. The request fixes no direction, so either
+    // earliest-first or latest-first counts; what matters is that the order is keyed on the due date
+    // (it is neither the id order nor the amount order).
+    const sorted = await rowOrder(page);
+    expect(sorted).not.toEqual(ID_ORDER);
+    expect([DUE_ASCENDING, DUE_DESCENDING]).toContainEqual(sorted);
+
+    // Still the same four invoices — sorting reorders the list, it does not add, drop or duplicate
+    // rows, and it does not pull in the other project's invoice.
+    await expect(page.locator('[data-testid^="invoice-row-"]')).toHaveCount(4);
+    await expect(page.getByTestId('invoice-row-9')).toHaveCount(0);
+  });
+
+  test('the chosen sort survives a fresh load', async ({ page }) => {
+    await resetAndSeed(SEED);
+
+    await page.goto('/projects/1');
+    await expect(page.getByTestId('project-detail-page')).toBeVisible();
+
+    await page.getByTestId('invoice-sort-due').click();
+    const sorted = await rowOrder(page);
+    expect([DUE_ASCENDING, DUE_DESCENDING]).toContainEqual(sorted);
+
+    // Reloading re-reads the page; the due-date sort the user asked for is still in effect and the
+    // rows come back in the same order (the sort lives in the URL, not in throwaway component state).
+    await page.reload();
+    await expect(page.getByTestId('project-detail-page')).toBeVisible();
+    await expect(page.locator('[data-testid^="invoice-row-"]')).toHaveCount(4);
+    expect(await rowOrder(page)).toEqual(sorted);
+  });
+});
