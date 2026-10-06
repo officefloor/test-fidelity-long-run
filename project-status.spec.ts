@@ -99,6 +99,8 @@ test.describe('mark a project as active, on hold or finished', () => {
     await expect(form).toBeVisible();
     await form.getByTestId('project-form-name').fill('Billing portal');
     await page.getByTestId('project-form-client').selectOption({ label: 'Acme Corp' });
+    // Every job now carries a reference code entered at creation (see project-code.spec.ts).
+    await page.getByTestId('project-form-code').fill('BP-01');
 
     // Pick a status that is NOT the likely default ("active"), so showing it proves the pick was
     // honoured rather than a fixed initial value being displayed.
@@ -133,6 +135,8 @@ test.describe('mark a project as active, on hold or finished', () => {
 
     await page.getByTestId('project-form').getByTestId('project-form-name').fill('Archive import');
     await page.getByTestId('project-form-client').selectOption({ label: 'Acme Corp' });
+    // Every job now carries a reference code entered at creation (see project-code.spec.ts).
+    await page.getByTestId('project-form-code').fill('AI-01');
     await pickStatus(page.getByTestId('project-form-status'), FINISHED);
     await page.getByTestId('project-form-submit').click();
 

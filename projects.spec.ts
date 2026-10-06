@@ -71,6 +71,8 @@ test.describe('projects', () => {
     await page.getByTestId('project-form-name').fill('Mobile app');
     // Pick which client the project is for, by the client's name.
     await page.getByTestId('project-form-client').selectOption({ label: 'Globex' });
+    // Every job now carries a reference code entered at creation (see project-code.spec.ts).
+    await page.getByTestId('project-form-code').fill('MA-01');
     await page.getByTestId('project-form-submit').click();
 
     // Reset RESTART IDENTITY + empty projects seed => the first created project has id 1.
