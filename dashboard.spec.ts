@@ -7,7 +7,9 @@
 //   - dashboard-clients-count     — how many clients there are
 //   - dashboard-projects-count    — how many projects there are
 //   - dashboard-outstanding-total — how much money is STILL OWED, i.e. the amount of the invoices
-//                                   that have NOT been paid (paid invoices are no longer owed)
+//                                   I have actually SENT and not yet been paid for. A DRAFT has not
+//                                   been sent, so it is not money I am owed; a PAID invoice is no
+//                                   longer owed. Only SENT invoices count toward the total.
 // While its data is loading it shows dashboard-loading, and if that data cannot be loaded it shows
 // dashboard-error instead of fabricating figures.
 //
@@ -62,9 +64,11 @@ test.describe('Dashboard home screen', () => {
   test('shows how many clients and projects there are, and how much is still owed', async ({
     page,
   }) => {
-    // 3 clients, 2 projects. Of the invoices raised, two are unpaid (120 + 230 = 350 still owed)
-    // and one is paid (400). The total ever invoiced is 750 — the dashboard must show the 350 that
-    // is OWED, not the 750 invoiced and not the 400 already paid.
+    // 3 clients, 2 projects. Money owed counts only the invoices I have actually SENT: two are sent
+    // (120 + 230 = 350 still owed). A DRAFT (170) has not been sent yet, and a PAID invoice (400) is
+    // already settled, so neither is money I am owed. The total ever invoiced is 920 — the dashboard
+    // must show the 350 that is OWED, not the 920 invoiced, not the 400 already paid, and not the
+    // 170 sitting in an unsent draft.
     await resetAndSeed({
       clients: [
         { id: 1, name: 'Acme Corp', email: 'hello@acme.test' },
@@ -76,9 +80,10 @@ test.describe('Dashboard home screen', () => {
         { id: 2, name: 'Mobile App', clientId: 2 },
       ],
       invoices: [
-        { id: 1, amount: 120, projectId: 1, status: 'UNPAID' },
-        { id: 2, amount: 230, projectId: 1, status: 'UNPAID' },
+        { id: 1, amount: 120, projectId: 1, status: 'SENT' },
+        { id: 2, amount: 230, projectId: 1, status: 'SENT' },
         { id: 3, amount: 400, projectId: 2, status: 'PAID' },
+        { id: 4, amount: 170, projectId: 1, status: 'DRAFT' },
       ],
     });
 
@@ -88,11 +93,15 @@ test.describe('Dashboard home screen', () => {
     await shows(clientsCount(page), 3);
     await shows(projectsCount(page), 2);
 
-    // How much money I am still owed: the unpaid invoices add up to 350.
+    // How much money I am still owed: the SENT invoices add up to 350.
     await shows(outstanding(page), 350);
-    // It is the amount OWED, not the amount invoiced in total (750) nor the amount already paid (400).
-    await hides(outstanding(page), 750);
+    // It is the amount OWED — not the total ever invoiced (920), not the amount already paid (400),
+    // and not the unsent draft (170), which is not money I am owed. Nor is it drafts-and-sent lumped
+    // together (520): only what has actually been sent counts.
+    await hides(outstanding(page), 920);
     await hides(outstanding(page), 400);
+    await hides(outstanding(page), 170);
+    await hides(outstanding(page), 520);
   });
 
   test('with nothing seeded it shows no clients, no projects and nothing owed', async ({ page }) => {
@@ -105,11 +114,12 @@ test.describe('Dashboard home screen', () => {
     await shows(outstanding(page), 0);
   });
 
-  test('money still owed counts only unpaid invoices — fully paid work owes nothing', async ({
+  test('money still owed counts only sent invoices — paid work and unsent drafts owe nothing', async ({
     page,
   }) => {
-    // There are clients and projects with invoices, but every invoice is already PAID, so nothing
-    // is still owed even though money was invoiced.
+    // There are clients and projects with invoices, but none has been SENT-and-not-yet-paid: two are
+    // already PAID and one is still a DRAFT that has not been sent. So nothing is still owed even
+    // though money has been invoiced.
     await resetAndSeed({
       clients: [
         { id: 1, name: 'Acme Corp', email: 'hello@acme.test' },
@@ -122,6 +132,7 @@ test.describe('Dashboard home screen', () => {
       invoices: [
         { id: 1, amount: 400, projectId: 1, status: 'PAID' },
         { id: 2, amount: 350, projectId: 2, status: 'PAID' },
+        { id: 3, amount: 500, projectId: 1, status: 'DRAFT' },
       ],
     });
 
@@ -130,11 +141,13 @@ test.describe('Dashboard home screen', () => {
     await shows(clientsCount(page), 2);
     await shows(projectsCount(page), 2);
 
-    // Nothing is still owed: the paid invoices (and their 750 total) are not money owed.
+    // Nothing is still owed: the paid invoices and the unsent draft are not money owed.
     await shows(outstanding(page), 0);
     await hides(outstanding(page), 400);
     await hides(outstanding(page), 350);
-    await hides(outstanding(page), 750);
+    await hides(outstanding(page), 500);
+    await hides(outstanding(page), 750); // the paid pair
+    await hides(outstanding(page), 1250); // everything invoiced
   });
 
   test('while its data is loading it shows a loading indicator, then the figures', async ({
@@ -150,7 +163,7 @@ test.describe('Dashboard home screen', () => {
         { id: 1, name: 'Website Redesign', clientId: 1 },
         { id: 2, name: 'Mobile App', clientId: 2 },
       ],
-      invoices: [{ id: 1, amount: 350, projectId: 1, status: 'UNPAID' }],
+      invoices: [{ id: 1, amount: 350, projectId: 1, status: 'SENT' }],
     });
 
     // The home screen itself serves no data, so reach it first, then slow the dashboard's own data
@@ -182,7 +195,7 @@ test.describe('Dashboard home screen', () => {
     await resetAndSeed({
       clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
       projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
-      invoices: [{ id: 1, amount: 350, projectId: 1, status: 'UNPAID' }],
+      invoices: [{ id: 1, amount: 350, projectId: 1, status: 'SENT' }],
     });
 
     // Reach the home screen (it serves no data), then make every data fetch the dashboard relies on

@@ -95,13 +95,14 @@ test.describe('Money is shown properly — dollar sign and cents', () => {
   });
 
   test('the dashboard outstanding total is shown as $amount.cc', async ({ page }) => {
-    // Two unpaid invoices (120 + 230 = 350 still owed) and one paid (400, no longer owed).
+    // Two SENT invoices (120 + 230 = 350 still owed) and one paid (400, no longer owed). Money owed
+    // counts only invoices that have actually been sent, so the sent pair is what is owed.
     await resetAndSeed({
       clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
       projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
       invoices: [
-        { id: 1, amount: 120, projectId: 1, status: 'UNPAID' },
-        { id: 2, amount: 230, projectId: 1, status: 'UNPAID' },
+        { id: 1, amount: 120, projectId: 1, status: 'SENT' },
+        { id: 2, amount: 230, projectId: 1, status: 'SENT' },
         { id: 3, amount: 400, projectId: 1, status: 'PAID' },
       ],
     });
