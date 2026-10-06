@@ -1,98 +1,123 @@
 // Acceptance tests for the change request:
-//   "Let me mark an invoice as paid. Keep a record every time I do so I can check back later."
+//   "Work out for me whether an invoice is paid, part paid or still owing. Base it on the payments
+//    I have recorded. I do not want to flip it to paid by hand anymore."
 //
-// On a project's detail page each invoice shows its status (invoice-status) and, once it has been
-// SENT, offers a control to mark it paid (invoice-pay-<id>). Marking an invoice paid flips THAT
-// invoice's status to paid and appends one audit record — INVOICE_PAID id=<id> amount=<amount> — so
-// the action can be checked back later. Marking one invoice must not touch its siblings, and each
-// marking writes its own record ("every time I do").
+// This REVISES the earlier "mark an invoice paid by hand" behaviour. An invoice no longer offers a
+// control to flip it to paid (there is no invoice-pay-<id> button on the project's detail page where
+// it used to live): being paid is now WORKED OUT from the payments recorded against the invoice. An
+// invoice reaches "paid" purely by recording payments that cover its amount — never by a hand action
+// — and that status is worked out per invoice, so fully paying one leaves a sibling still owing.
 //
-// Invoices now move through stages (DRAFT -> SENT -> PAID) and payment is only allowed once an
-// invoice has been sent (see invoice-send.spec.ts). So these tests seed invoices already at the SENT
-// stage (status: 'SENT') — the point where they are payable — and drive the pay flow from there.
+// (The three worked-out states and the PAYMENT_RECORDED audit are covered in detail by
+// invoice-status-panel.spec.ts; this spec pins the two things this change REMOVES/REPLACES — the
+// by-hand control, and reaching paid through payments alone — plus per-invoice isolation.)
 //
 // Asserts ONLY through the two public channels: the UI (data-testid) and the audit file
-// (auditLines()). Data is arranged via resetAndSeed; the pay flow is driven through the UI.
-// Seed honours invoices: { id, projectId, amount, status }.
+// (auditLines()). Data is arranged via resetAndSeed; the record-a-payment flow is driven through the
+// existing payment-form. Seed honours invoices: { id, projectId, amount, status } and
+// payments: { id, invoiceId, amount, date } (alongside clients / projects).
 //
-// The paid label is asserted case-insensitively (/^paid$/i) so the test tolerates whichever casing
-// the feature renders (Paid / PAID / paid). The audit amount is matched with an optional trailing
-// ".00" so a plain or two-decimal rendering both pass. Amounts are chosen as distinct whole numbers
-// so no value is a substring of another.
+// State words are matched vocabulary-/casing-tolerantly: "still owing" as /owing|owed|outstanding|
+// unpaid/i and a full "paid" as containing /paid/i while NOT carrying /part/i (so it is told apart
+// from a "part paid"). The audit amount is matched with an optional trailing ".00". This SHOULD FAIL
+// before the change: today a sent invoice still offers invoice-pay-<id>, and there is no
+// invoice-status-panel to show the worked-out status.
 import { test, expect } from '@playwright/test';
 import { resetAndSeed } from '../support/seed';
 import { auditLines } from '../support/audit';
 
-test.describe('mark invoice paid', () => {
-  test('marking an unpaid invoice paid flips its status and records it', async ({ page }) => {
+const OWING = /owing|owed|outstanding|unpaid/i;
+const PART = /part/i;
+const PAID = /paid/i;
+
+test.describe('an invoice is worked out as paid from its payments, not flipped by hand', () => {
+  test('there is no by-hand control; paid is reached by recording payments', async ({ page }) => {
     await resetAndSeed({
       clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
       projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
-      invoices: [{ id: 1, projectId: 1, amount: 120, status: 'SENT' }],
+      invoices: [{ id: 1, projectId: 1, amount: 300, status: 'SENT' }],
+      payments: [],
     });
 
+    // On the project's detail page — where the by-hand "mark paid" control used to live — a sent
+    // invoice shows its status but offers NO control to flip it to paid: that is gone.
     await page.goto('/projects');
     await page.getByTestId('project-open-1').click();
-
     await expect(page.getByTestId('project-detail-page')).toBeVisible();
-
     const row = page.getByTestId('invoice-row-1');
     await expect(row).toBeVisible();
-    // The invoice surfaces a status, and a control to mark it paid.
     await expect(row.getByTestId('invoice-status')).toBeVisible();
-    await expect(page.getByTestId('invoice-pay-1')).toBeVisible();
+    await expect(page.getByTestId('invoice-pay-1')).toHaveCount(0);
 
-    // reset cleared the audit file — nothing has been marked paid yet.
+    // On the invoice's own page, with nothing paid yet, it is worked out as still owing.
+    await page.goto('/invoices/1');
+    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
+    const panel = page.getByTestId('invoice-status-panel');
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText(OWING);
+    await expect(panel).not.toContainText(PART);
     expect(auditLines()).toEqual([]);
 
-    await page.getByTestId('invoice-pay-1').click();
+    // Record payments covering the whole 300 (100 + 200). No hand action — just the payments.
+    await page.getByTestId('payment-form-amount').fill('100');
+    await page.getByTestId('payment-form-date').fill('2025-04-01');
+    await page.getByTestId('payment-form-submit').click();
+    await expect(page.getByTestId('payment-form-error')).toHaveCount(0);
+    // Half-covered after the first -> part paid, not yet paid.
+    await expect(panel).toContainText(PART);
 
-    // The invoice's status reflects that it is now paid.
-    await expect(row.getByTestId('invoice-status')).toHaveText(/^paid$/i);
+    await page.getByTestId('payment-form-amount').fill('200');
+    await page.getByTestId('payment-form-date').fill('2025-04-20');
+    await page.getByTestId('payment-form-submit').click();
+    await expect(page.getByTestId('payment-form-error')).toHaveCount(0);
 
-    // And exactly one record was kept for the action, naming the invoice and its amount.
+    // Now the payments cover the amount: worked out as paid, with no by-hand step involved.
+    await expect(panel).toContainText(PAID);
+    await expect(panel).not.toContainText(PART);
+
+    // Each recorded payment kept its own PAYMENT_RECORDED record (ids 1 and 2).
     await expect
-      .poll(() => auditLines().filter((l) => /^INVOICE_PAID id=1 amount=120(\.0+)?$/.test(l)))
+      .poll(() => auditLines().filter((l) => /^PAYMENT_RECORDED id=1 amount=100(\.0+)?$/.test(l)))
       .toHaveLength(1);
-    expect(auditLines()).toHaveLength(1);
+    await expect
+      .poll(() => auditLines().filter((l) => /^PAYMENT_RECORDED id=2 amount=200(\.0+)?$/.test(l)))
+      .toHaveLength(1);
   });
 
-  test('keeps a separate record each time, and marking one leaves the others untouched', async ({ page }) => {
+  test('paying one invoice off leaves a sibling still owing', async ({ page }) => {
     await resetAndSeed({
       clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
       projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
       invoices: [
-        { id: 1, projectId: 1, amount: 120, status: 'SENT' },
-        { id: 2, projectId: 1, amount: 80, status: 'SENT' },
+        { id: 1, projectId: 1, amount: 300, status: 'SENT' },
+        { id: 2, projectId: 1, amount: 500, status: 'SENT' },
       ],
+      payments: [],
     });
 
-    await page.goto('/projects');
-    await page.getByTestId('project-open-1').click();
-    await expect(page.getByTestId('project-detail-page')).toBeVisible();
+    // Fully pay invoice 1 by recording a payment that covers it (300 of 300).
+    await page.goto('/invoices/1');
+    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
+    const panel1 = page.getByTestId('invoice-status-panel');
+    await expect(panel1).toContainText(OWING);
 
-    const first = page.getByTestId('invoice-row-1');
-    const second = page.getByTestId('invoice-row-2');
+    await page.getByTestId('payment-form-amount').fill('300');
+    await page.getByTestId('payment-form-date').fill('2025-05-05');
+    await page.getByTestId('payment-form-submit').click();
+    await expect(page.getByTestId('payment-form-error')).toHaveCount(0);
 
-    // Mark the first invoice paid. Its status flips; the second is still payable (untouched).
-    await page.getByTestId('invoice-pay-1').click();
-    await expect(first.getByTestId('invoice-status')).toHaveText(/^paid$/i);
-    await expect(second.getByTestId('invoice-status')).not.toHaveText(/^paid$/i);
-    await expect(page.getByTestId('invoice-pay-2')).toBeVisible();
-
-    // One record so far, for invoice 1 and its amount — and only that one.
+    // Invoice 1 is worked out as paid.
+    await expect(panel1).toContainText(PAID);
+    await expect(panel1).not.toContainText(PART);
     await expect
-      .poll(() => auditLines().filter((l) => /^INVOICE_PAID id=1 amount=120(\.0+)?$/.test(l)))
+      .poll(() => auditLines().filter((l) => /^PAYMENT_RECORDED id=1 amount=300(\.0+)?$/.test(l)))
       .toHaveLength(1);
-    expect(auditLines()).toHaveLength(1);
 
-    // Now mark the second invoice paid too — a separate record is kept for it as well.
-    await page.getByTestId('invoice-pay-2').click();
-    await expect(second.getByTestId('invoice-status')).toHaveText(/^paid$/i);
-
-    await expect.poll(() => auditLines()).toHaveLength(2);
-    const lines = auditLines();
-    expect(lines.some((l) => /^INVOICE_PAID id=1 amount=120(\.0+)?$/.test(l))).toBe(true);
-    expect(lines.some((l) => /^INVOICE_PAID id=2 amount=80(\.0+)?$/.test(l))).toBe(true);
+    // Invoice 2 had nothing recorded against it — it is untouched, still owing.
+    await page.goto('/invoices/2');
+    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
+    const panel2 = page.getByTestId('invoice-status-panel');
+    await expect(panel2).toContainText(OWING);
+    await expect(panel2).not.toContainText(PART);
   });
 });

@@ -2,29 +2,34 @@
 //   "Invoices should move through stages. First a draft. Then I send it. Then it gets paid. Keep a
 //    record when I send one. Only let me take payment once it has been sent."
 //
-// An invoice now moves through three stages: DRAFT -> SENT -> PAID. A freshly created invoice is a
-// DRAFT. A draft offers a control to SEND it (invoice-send-<id>); sending flips THAT invoice's
-// status to SENT and appends one audit record — INVOICE_SENT id=<id> amount=<amount> — so the send
-// can be checked back later (the UI only shows the status). Payment is GATED on sending: the mark-
-// paid control (invoice-pay-<id>) is only offered once the invoice has been sent — a draft cannot
-// be paid. Once sent, paying it works as before (status -> PAID, INVOICE_PAID record).
+// An invoice starts as a DRAFT. A draft offers a control to SEND it (invoice-send-<id>); sending
+// flips THAT invoice's status to SENT and appends one audit record — INVOICE_SENT id=<id>
+// amount=<amount> — so the send can be checked back later (the UI only shows the status). Once an
+// invoice is SENT there is nothing left to send, so the send control is gone.
+//
+// NOTE: the final "then it gets paid" stage is no longer reached by a by-hand control. A later change
+// ("Work out whether an invoice is paid, part paid or still owing. ... I do not want to flip it to
+// paid by hand anymore.") removed the mark-paid button and now WORKS the paid status OUT from the
+// payments recorded against the invoice — so this spec no longer drives or asserts a mark-paid flow.
+// Being worked out as paid / part paid / still owing from payments is covered by
+// invoice-status-panel.spec.ts.
 //
 // Asserts ONLY through the two public channels: the UI (data-testid) and the audit file
-// (auditLines()). Data is arranged via resetAndSeed; the send/pay flows are driven through the UI.
+// (auditLines()). Data is arranged via resetAndSeed; the send flow is driven through the UI.
 // Seed honours invoices: { id, projectId, amount, status } — status is seeded to place an invoice at
 // a chosen stage ('DRAFT' / 'SENT' / 'PAID').
 //
-// Status labels are asserted case-insensitively (/^draft$/i, /^sent$/i, /^paid$/i) so the test
-// tolerates whichever casing the feature renders. The audit amount is matched with an optional
-// trailing ".00" so a plain or two-decimal rendering both pass. Amounts are distinct whole numbers so
-// no value is a substring of another. This test SHOULD FAIL before the change: today a draft has no
-// send control and can be paid directly.
+// Status labels are asserted case-insensitively (/^draft$/i, /^sent$/i) so the test tolerates
+// whichever casing the feature renders. The audit amount is matched with an optional trailing ".00"
+// so a plain or two-decimal rendering both pass. Amounts are distinct whole numbers so no value is a
+// substring of another. This test SHOULD FAIL before the change: today a freshly created invoice has
+// no send control.
 import { test, expect } from '@playwright/test';
 import { resetAndSeed } from '../support/seed';
 import { auditLines } from '../support/audit';
 
 test.describe('invoice stages: draft -> sent -> paid', () => {
-  test('a newly created invoice is a draft: it can be sent but not yet paid', async ({ page }) => {
+  test('a newly created invoice is a draft that can be sent', async ({ page }) => {
     await resetAndSeed({
       clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
       projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
@@ -45,12 +50,11 @@ test.describe('invoice stages: draft -> sent -> paid', () => {
     // First a draft: the new invoice starts in the DRAFT stage.
     await expect(row.getByTestId('invoice-status')).toHaveText(/^draft$/i);
 
-    // A draft can be sent, but cannot yet be paid — payment is only offered once it has been sent.
+    // A draft can be sent.
     await expect(page.getByTestId('invoice-send-1')).toBeVisible();
-    await expect(page.getByTestId('invoice-pay-1')).toHaveCount(0);
   });
 
-  test('sending a draft moves it to sent, keeps a record, and only then allows payment', async ({ page }) => {
+  test('sending a draft moves it to sent and keeps a record', async ({ page }) => {
     await resetAndSeed({
       clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
       projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
@@ -64,10 +68,9 @@ test.describe('invoice stages: draft -> sent -> paid', () => {
     const row = page.getByTestId('invoice-row-1');
     await expect(row).toBeVisible();
 
-    // Starts as a draft: a send control is offered, and it cannot be paid yet.
+    // Starts as a draft: a send control is offered.
     await expect(row.getByTestId('invoice-status')).toHaveText(/^draft$/i);
     await expect(page.getByTestId('invoice-send-1')).toBeVisible();
-    await expect(page.getByTestId('invoice-pay-1')).toHaveCount(0);
 
     // reset cleared the audit file — nothing has been sent yet.
     expect(auditLines()).toEqual([]);
@@ -83,21 +86,11 @@ test.describe('invoice stages: draft -> sent -> paid', () => {
       .toHaveLength(1);
     expect(auditLines()).toHaveLength(1);
 
-    // Only now that it has been sent is payment offered; there is nothing left to send.
-    await expect(page.getByTestId('invoice-pay-1')).toBeVisible();
+    // Now that it has been sent, there is nothing left to send.
     await expect(page.getByTestId('invoice-send-1')).toHaveCount(0);
-
-    // And paying it still works: status -> PAID, with its own INVOICE_PAID record alongside the send.
-    await page.getByTestId('invoice-pay-1').click();
-    await expect(row.getByTestId('invoice-status')).toHaveText(/^paid$/i);
-
-    await expect.poll(() => auditLines()).toHaveLength(2);
-    const lines = auditLines();
-    expect(lines.some((l) => /^INVOICE_SENT id=1 amount=120(\.0+)?$/.test(l))).toBe(true);
-    expect(lines.some((l) => /^INVOICE_PAID id=1 amount=120(\.0+)?$/.test(l))).toBe(true);
   });
 
-  test('a draft cannot be paid but an already-sent invoice can', async ({ page }) => {
+  test('a draft offers a send control; an already-sent invoice has nothing left to send', async ({ page }) => {
     // Two invoices side by side: one still a DRAFT, one already SENT.
     await resetAndSeed({
       clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
@@ -115,14 +108,12 @@ test.describe('invoice stages: draft -> sent -> paid', () => {
     const draft = page.getByTestId('invoice-row-1');
     const sent = page.getByTestId('invoice-row-2');
 
-    // The draft: sendable, not payable.
+    // The draft: sendable.
     await expect(draft.getByTestId('invoice-status')).toHaveText(/^draft$/i);
     await expect(page.getByTestId('invoice-send-1')).toBeVisible();
-    await expect(page.getByTestId('invoice-pay-1')).toHaveCount(0);
 
-    // The already-sent invoice: payable, with nothing left to send.
+    // The already-sent invoice: nothing left to send.
     await expect(sent.getByTestId('invoice-status')).toHaveText(/^sent$/i);
-    await expect(page.getByTestId('invoice-pay-2')).toBeVisible();
     await expect(page.getByTestId('invoice-send-2')).toHaveCount(0);
 
     // Seeded straight into their stages — no send happened, so the audit file is empty.
@@ -151,7 +142,6 @@ test.describe('invoice stages: draft -> sent -> paid', () => {
     await expect(first.getByTestId('invoice-status')).toHaveText(/^sent$/i);
     await expect(second.getByTestId('invoice-status')).toHaveText(/^draft$/i);
     await expect(page.getByTestId('invoice-send-2')).toBeVisible();
-    await expect(page.getByTestId('invoice-pay-2')).toHaveCount(0);
 
     // One record so far, for invoice 1 and its amount — and only that one.
     await expect
