@@ -1,11 +1,13 @@
 // Acceptance test for the change request:
 //   "Let me mark an invoice as paid. Keep a record every time I do so I can check back later."
 //
-// On a project's detail page each invoice shows its payment status (invoice-status) and, while it is
-// still unpaid, a control to mark it paid (invoice-pay-<id>). Marking an invoice paid flips its
-// status to paid, survives a fresh load from the server, and — because the request wants a record
-// kept EVERY time — appends exactly one audit record `INVOICE_PAID id=<id> amount=<amount>` per
-// marking. Marking one invoice must not touch its siblings.
+// Invoices move through stages (draft → sent → paid), and payment is only offered once an invoice has
+// been SENT — so the invoices here are seeded in the SENT stage, which is where the pay control
+// (invoice-pay-<id>) is available. On a project's detail page each invoice shows its status
+// (invoice-status). Marking a sent invoice paid flips its status to paid, survives a fresh load from
+// the server, and — because the request wants a record kept EVERY time — appends exactly one audit
+// record `INVOICE_PAID id=<id> amount=<amount>` per marking. Marking one invoice must not touch its
+// siblings. (That payment is unavailable BEFORE an invoice is sent is covered by invoice-send.spec.)
 //
 // Asserts ONLY through the two public channels: the UI (data-testid) and the audit file
 // (auditLines()). Data is arranged via resetAndSeed (the app's /__test__ endpoint): `clients`
@@ -17,8 +19,8 @@ import { auditLines } from '../support/audit';
 
 // A status cell is "paid" when it carries the word "paid" on its own — matched case-insensitively so
 // the test binds to the MEANING, not one capitalisation ("Paid"/"PAID"/"paid ✓" all count). The
-// word boundary keeps "Unpaid"/"UNPAID" from matching, so the same regex distinguishes the two
-// states without pinning the exact unpaid wording.
+// word boundary keeps the earlier "sent" stage from matching, so the same regex distinguishes a paid
+// invoice from a not-yet-paid one without pinning the exact pre-payment wording.
 const PAID = /\bpaid\b/i;
 
 const invoiceRows = (page: Page) => page.locator('[data-testid^="invoice-row-"]');
@@ -34,19 +36,19 @@ const paidRecordsFor = (id: number, amount: number): string[] =>
   auditLines().filter((line) => paidRecord(id, amount).test(line));
 
 test.describe('Mark an invoice as paid', () => {
-  test('marking an unpaid invoice flips its status to paid, persists, and records it once', async ({
+  test('marking a sent invoice flips its status to paid, persists, and records it once', async ({
     page,
   }) => {
     await resetAndSeed({
       clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
       projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
-      invoices: [{ id: 1, amount: 100, projectId: 1, status: 'UNPAID' }],
+      invoices: [{ id: 1, amount: 100, projectId: 1, status: 'SENT' }],
     });
 
     await page.goto('/projects/1');
     await expect(page.getByTestId('project-detail-page')).toBeVisible();
 
-    // The invoice starts out not paid, and offers a control to mark it paid.
+    // The invoice has been sent but not yet paid, so it offers a control to mark it paid.
     await expect(statusOf(page, 1)).not.toHaveText(PAID);
     const pay = page.getByTestId('invoice-pay-1');
     await expect(pay).toBeVisible();
@@ -79,8 +81,8 @@ test.describe('Mark an invoice as paid', () => {
       clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
       projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
       invoices: [
-        { id: 1, amount: 100, projectId: 1, status: 'UNPAID' },
-        { id: 2, amount: 250, projectId: 1, status: 'UNPAID' },
+        { id: 1, amount: 100, projectId: 1, status: 'SENT' },
+        { id: 2, amount: 250, projectId: 1, status: 'SENT' },
       ],
     });
 
@@ -92,7 +94,7 @@ test.describe('Mark an invoice as paid', () => {
     // Mark the first invoice paid.
     await page.getByTestId('invoice-pay-1').click();
 
-    // Only that invoice changed; its sibling is still unpaid.
+    // Only that invoice changed; its sibling is still sent but not paid.
     await expect(statusOf(page, 1)).toHaveText(PAID);
     await expect(statusOf(page, 2)).not.toHaveText(PAID);
 
