@@ -100,9 +100,10 @@ test.describe('an invoice is a list of things being charged for, with the total 
     // No line items seeded, so no rows yet.
     await expect(page.getByTestId('lineitem-description')).toHaveCount(0);
 
-    // List one thing being charged for: 3 @ $90.00 each.
+    // List one thing being charged for: 3 hours @ $90.00 each.
     await page.getByTestId('lineitem-form-description').fill('Consulting');
     await page.getByTestId('lineitem-form-qty').fill('3');
+    await page.getByTestId('lineitem-form-unit').fill('hours');
     await page.getByTestId('lineitem-form-unitprice').fill('90');
     await page.getByTestId('lineitem-form-submit').click();
 
@@ -111,6 +112,7 @@ test.describe('an invoice is a list of things being charged for, with the total 
     await expect(row).toBeVisible();
     await expect(row.getByTestId('lineitem-description')).toHaveText('Consulting');
     await expect(row.getByTestId('lineitem-qty')).toHaveText(/^3(\.0+)?$/);
+    await expect(row.getByTestId('lineitem-unit')).toHaveText('hours');
     await expect(row.getByTestId('lineitem-unitprice')).toHaveText(/^\$?90(\.00)?$/);
     await expect(row.getByTestId('lineitem-amount')).toHaveText(/^\$?270(\.00)?$/);
     // A valid add is not an error.
@@ -147,6 +149,7 @@ test.describe('an invoice is a list of things being charged for, with the total 
     // A complete line item is then accepted, clearing the error and appearing as the first row (id 1).
     await page.getByTestId('lineitem-form-description').fill('Consulting');
     await page.getByTestId('lineitem-form-qty').fill('3');
+    await page.getByTestId('lineitem-form-unit').fill('hours');
     await page.getByTestId('lineitem-form-unitprice').fill('90');
     await page.getByTestId('lineitem-form-submit').click();
 
