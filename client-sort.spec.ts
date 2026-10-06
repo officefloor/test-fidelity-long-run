@@ -1,0 +1,195 @@
+// Acceptance tests for the change request:
+//   "Let me sort my clients by name. Or by how much they owe me."
+//
+// The clients page (clients-page, at /clients) lists every (live) client. This change adds a control
+// (client-sort) on that page that REORDERS the client rows by one of two keys: the client's NAME
+// (alphabetical), or HOW MUCH THEY OWE — their outstanding total, the money still due across all of
+// their invoices (the same "what is owed" the client statement surfaces as client-outstanding-total).
+// Choosing a key only changes the ORDER the existing rows appear in; it never adds or drops a client.
+//
+// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed; the sort is driven
+// through the client-sort control. Seed honours clients { id, name, email }, projects
+// { id, clientId, name } and invoices { id, projectId, amount, status }.
+//
+// client-sort is a single control (one testid), so — following the sibling project-status-filter /
+// invoice-status-filter — it is a <select> offering the two keys. We do NOT assume the casing/wording
+// of its option labels or values: for a wanted key we locate the option whose visible text OR value
+// matches a key-word regex ("name" / "owe|owed|amount|balance|outstanding|due") and select it by its
+// own value. So a correct implementation passes however it renders and values its sort options.
+//
+// Order is asserted format-tolerantly and position-tolerantly: we read the client-row-<id> elements
+// in DOM order and compare the sequence of row ids. Each fixture is built so that NAME order,
+// OWED order and id (seed) order are three DISTINCT permutations — so passing "by name" requires a
+// genuine alphabetical sort (not id order, not owed order) and passing "by owed" requires a genuine
+// sort by the amount owed (not id order, not name order), not leaving the rows as seeded. The "owed"
+// direction (most-owed-first vs least-owed-first) is left open: we accept whichever monotonic
+// ordering by the owed amount the feature chose, since the request does not pin a direction.
+//
+// This SHOULD FAIL before the change: there is no client-sort control on the clients page today.
+import { test, expect, type Page } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+const BY_NAME = /name/i;
+const BY_OWED = /owe|owed|amount|balance|outstanding|due/i;
+
+// The client-row-<id> testids in the order the rows currently appear on the page.
+async function clientRowOrder(page: Page): Promise<string[]> {
+  return page
+    .locator('[data-testid^="client-row-"]')
+    .evaluateAll((els) => els.map((el) => el.getAttribute('data-testid') ?? ''));
+}
+
+// The <option> value whose visible text OR value matches `key` (case-insensitive). Selecting by the
+// option's own value keeps us agnostic to the label/value casing/wording the feature chose.
+async function sortOptionValueFor(page: Page, key: RegExp): Promise<string> {
+  const value = await page
+    .getByTestId('client-sort')
+    .locator('option')
+    .evaluateAll((opts, src) => {
+      const re = new RegExp(src as string, 'i');
+      const match = (opts as HTMLOptionElement[]).find(
+        (o) => re.test((o.textContent ?? '').trim()) || re.test(o.value),
+      );
+      return match ? match.value : null;
+    }, key.source);
+  if (value === null) {
+    throw new Error(`client-sort has no option matching ${key}`);
+  }
+  return value;
+}
+
+// Reorder the list by one key through the control.
+async function sortBy(page: Page, key: RegExp): Promise<void> {
+  const control = page.getByTestId('client-sort');
+  await expect(control).toBeVisible();
+  await control.selectOption(await sortOptionValueFor(page, key));
+}
+
+test.describe('sort clients', () => {
+  // Three clients, seeded in id order 1,2,3. Amounts owed and names are chosen so that the three
+  // orderings are DISTINCT permutations:
+  //   id (seed) order        : [1, 2, 3]
+  //   NAME ascending         : Alpha(3) -> Beta(1) -> Gamma(2)      == [3, 1, 2]
+  //   OWED ascending         : 100(2)   -> 200(3)   -> 300(1)       == [2, 3, 1]
+  //   OWED descending        : 300(1)   -> 200(3)   -> 100(2)       == [1, 3, 2]
+  // Every pair differs, so neither sort can be satisfied by the seed order or by the other key.
+  // Each client has one SENT, unpaid invoice (no discount/tax, no payments), so its net total IS the
+  // amount and the amount owed is unambiguous under any reasonable reading of "owed" (all invoices,
+  // or sent-but-unpaid only).
+  const FIXTURE = {
+    clients: [
+      { id: 1, name: 'Beta Builders', email: 'hello@beta.example' },
+      { id: 2, name: 'Gamma Goods', email: 'hello@gamma.example' },
+      { id: 3, name: 'Alpha Associates', email: 'hello@alpha.example' },
+    ],
+    projects: [
+      { id: 1, clientId: 1, name: 'Beta project' },
+      { id: 2, clientId: 2, name: 'Gamma project' },
+      { id: 3, clientId: 3, name: 'Alpha project' },
+    ],
+    invoices: [
+      { id: 1, projectId: 1, amount: 300, status: 'SENT' },
+      { id: 2, projectId: 2, amount: 100, status: 'SENT' },
+      { id: 3, projectId: 3, amount: 200, status: 'SENT' },
+    ],
+  };
+
+  const NAME_ORDER = ['client-row-3', 'client-row-1', 'client-row-2'];
+  const OWED_ASC = ['client-row-2', 'client-row-3', 'client-row-1'];
+  const OWED_DESC = ['client-row-1', 'client-row-3', 'client-row-2'];
+
+  test.beforeEach(async () => {
+    await resetAndSeed(FIXTURE);
+  });
+
+  test('by name orders the clients alphabetically', async ({ page }) => {
+    await page.goto('/clients');
+
+    await expect(page.getByTestId('clients-table')).toBeVisible();
+    await expect(page.getByTestId('client-row-1')).toBeVisible();
+    await expect(page.getByTestId('client-row-2')).toBeVisible();
+    await expect(page.getByTestId('client-row-3')).toBeVisible();
+
+    await sortBy(page, BY_NAME);
+
+    // All three clients are still present, now in alphabetical order by name.
+    await expect(page.getByTestId('client-row-1')).toBeVisible();
+    await expect(page.getByTestId('client-row-2')).toBeVisible();
+    await expect(page.getByTestId('client-row-3')).toBeVisible();
+    expect(await clientRowOrder(page)).toEqual(NAME_ORDER);
+  });
+
+  test('by how much they owe orders the clients by their outstanding total', async ({ page }) => {
+    await page.goto('/clients');
+
+    await expect(page.getByTestId('clients-table')).toBeVisible();
+    await expect(page.getByTestId('client-row-1')).toBeVisible();
+    await expect(page.getByTestId('client-row-2')).toBeVisible();
+    await expect(page.getByTestId('client-row-3')).toBeVisible();
+
+    await sortBy(page, BY_OWED);
+
+    // All three clients are still present, now ordered by the amount they owe — in whichever
+    // monotonic direction the feature chose (most-owed-first or least-owed-first). Either way it is a
+    // genuine sort by owed: NOT the seed/id order [1,2,3] and NOT the name order.
+    await expect(page.getByTestId('client-row-1')).toBeVisible();
+    await expect(page.getByTestId('client-row-2')).toBeVisible();
+    await expect(page.getByTestId('client-row-3')).toBeVisible();
+    expect([OWED_ASC, OWED_DESC]).toContainEqual(await clientRowOrder(page));
+  });
+
+  test('switching the key re-sorts the same clients by the newly chosen key', async ({ page }) => {
+    await page.goto('/clients');
+    await expect(page.getByTestId('clients-table')).toBeVisible();
+
+    // Sort by name, then switch to owed, then back to name — the list re-sorts each time, and the set
+    // of rows never changes.
+    await sortBy(page, BY_NAME);
+    expect(await clientRowOrder(page)).toEqual(NAME_ORDER);
+
+    await sortBy(page, BY_OWED);
+    expect([OWED_ASC, OWED_DESC]).toContainEqual(await clientRowOrder(page));
+
+    await sortBy(page, BY_NAME);
+    expect(await clientRowOrder(page)).toEqual(NAME_ORDER);
+  });
+
+  test("reads each client's own name and owed total, whatever the seeded order", async ({ page }) => {
+    // A DIFFERENT fixture so neither ordering can be hard-coded. Same three ids 1,2,3 seeded in order:
+    //   NAME ascending  : Apex(2) -> Delta(1) -> Zenith(3)   == [2, 1, 3]
+    //   OWED ascending  : 50(1)   -> 150(3)   -> 400(2)       == [1, 3, 2]
+    //   OWED descending : 400(2)  -> 150(3)   -> 50(1)        == [2, 3, 1]
+    //   id (seed) order : [1, 2, 3]
+    // All distinct, and the name/owed orders differ from the first fixture's — so a genuine read of
+    // each client's own name and amount owed is required to satisfy both fixtures.
+    await resetAndSeed({
+      clients: [
+        { id: 1, name: 'Delta Design', email: 'hello@delta.example' },
+        { id: 2, name: 'Apex Analytics', email: 'hello@apex.example' },
+        { id: 3, name: 'Zenith Partners', email: 'hello@zenith.example' },
+      ],
+      projects: [
+        { id: 1, clientId: 1, name: 'Delta project' },
+        { id: 2, clientId: 2, name: 'Apex project' },
+        { id: 3, clientId: 3, name: 'Zenith project' },
+      ],
+      invoices: [
+        { id: 1, projectId: 1, amount: 50, status: 'SENT' },
+        { id: 2, projectId: 2, amount: 400, status: 'SENT' },
+        { id: 3, projectId: 3, amount: 150, status: 'SENT' },
+      ],
+    });
+
+    await page.goto('/clients');
+    await expect(page.getByTestId('clients-table')).toBeVisible();
+
+    await sortBy(page, BY_NAME);
+    expect(await clientRowOrder(page)).toEqual(['client-row-2', 'client-row-1', 'client-row-3']);
+
+    await sortBy(page, BY_OWED);
+    expect([
+      ['client-row-1', 'client-row-3', 'client-row-2'], // owed ascending
+      ['client-row-2', 'client-row-3', 'client-row-1'], // owed descending
+    ]).toContainEqual(await clientRowOrder(page));
+  });
+});
