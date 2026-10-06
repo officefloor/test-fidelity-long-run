@@ -1,0 +1,159 @@
+// Acceptance test for the change request:
+//   "When I open a project I want to see its invoices. Show me what they add up to. Let me add a
+//    new invoice for an amount."
+//
+// Opening a project (project-open-<id> from the projects list) lands on that project's detail page.
+// The detail page lists THAT project's invoices, each showing its amount, and shows what they add
+// up to (project-invoices-total). A new invoice is added by giving an amount; once added it joins
+// the same invoices list, the total grows by that amount, and both survive a fresh load.
+//
+// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed (the app's /__test__
+// endpoint): `clients` honours { id, name, email }, `projects` honours { id, name, clientId } and
+// `invoices` honours { id, amount, projectId }.
+import { test, expect, type Page, type Locator } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+const invoiceRows = (page: Page) => page.locator('[data-testid^="invoice-row-"]');
+
+// A money value may be rendered with a currency symbol, grouping or decimals ($1,200.00) or bare
+// (1200). Assert the amount it carries is PRESENT, so the test binds to "what they add up to"
+// rather than to one presentation. The digits used below are chosen so no amount or total is a
+// substring of another.
+const digits = (n: number) => String(n);
+
+async function expectAmount(cell: Locator, n: number): Promise<void> {
+  await expect(cell).toContainText(digits(n));
+}
+
+test.describe('Project invoices', () => {
+  test('opening a project from the list lands on its detail page', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
+      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
+      invoices: [],
+    });
+
+    await page.goto('/projects');
+    await expect(page.getByTestId('project-row-1')).toBeVisible();
+
+    // Opening the project is a navigation, not a flag: following it lands on that project's own
+    // detail page.
+    const open = page.getByTestId('project-open-1');
+    await expect(open).toBeVisible();
+    await open.click();
+
+    await expect(page).toHaveURL(/\/projects\/1$/);
+    await expect(page.getByTestId('project-detail-page')).toBeVisible();
+  });
+
+  test('the detail page lists the project invoices with their amounts and what they add up to', async ({
+    page,
+  }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
+      projects: [
+        { id: 1, name: 'Website Redesign', clientId: 1 },
+        { id: 2, name: 'Mobile App', clientId: 1 },
+      ],
+      invoices: [
+        { id: 1, amount: 100, projectId: 1 },
+        { id: 2, amount: 250, projectId: 1 },
+        { id: 3, amount: 50, projectId: 1 },
+        // An invoice on a DIFFERENT project must not show here, nor count toward this total.
+        { id: 4, amount: 999, projectId: 2 },
+      ],
+    });
+
+    await page.goto('/projects/1');
+
+    await expect(page.getByTestId('project-detail-page')).toBeVisible();
+    await expect(page.getByTestId('project-invoices-table')).toBeVisible();
+
+    // Only this project's three invoices are shown, each carrying its own amount.
+    await expect(invoiceRows(page)).toHaveCount(3);
+    await expectAmount(page.getByTestId('invoice-row-1').getByTestId('invoice-amount'), 100);
+    await expectAmount(page.getByTestId('invoice-row-2').getByTestId('invoice-amount'), 250);
+    await expectAmount(page.getByTestId('invoice-row-3').getByTestId('invoice-amount'), 50);
+
+    // The other project's invoice is nowhere on this page.
+    await expect(page.getByTestId('invoice-row-4')).toHaveCount(0);
+    await expect(page.getByTestId('project-detail-page')).not.toContainText('999');
+
+    // And the page shows what they add up to: 100 + 250 + 50 = 400.
+    await expectAmount(page.getByTestId('project-invoices-total'), 400);
+  });
+
+  test('a project with no invoices shows an empty list that adds up to zero', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
+      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
+      invoices: [],
+    });
+
+    await page.goto('/projects/1');
+
+    await expect(page.getByTestId('project-detail-page')).toBeVisible();
+    await expect(invoiceRows(page)).toHaveCount(0);
+    // Nothing invoiced yet, so what they add up to is zero.
+    await expectAmount(page.getByTestId('project-invoices-total'), 0);
+  });
+
+  test('adding a new invoice for an amount shows it and grows the total', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
+      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
+      invoices: [{ id: 1, amount: 100, projectId: 1 }],
+    });
+
+    await page.goto('/projects/1');
+    await expect(invoiceRows(page)).toHaveCount(1);
+    await expectAmount(page.getByTestId('project-invoices-total'), 100);
+
+    // Add a new invoice by giving it an amount.
+    await expect(page.getByTestId('invoice-form')).toBeVisible();
+    await page.getByTestId('invoice-form-amount').fill('300');
+    await page.getByTestId('invoice-form-submit').click();
+
+    // The new invoice joins the same list. Its id is assigned by the server, so locate the new row
+    // by the amount it carries rather than by a known id.
+    const addedRow = invoiceRows(page).filter({
+      has: page.getByTestId('invoice-amount').getByText('300', { exact: false }),
+    });
+    await expect(addedRow).toHaveCount(1);
+
+    // Both invoices are now listed, and the total has grown to 100 + 300 = 400.
+    await expect(invoiceRows(page)).toHaveCount(2);
+    await expectAmount(page.getByTestId('project-invoices-total'), 400);
+
+    // And it survives a fresh load from the server.
+    await page.reload();
+    await expect(invoiceRows(page)).toHaveCount(2);
+    await expect(
+      invoiceRows(page).filter({
+        has: page.getByTestId('invoice-amount').getByText('300', { exact: false }),
+      }),
+    ).toHaveCount(1);
+    await expectAmount(page.getByTestId('project-invoices-total'), 400);
+  });
+
+  test('a new invoice added to an empty project appears and the total reflects it', async ({
+    page,
+  }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
+      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
+      invoices: [],
+    });
+
+    await page.goto('/projects/1');
+    await expect(invoiceRows(page)).toHaveCount(0);
+    await expectAmount(page.getByTestId('project-invoices-total'), 0);
+
+    await page.getByTestId('invoice-form-amount').fill('175');
+    await page.getByTestId('invoice-form-submit').click();
+
+    await expect(invoiceRows(page)).toHaveCount(1);
+    await expectAmount(invoiceRows(page).getByTestId('invoice-amount'), 175);
+    await expectAmount(page.getByTestId('project-invoices-total'), 175);
+  });
+});
