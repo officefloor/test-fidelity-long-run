@@ -1,0 +1,144 @@
+// Acceptance test for the change request:
+//   "When I open a client show me the projects I am doing for them."
+//
+// Opening a client (client-open-<id> from the clients list) lands on that client's detail page
+// (client-detail-page, at /clients/<id>). The detail page lists THE PROJECTS being done for THAT
+// client — only that client's projects, each shown with its name. A client with no projects shows
+// an empty state (client-projects-empty) instead of the table (client-projects-table).
+//
+// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed (the app's /__test__
+// endpoint): `clients` honours { id, name, email } and `projects` honours { id, name, clientId }.
+import { test, expect, type Page } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+const projectRows = (page: Page) => page.locator('[data-testid^="project-row-"]');
+
+// Locate the one project row carrying the given name, regardless of its server-assigned id.
+const projectRowNamed = (page: Page, name: string) =>
+  projectRows(page).filter({
+    has: page.getByTestId('project-name').getByText(name, { exact: true }),
+  });
+
+test.describe('Client projects', () => {
+  test('opening a client from the list lands on its detail page', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
+      projects: [],
+    });
+
+    await page.goto('/clients');
+    await expect(page.getByTestId('client-row-1')).toBeVisible();
+
+    // Opening the client is a navigation, not a flag: following it lands on that client's own
+    // detail page.
+    const open = page.getByTestId('client-open-1');
+    await expect(open).toBeVisible();
+    await open.click();
+
+    await expect(page).toHaveURL(/\/clients\/1$/);
+    await expect(page.getByTestId('client-detail-page')).toBeVisible();
+  });
+
+  test('the detail page lists the projects being done for that client', async ({ page }) => {
+    await resetAndSeed({
+      clients: [
+        { id: 1, name: 'Acme Corp', email: 'hello@acme.test' },
+        { id: 2, name: 'Globex', email: 'contact@globex.test' },
+      ],
+      projects: [
+        { id: 1, name: 'Website Redesign', clientId: 1 },
+        { id: 2, name: 'Billing System', clientId: 1 },
+        // A project for a DIFFERENT client must not show on this client's page.
+        { id: 3, name: 'Mobile App', clientId: 2 },
+      ],
+    });
+
+    await page.goto('/clients/1');
+
+    await expect(page.getByTestId('client-detail-page')).toBeVisible();
+    await expect(page.getByTestId('client-projects-table')).toBeVisible();
+    await expect(page.getByTestId('client-projects-empty')).toHaveCount(0);
+
+    // Only this client's two projects are shown, each carrying its own name.
+    await expect(projectRows(page)).toHaveCount(2);
+    await expect(page.getByTestId('project-row-1').getByTestId('project-name')).toHaveText(
+      'Website Redesign',
+    );
+    await expect(page.getByTestId('project-row-2').getByTestId('project-name')).toHaveText(
+      'Billing System',
+    );
+
+    // The other client's project is nowhere on this page.
+    await expect(page.getByTestId('project-row-3')).toHaveCount(0);
+    await expect(page.getByTestId('client-detail-page')).not.toContainText('Mobile App');
+  });
+
+  test("opening a different client shows that client's own projects", async ({ page }) => {
+    await resetAndSeed({
+      clients: [
+        { id: 1, name: 'Acme Corp', email: 'hello@acme.test' },
+        { id: 2, name: 'Globex', email: 'contact@globex.test' },
+      ],
+      projects: [
+        { id: 1, name: 'Website Redesign', clientId: 1 },
+        { id: 2, name: 'Billing System', clientId: 1 },
+        { id: 3, name: 'Mobile App', clientId: 2 },
+      ],
+    });
+
+    await page.goto('/clients/2');
+
+    await expect(page.getByTestId('client-detail-page')).toBeVisible();
+    await expect(page.getByTestId('client-projects-table')).toBeVisible();
+
+    // Globex has exactly one project; Acme's two projects do not appear here.
+    await expect(projectRows(page)).toHaveCount(1);
+    await expect(projectRowNamed(page, 'Mobile App')).toHaveCount(1);
+    await expect(page.getByTestId('client-detail-page')).not.toContainText('Website Redesign');
+    await expect(page.getByTestId('client-detail-page')).not.toContainText('Billing System');
+  });
+
+  test('a client with no projects shows an empty state', async ({ page }) => {
+    await resetAndSeed({
+      clients: [
+        { id: 1, name: 'Acme Corp', email: 'hello@acme.test' },
+        { id: 2, name: 'Globex', email: 'contact@globex.test' },
+      ],
+      // Only the other client has a project; client 1 has none.
+      projects: [{ id: 1, name: 'Mobile App', clientId: 2 }],
+    });
+
+    await page.goto('/clients/1');
+
+    await expect(page.getByTestId('client-detail-page')).toBeVisible();
+    await expect(page.getByTestId('client-projects-empty')).toBeVisible();
+    // Nothing is listed, and no stray project leaks in from the other client.
+    await expect(projectRows(page)).toHaveCount(0);
+    await expect(page.getByTestId('client-detail-page')).not.toContainText('Mobile App');
+  });
+
+  test('opening a client surfaces its projects end to end from the list', async ({ page }) => {
+    await resetAndSeed({
+      clients: [
+        { id: 1, name: 'Acme Corp', email: 'hello@acme.test' },
+        { id: 2, name: 'Globex', email: 'contact@globex.test' },
+      ],
+      projects: [
+        { id: 1, name: 'Website Redesign', clientId: 1 },
+        { id: 2, name: 'Mobile App', clientId: 2 },
+      ],
+    });
+
+    await page.goto('/clients');
+    // Navigate the way a user would: open the client from its row in the list.
+    await page.getByTestId('client-open-1').click();
+
+    await expect(page).toHaveURL(/\/clients\/1$/);
+    await expect(page.getByTestId('client-detail-page')).toBeVisible();
+
+    // The projects done for Acme are shown; Globex's project is not.
+    await expect(projectRows(page)).toHaveCount(1);
+    await expect(projectRowNamed(page, 'Website Redesign')).toHaveCount(1);
+    await expect(page.getByTestId('client-detail-page')).not.toContainText('Mobile App');
+  });
+});
