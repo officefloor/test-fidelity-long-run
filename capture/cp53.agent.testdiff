@@ -1,0 +1,165 @@
+diff --git a/project-code.spec.ts b/project-code.spec.ts
+new file mode 100644
+index 0000000..f488b97
+--- /dev/null
++++ b/project-code.spec.ts
+@@ -0,0 +1,124 @@
++// Acceptance tests for the change request:
++//   "Give each job a short reference code, set when creating the job. Keep it unique so no two jobs
++//    share one."
++//
++// Every job now carries a short REFERENCE CODE. The code is entered when the job is created (a new
++// project-form-code field on the add-a-job form) and is then shown as the job's own code
++// (project-code) alongside its name on the jobs list — the same per-job surface that already shows
++// a job's name, client and status. Codes must be UNIQUE: creating a job whose code already belongs
++// to another job is refused — the form surfaces project-form-code-error and no new job row appears.
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed, which honours
++// projects: { id, clientId, name, code } alongside clients — `code` seeds a job's reference code
++// directly so the display can be checked, and the enter-a-code flow is driven through the add form.
++// This change records nothing, so no audit channel is used.
++//
++// The codes seeded/entered are distinct, non-overlapping strings so a row shown with the WRONG code
++// (a leaked default, a mislabelled cell) fails rather than passing on a loose match. This SHOULD
++// FAIL before the change: a job row carries no project-code cell today, the add form has no
++// project-form-code control, and nothing enforces code uniqueness.
++import { test, expect } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++test.describe('job reference code', () => {
++  test('shows each job its OWN reference code, not a shared or fixed value', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [
++        { id: 1, clientId: 1, name: 'Website redesign', code: 'WR-01' },
++        { id: 2, clientId: 1, name: 'Warehouse automation', code: 'WH-02' },
++      ],
++    });
++
++    await page.goto('/projects');
++    await expect(page.getByTestId('projects-table')).toBeVisible();
++
++    // Job 1 shows its own code alongside its name.
++    const row1 = page.getByTestId('project-row-1');
++    await expect(row1.getByTestId('project-name')).toHaveText('Website redesign');
++    await expect(row1.getByTestId('project-code')).toContainText('WR-01');
++    await expect(row1.getByTestId('project-code')).not.toContainText('WH-02');
++
++    // Job 2 shows a DIFFERENT code — proving each job carries its own, not a fixed string.
++    const row2 = page.getByTestId('project-row-2');
++    await expect(row2.getByTestId('project-name')).toHaveText('Warehouse automation');
++    await expect(row2.getByTestId('project-code')).toContainText('WH-02');
++    await expect(row2.getByTestId('project-code')).not.toContainText('WR-01');
++  });
++
++  test('sets the reference code entered when the job is created', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [],
++    });
++
++    await page.goto('/projects');
++    await expect(page.getByTestId('projects-empty')).toBeVisible();
++
++    const form = page.getByTestId('project-form');
++    await expect(form).toBeVisible();
++    await form.getByTestId('project-form-name').fill('Billing portal');
++    await page.getByTestId('project-form-client').selectOption({ label: 'Acme Corp' });
++    // Enter the reference code as part of creating the job.
++    await page.getByTestId('project-form-code').fill('BP-07');
++    await page.getByTestId('project-form-submit').click();
++
++    // RESTART IDENTITY on reset + no jobs seeded => the created job is id 1. It shows the code that
++    // was entered — the create flow set it, it was not dropped.
++    const row = page.getByTestId('project-row-1');
++    await expect(row).toBeVisible();
++    await expect(row.getByTestId('project-name')).toHaveText('Billing portal');
++    await expect(row.getByTestId('project-code')).toContainText('BP-07');
++  });
++
++  test('refuses to create a job whose reference code already belongs to another job', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [{ id: 1, clientId: 1, name: 'Website redesign', code: 'DUP-1' }],
++    });
++
++    await page.goto('/projects');
++    await expect(page.getByTestId('project-row-1')).toBeVisible();
++
++    // Try to add a second job that reuses an existing code.
++    await page.getByTestId('project-form').getByTestId('project-form-name').fill('Another job');
++    await page.getByTestId('project-form-client').selectOption({ label: 'Acme Corp' });
++    await page.getByTestId('project-form-code').fill('DUP-1');
++    await page.getByTestId('project-form-submit').click();
++
++    // The duplicate code is rejected and surfaced on the form.
++    await expect(page.getByTestId('project-form-code-error')).toBeVisible();
++
++    // Nothing new was created: still exactly the one original job, no second row.
++    await expect(page.getByTestId('project-row-2')).toHaveCount(0);
++    await expect(page.getByTestId('project-name')).toHaveCount(1);
++    await expect(page.getByTestId('project-row-1').getByTestId('project-name')).toHaveText(
++      'Website redesign',
++    );
++  });
++
++  test('still creates a job whose reference code is not already taken', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [{ id: 1, clientId: 1, name: 'Website redesign', code: 'DUP-1' }],
++    });
++
++    await page.goto('/projects');
++    await expect(page.getByTestId('project-row-1')).toBeVisible();
++
++    // A distinct code saves as usual.
++    await page.getByTestId('project-form').getByTestId('project-form-name').fill('Mobile app');
++    await page.getByTestId('project-form-client').selectOption({ label: 'Acme Corp' });
++    await page.getByTestId('project-form-code').fill('MA-09');
++    await page.getByTestId('project-form-submit').click();
++
++    // RESTART IDENTITY + one seeded job => the newly created job has id 2, showing the entered code.
++    const row = page.getByTestId('project-row-2');
++    await expect(row).toBeVisible();
++    await expect(row.getByTestId('project-name')).toHaveText('Mobile app');
++    await expect(row.getByTestId('project-code')).toContainText('MA-09');
++
++    // No duplicate-code error was raised for a distinct code.
++    await expect(page.getByTestId('project-form-code-error')).toHaveCount(0);
++  });
++});
+diff --git a/project-status.spec.ts b/project-status.spec.ts
+index 926ac28..5a849f8 100644
+--- a/project-status.spec.ts
++++ b/project-status.spec.ts
+@@ -99,6 +99,8 @@ test.describe('mark a project as active, on hold or finished', () => {
+     await expect(form).toBeVisible();
+     await form.getByTestId('project-form-name').fill('Billing portal');
+     await page.getByTestId('project-form-client').selectOption({ label: 'Acme Corp' });
++    // Every job now carries a reference code entered at creation (see project-code.spec.ts).
++    await page.getByTestId('project-form-code').fill('BP-01');
+ 
+     // Pick a status that is NOT the likely default ("active"), so showing it proves the pick was
+     // honoured rather than a fixed initial value being displayed.
+@@ -133,6 +135,8 @@ test.describe('mark a project as active, on hold or finished', () => {
+ 
+     await page.getByTestId('project-form').getByTestId('project-form-name').fill('Archive import');
+     await page.getByTestId('project-form-client').selectOption({ label: 'Acme Corp' });
++    // Every job now carries a reference code entered at creation (see project-code.spec.ts).
++    await page.getByTestId('project-form-code').fill('AI-01');
+     await pickStatus(page.getByTestId('project-form-status'), FINISHED);
+     await page.getByTestId('project-form-submit').click();
+ 
+diff --git a/projects.spec.ts b/projects.spec.ts
+index 591a1c2..189efa9 100644
+--- a/projects.spec.ts
++++ b/projects.spec.ts
+@@ -71,6 +71,8 @@ test.describe('projects', () => {
+     await page.getByTestId('project-form-name').fill('Mobile app');
+     // Pick which client the project is for, by the client's name.
+     await page.getByTestId('project-form-client').selectOption({ label: 'Globex' });
++    // Every job now carries a reference code entered at creation (see project-code.spec.ts).
++    await page.getByTestId('project-form-code').fill('MA-01');
+     await page.getByTestId('project-form-submit').click();
+ 
+     // Reset RESTART IDENTITY + empty projects seed => the first created project has id 1.

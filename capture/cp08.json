@@ -1,0 +1,610 @@
+{
+  "checkpoint": 8,
+  "checkpoint_id": "cp08_dashboard",
+  "type": "additive",
+  "mutates": [],
+  "mode": "agent",
+  "code_view": "previous",
+  "no_code_change": false,
+  "request": "I want a home screen. Show me how many clients and projects I have. Show me how much money I\nam still owed.\n",
+  "prompt": "You are writing ACCEPTANCE TESTS for one change to this application.\n\nYou write TESTS ONLY. Do not modify application source, build scripts, or the test support\nhelpers (e2e/support/*). A run that changes application code is void.\n\nTHE CHANGE REQUEST (as the user wrote it):\nI want a home screen. Show me how many clients and projects I have. Show me how much money I\nam still owed.\n\nWHAT TO DO\nWrite Playwright acceptance test(s) under e2e/specs/ that verify this change request has been\nimplemented. Where the request revises behaviour that your EXISTING tests already assert, update\nthose tests too \u2014 the suite must describe the application as it is meant to be after this change,\nnot as it was before.\n\nAssert only through the two public channels below. Never reach into the database, the REST API, or\napplication internals.\n\nCHANNEL 1 \u2014 the UI, via data-testid\n  Introduced by THIS change (8):\n    dashboard\n    dashboard-clients-count\n    dashboard-error\n    dashboard-loading\n    dashboard-outstanding-total\n    dashboard-page\n    dashboard-projects-count\n    nav-dashboard\n  Every anchor available to you (52):\n    app-home\n    app-nav\n    app-root\n    client-detail-page\n    client-email\n    client-form\n    client-form-email\n    client-form-email-error\n    client-form-name\n    client-form-submit\n    client-name\n    client-open-<id>\n    client-projects-empty\n    client-projects-table\n    client-row-<id>\n    client-search\n    clients-empty\n    clients-page\n    clients-table\n    dashboard\n    dashboard-clients-count\n    dashboard-error\n    dashboard-loading\n    dashboard-outstanding-total\n    dashboard-page\n    dashboard-projects-count\n    home-empty\n    invoice-amount\n    invoice-form\n    invoice-form-amount\n    invoice-form-submit\n    invoice-pay-<id>\n    invoice-row-<id>\n    invoice-status\n    nav-clients\n    nav-dashboard\n    nav-home\n    nav-projects\n    project-client\n    project-detail-page\n    project-form\n    project-form-client\n    project-form-name\n    project-form-submit\n    project-invoices-table\n    project-invoices-total\n    project-name\n    project-open-<id>\n    project-row-<id>\n    projects-empty\n    projects-page\n    projects-table\n  `<id>` / `<currency>` are placeholders: the concrete value comes from the data\n  your test seeds, e.g. client-row-1. Anchors are a stable contract \u2014 use them\n  exactly as written.\n\nCHANNEL 2 \u2014 the audit file, via auditLines() from ../support/audit\n  Introduced by THIS change (0):\n    (none)\n  Every record format available to you (1):\n    INVOICE_PAID id=<id> amount=<amount>\n\nSEED FIELDS HONOURED by /__test__/seed (anything else is ignored):\n    clients: email, id, name\n    invoices: amount, id, projectId, status\n    projects: clientId, id, name\n\nHOW DATA IS ARRANGED\nCall `resetAndSeed({...})` from `../support/seed` to put the application into the state your test\nneeds (it clears all data and the audit file first). Only the seed fields listed above are\nhonoured \u2014 a field that is not listed is accepted and SILENTLY IGNORED, so seeding it will look\nlike it worked and your assertion will fail for an unrelated-looking reason.\n\nTHE APPLICATION\nThe source in this directory is the application as it stands BEFORE this change request has been\nimplemented. You can read it and run it. Your new test SHOULD FAIL against it \u2014 the behaviour\nbeing requested is not there yet. That is expected, and is not a reason to weaken the test. Your\nexisting tests should still pass.\n\nYOUR EXISTING TESTS\n  e2e/specs/ holds the 7 spec file(s) you have written so far (22 tests).\n  Their git history is available. Update them where this change request revises\n  behaviour they assert; otherwise leave them alone.\n    client-email.spec.ts\n    client-projects.spec.ts\n    client-search.spec.ts\n    clients.spec.ts\n    invoice-paid.spec.ts\n    project-invoices.spec.ts\n    projects.spec.ts\n",
+  "contract": {
+    "checkpoint": 8,
+    "no_code_change": false,
+    "new_testids": [
+      "dashboard",
+      "dashboard-clients-count",
+      "dashboard-error",
+      "dashboard-loading",
+      "dashboard-outstanding-total",
+      "dashboard-page",
+      "dashboard-projects-count",
+      "nav-dashboard"
+    ],
+    "new_audit_records": null,
+    "available_testids": [
+      "app-home",
+      "app-nav",
+      "app-root",
+      "client-detail-page",
+      "client-email",
+      "client-form",
+      "client-form-email",
+      "client-form-email-error",
+      "client-form-name",
+      "client-form-submit",
+      "client-name",
+      "client-open-<id>",
+      "client-projects-empty",
+      "client-projects-table",
+      "client-row-<id>",
+      "client-search",
+      "clients-empty",
+      "clients-page",
+      "clients-table",
+      "dashboard",
+      "dashboard-clients-count",
+      "dashboard-error",
+      "dashboard-loading",
+      "dashboard-outstanding-total",
+      "dashboard-page",
+      "dashboard-projects-count",
+      "home-empty",
+      "invoice-amount",
+      "invoice-form",
+      "invoice-form-amount",
+      "invoice-form-submit",
+      "invoice-pay-<id>",
+      "invoice-row-<id>",
+      "invoice-status",
+      "nav-clients",
+      "nav-dashboard",
+      "nav-home",
+      "nav-projects",
+      "project-client",
+      "project-detail-page",
+      "project-form",
+      "project-form-client",
+      "project-form-name",
+      "project-form-submit",
+      "project-invoices-table",
+      "project-invoices-total",
+      "project-name",
+      "project-open-<id>",
+      "project-row-<id>",
+      "projects-empty",
+      "projects-page",
+      "projects-table"
+    ],
+    "available_audit_records": [
+      "INVOICE_PAID id=<id> amount=<amount>"
+    ],
+    "seed_accepts": {
+      "clients": [
+        "email",
+        "id",
+        "name"
+      ],
+      "invoices": [
+        "amount",
+        "id",
+        "projectId",
+        "status"
+      ],
+      "projects": [
+        "clientId",
+        "id",
+        "name"
+      ]
+    }
+  },
+  "reference": {
+    "repo": "officehq-tanstack-officefloor",
+    "origin": "git@github.com:officefloor/officehq-tanstack-officefloor.git",
+    "branch": "evolve/202610020135/just-solve/chain2",
+    "repairs_applied": [
+      "005-seed-advances-the-clients-identity"
+    ]
+  },
+  "suite": {
+    "files": {
+      "client-email.spec.ts": [
+        "client-email.spec.ts::does not show the email error before the user tries to save",
+        "client-email.spec.ts::refuses to save a client with no email",
+        "client-email.spec.ts::refuses to save a client with a malformed email",
+        "client-email.spec.ts::saves the client once a proper email is provided, clearing the error"
+      ],
+      "client-projects.spec.ts": [
+        "client-projects.spec.ts::opening a client shows the projects being done for them",
+        "client-projects.spec.ts::a client with no projects of their own shows an empty state"
+      ],
+      "client-search.spec.ts": [
+        "client-search.spec.ts::narrows the list to clients whose name matches what is typed",
+        "client-search.spec.ts::clearing the box shows every client again",
+        "client-search.spec.ts::a search that matches no client hides every row"
+      ],
+      "clients.spec.ts": [
+        "clients.spec.ts::lists all seeded clients in one list, each with name and email",
+        "clients.spec.ts::shows an empty state when there are no clients",
+        "clients.spec.ts::adds a client with their name and email through the form",
+        "clients.spec.ts::reaches the clients list from the nav"
+      ],
+      "dashboard.spec.ts": [
+        "dashboard.spec.ts::reaches the dashboard from the nav",
+        "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed",
+        "dashboard.spec.ts::a paid invoice is not money still owed",
+        "dashboard.spec.ts::with no data at all the figures are zero"
+      ],
+      "invoice-paid.spec.ts": [
+        "invoice-paid.spec.ts::marking an unpaid invoice paid flips its status and records it",
+        "invoice-paid.spec.ts::keeps a separate record each time, and marking one leaves the others untouched"
+      ],
+      "project-invoices.spec.ts": [
+        "project-invoices.spec.ts::opening a project shows its invoices and what they add up to",
+        "project-invoices.spec.ts::adds a new invoice for an amount, which then appears and is added into the total",
+        "project-invoices.spec.ts::a freshly added invoice adds onto the existing total"
+      ],
+      "projects.spec.ts": [
+        "projects.spec.ts::lists all seeded projects, each with its name and the client it is for",
+        "projects.spec.ts::shows an empty state when there are no projects",
+        "projects.spec.ts::adds a project and picks which client it is for, then shows it with the client name",
+        "projects.spec.ts::reaches the projects list from the nav"
+      ]
+    },
+    "total_tests": 26,
+    "file_delta": {
+      "added": [
+        "dashboard.spec.ts"
+      ],
+      "removed": [],
+      "modified": []
+    },
+    "test_delta": {
+      "added": [
+        "dashboard.spec.ts::a paid invoice is not money still owed",
+        "dashboard.spec.ts::reaches the dashboard from the nav",
+        "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed",
+        "dashboard.spec.ts::with no data at all the figures are zero"
+      ],
+      "removed": []
+    },
+    "test_moves": {
+      "added": [
+        "dashboard.spec.ts::reaches the dashboard from the nav",
+        "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed",
+        "dashboard.spec.ts::a paid invoice is not money still owed",
+        "dashboard.spec.ts::with no data at all the figures are zero"
+      ],
+      "revised": [],
+      "dropped": [],
+      "file_gone": []
+    },
+    "gate_id_delta": {
+      "added": [
+        "dashboard.spec.ts::a paid invoice is not money still owed",
+        "dashboard.spec.ts::reaches the dashboard from the nav",
+        "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed",
+        "dashboard.spec.ts::with no data at all the figures are zero"
+      ],
+      "removed": []
+    }
+  },
+  "source": {
+    "kind": "agent",
+    "suite_repo": "/home/daniel/test-fidelity-long-run/runs/202610060034/chain1/suite",
+    "suite_commit": "149827a2819b835c0f57c2dcaaa9d0d60bba5fcf",
+    "code_view": "previous",
+    "view_checkpoint": 7,
+    "files_added": [
+      "dashboard.spec.ts"
+    ],
+    "files_removed": []
+  },
+  "gate": {
+    "build_ok": true,
+    "total_selected": 26,
+    "passed": 25,
+    "failed_count": 1,
+    "failed": [
+      "project-invoices.spec.ts::a freshly added invoice adds onto the existing total"
+    ],
+    "repeats": 2,
+    "flaky": [],
+    "flaky_count": 0,
+    "results": {
+      "client-email.spec.ts::does not show the email error before the user tries to save": true,
+      "client-email.spec.ts::refuses to save a client with no email": true,
+      "client-email.spec.ts::refuses to save a client with a malformed email": true,
+      "client-email.spec.ts::saves the client once a proper email is provided, clearing the error": true,
+      "client-projects.spec.ts::opening a client shows the projects being done for them": true,
+      "client-projects.spec.ts::a client with no projects of their own shows an empty state": true,
+      "client-search.spec.ts::narrows the list to clients whose name matches what is typed": true,
+      "client-search.spec.ts::clearing the box shows every client again": true,
+      "client-search.spec.ts::a search that matches no client hides every row": true,
+      "clients.spec.ts::lists all seeded clients in one list, each with name and email": true,
+      "clients.spec.ts::shows an empty state when there are no clients": true,
+      "clients.spec.ts::adds a client with their name and email through the form": true,
+      "clients.spec.ts::reaches the clients list from the nav": true,
+      "dashboard.spec.ts::reaches the dashboard from the nav": true,
+      "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed": true,
+      "dashboard.spec.ts::a paid invoice is not money still owed": true,
+      "dashboard.spec.ts::with no data at all the figures are zero": true,
+      "invoice-paid.spec.ts::marking an unpaid invoice paid flips its status and records it": true,
+      "invoice-paid.spec.ts::keeps a separate record each time, and marking one leaves the others untouched": true,
+      "project-invoices.spec.ts::opening a project shows its invoices and what they add up to": true,
+      "project-invoices.spec.ts::adds a new invoice for an amount, which then appears and is added into the total": true,
+      "project-invoices.spec.ts::a freshly added invoice adds onto the existing total": false,
+      "projects.spec.ts::lists all seeded projects, each with its name and the client it is for": true,
+      "projects.spec.ts::shows an empty state when there are no projects": true,
+      "projects.spec.ts::adds a project and picks which client it is for, then shows it with the client name": true,
+      "projects.spec.ts::reaches the projects list from the nav": true
+    },
+    "results_repeats": [
+      {
+        "client-email.spec.ts::does not show the email error before the user tries to save": true,
+        "client-email.spec.ts::refuses to save a client with no email": true,
+        "client-email.spec.ts::refuses to save a client with a malformed email": true,
+        "client-email.spec.ts::saves the client once a proper email is provided, clearing the error": true,
+        "client-projects.spec.ts::opening a client shows the projects being done for them": true,
+        "client-projects.spec.ts::a client with no projects of their own shows an empty state": true,
+        "client-search.spec.ts::narrows the list to clients whose name matches what is typed": true,
+        "client-search.spec.ts::clearing the box shows every client again": true,
+        "client-search.spec.ts::a search that matches no client hides every row": true,
+        "clients.spec.ts::lists all seeded clients in one list, each with name and email": true,
+        "clients.spec.ts::shows an empty state when there are no clients": true,
+        "clients.spec.ts::adds a client with their name and email through the form": true,
+        "clients.spec.ts::reaches the clients list from the nav": true,
+        "dashboard.spec.ts::reaches the dashboard from the nav": true,
+        "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed": true,
+        "dashboard.spec.ts::a paid invoice is not money still owed": true,
+        "dashboard.spec.ts::with no data at all the figures are zero": true,
+        "invoice-paid.spec.ts::marking an unpaid invoice paid flips its status and records it": true,
+        "invoice-paid.spec.ts::keeps a separate record each time, and marking one leaves the others untouched": true,
+        "project-invoices.spec.ts::opening a project shows its invoices and what they add up to": true,
+        "project-invoices.spec.ts::adds a new invoice for an amount, which then appears and is added into the total": true,
+        "project-invoices.spec.ts::a freshly added invoice adds onto the existing total": false,
+        "projects.spec.ts::lists all seeded projects, each with its name and the client it is for": true,
+        "projects.spec.ts::shows an empty state when there are no projects": true,
+        "projects.spec.ts::adds a project and picks which client it is for, then shows it with the client name": true,
+        "projects.spec.ts::reaches the projects list from the nav": true
+      }
+    ],
+    "detail": [
+      {
+        "test_id": "client-email.spec.ts::does not show the email error before the user tries to save",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 182,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email.spec.ts::refuses to save a client with no email",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 343,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email.spec.ts::refuses to save a client with a malformed email",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 296,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email.spec.ts::saves the client once a proper email is provided, clearing the error",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 378,
+        "failure": ""
+      },
+      {
+        "test_id": "client-projects.spec.ts::opening a client shows the projects being done for them",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 313,
+        "failure": ""
+      },
+      {
+        "test_id": "client-projects.spec.ts::a client with no projects of their own shows an empty state",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 160,
+        "failure": ""
+      },
+      {
+        "test_id": "client-search.spec.ts::narrows the list to clients whose name matches what is typed",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 253,
+        "failure": ""
+      },
+      {
+        "test_id": "client-search.spec.ts::clearing the box shows every client again",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 139,
+        "failure": ""
+      },
+      {
+        "test_id": "client-search.spec.ts::a search that matches no client hides every row",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 126,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::lists all seeded clients in one list, each with name and email",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 125,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::shows an empty state when there are no clients",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 104,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::adds a client with their name and email through the form",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 305,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::reaches the clients list from the nav",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 151,
+        "failure": ""
+      },
+      {
+        "test_id": "dashboard.spec.ts::reaches the dashboard from the nav",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 517,
+        "failure": ""
+      },
+      {
+        "test_id": "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 302,
+        "failure": ""
+      },
+      {
+        "test_id": "dashboard.spec.ts::a paid invoice is not money still owed",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 152,
+        "failure": ""
+      },
+      {
+        "test_id": "dashboard.spec.ts::with no data at all the figures are zero",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 144,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-paid.spec.ts::marking an unpaid invoice paid flips its status and records it",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 419,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-paid.spec.ts::keeps a separate record each time, and marking one leaves the others untouched",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 520,
+        "failure": ""
+      },
+      {
+        "test_id": "project-invoices.spec.ts::opening a project shows its invoices and what they add up to",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 204,
+        "failure": ""
+      },
+      {
+        "test_id": "project-invoices.spec.ts::adds a new invoice for an amount, which then appears and is added into the total",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 342,
+        "failure": ""
+      },
+      {
+        "test_id": "project-invoices.spec.ts::a freshly added invoice adds onto the existing total",
+        "category": "functionality",
+        "passed": false,
+        "duration_ms": 5249,
+        "failure": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: getByTestId('invoice-row-2').getByTestId('invoice-amount')\nExpected string: \u001b[32m\"300\"\u001b[39m\nReceived: <element(s) not found>\nCall log:\n  \u001b[2m- expect.toContainText with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('invoice-row-2').getByTestId('invoice-amount')\u001b[22m\n\n\n  103 |     // Both invoices now listed, and the total is 120 + 300 = 420.\n  104 |     await expect(page.getByTestId('invoice-row-1').getByTestId('invoice-amount')).toContainText('120');\n> 105 |     await expect(page.getByTestId('invoice-row-2').getByTestId('invoice-amount')).toContainText('300');\n      |                                                                                   ^\n  106 |     await expect(page.getByTestId('project-invoices-total')).toContainText('420');\n  107 |   });\n  108 | });\n\n    at /home/daniel/test-fidelity-long-run/work/202610060034/cp08/e2e/specs/project-invoices.spec.ts:105:83 | Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: getByTestId('invoice-row-2').getByTestId('invoice-amount')\nExpected string: \u001b[32m\"300\"\u001b[39m\nReceived: <element(s) not found>\nCall log:\n  \u001b[2m- expect.toContainText with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('invoice-row-2').getByTestId('invoice-amount')\u001b[22m\n"
+      },
+      {
+        "test_id": "projects.spec.ts::lists all seeded projects, each with its name and the client it is for",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 211,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::shows an empty state when there are no projects",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 113,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::adds a project and picks which client it is for, then shows it with the client name",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 428,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::reaches the projects list from the nav",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 136,
+        "failure": ""
+      }
+    ],
+    "error": "",
+    "gate_invalid": false,
+    "gate_attempts": 1,
+    "test_seconds": 11.47,
+    "wall_seconds": 58.8
+  },
+  "mutations": [
+    {
+      "id": "zero",
+      "kind": "zero",
+      "description": "application at cp07 \u2014 this change's feature absent",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "dashboard.spec.ts::a paid invoice is not money still owed",
+        "dashboard.spec.ts::reaches the dashboard from the nav",
+        "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed",
+        "dashboard.spec.ts::with no data at all the figures are zero"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 26,
+      "failed_count": 5,
+      "error": ""
+    },
+    {
+      "id": "001-outstanding-includes-paid-invoices",
+      "kind": "authored",
+      "description": "Paid invoices are counted as still owed. The behavioural heart of the clause, and the one a\ntest written by reading the code is most likely to miss: both versions show a plausible\nfigure, so only a fixture with a PAID invoice and an exact assertion catches it.",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "dashboard.spec.ts::a paid invoice is not money still owed",
+        "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 26,
+      "failed_count": 3,
+      "error": "",
+      "file": "src/main/java/net/officefloor/hq/app/DashboardGetLogic.java",
+      "applied": true,
+      "clause": "how much money I am still owed",
+      "uncalibrated": false
+    },
+    {
+      "id": "002-client-count-off-by-one",
+      "kind": "authored",
+      "description": "One fewer client than exists. Killed by an exact count; survived by a test that only\nasserts the tile is present or non-zero.",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "dashboard.spec.ts::a paid invoice is not money still owed",
+        "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed",
+        "dashboard.spec.ts::with no data at all the figures are zero"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 26,
+      "failed_count": 4,
+      "error": "",
+      "file": "src/main/java/net/officefloor/hq/app/DashboardGetLogic.java",
+      "applied": true,
+      "clause": "how many clients",
+      "uncalibrated": false
+    },
+    {
+      "id": "003-outstanding-loses-its-cents",
+      "kind": "authored",
+      "description": "The total renders with no decimals \u2014 300 rather than 300.00. Right value, wrong money.",
+      "expect_kill": true,
+      "killed": false,
+      "correct": false,
+      "new_failures": [],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 26,
+      "failed_count": 1,
+      "error": "",
+      "file": "src/main/frontend/features/dashboard/Dashboard.tsx",
+      "applied": true,
+      "clause": "how much money",
+      "uncalibrated": false
+    }
+  ],
+  "verdict": {
+    "green": false,
+    "flaky_tests": [],
+    "test_seconds": 11.47,
+    "wall_seconds": 58.8,
+    "suite_non_decreasing": true,
+    "tests_total": 26,
+    "tests_delta": 4,
+    "tests_added": 4,
+    "tests_revised": 0,
+    "tests_dropped": 0,
+    "app_code_touched": [],
+    "mutation_zero_correct": true,
+    "kill_rate": 0.6666666666666666,
+    "mutations_authored": 3,
+    "mutations_killed": 2,
+    "survived": [
+      "003-outstanding-loses-its-cents"
+    ]
+  },
+  "files": {
+    "prompt": "cp08.prompt.txt",
+    "build_log": "cp08.build.log"
+  },
+  "agent": {
+    "ok": true,
+    "cost_usd": 0.901392,
+    "input_tokens": 26,
+    "output_tokens": 12013,
+    "cache_read_tokens": 445844,
+    "cache_creation_tokens": 37600,
+    "num_turns": 15,
+    "duration_ms": 369299,
+    "duration_api_ms": 175754,
+    "model": "claude-opus-4-8",
+    "session_id": "eab48bb1-b168-4771-ac17-beab6117ed65",
+    "stop_reason": "success",
+    "result_text": "Done. I wrote one new acceptance spec for the dashboard change request.\n\n## What I added\n\n`e2e/specs/dashboard.spec.ts` \u2014 four tests covering the request (\"a home screen\" showing client/project counts and money still owed), asserting only through `data-testid`:\n\n1. **reaches the dashboard from the nav** \u2014 `nav-dashboard` \u2192 `dashboard-page` / `dashboard`.\n2. **shows counts and outstanding** \u2014 2 clients, 3 projects; outstanding = sum of **UNPAID** invoice amounts across projects (120+300+55 = **475**), explicitly **not** including a PAID 999. Also checks `dashboard-loading`/`dashboard-error` have resolved away.\n3. **a paid invoice is not money still owed** \u2014 all invoices PAID \u21d2 outstanding is 0, not any paid amount.\n4. **no data \u21d2 zero figures** \u2014 empty seed gives 0/0/0.\n\nDesign notes: I reach the dashboard via `nav-dashboard` rather than hard-coding a URL (the nav link is the stable contract, the path is the implementer's choice); counts/amounts use `toContainText` so labels and currency formatting pass, with distinct values chosen so none is a substring of another; \"still owed\" is interpreted as unpaid invoices, consistent with the UNPAID/PAID status model and the existing `invoice-paid` spec.\n\n## Verification\n\n- My 4 dashboard tests **fail against the current app** for the right reason \u2014 `nav-dashboard`/`dashboard-page` don't exist yet. That's the expected pre-implementation state.\n- The change is purely additive (no existing spec asserts dashboard behaviour, and a new nav link doesn't break the existing nav tests), so I modified no existing specs.\n\n## One thing to flag\n\nA pre-existing spec I did **not** touch \u2014 `project-invoices.spec.ts \u203a \"a freshly added invoice adds onto the existing total\"` \u2014 **fails deterministically (3/3 reruns) in this checkpoint even with my spec removed** (21 passed, 1 failed). It's a pre-existing application/seed-support bug (the classic IDENTITY-collision pitfall: an invoice seeded with explicit `id=1`, then one created via the form, don't land on `id=2`). It's unrelated to the dashboard change request, so per the \"tests only / only revise specs the change request changes\" rules I left it alone rather than weakening or rewriting it. Worth a look separately, but it's outside the scope of this task.",
+    "error": "",
+    "attempts": [
+      {
+        "ok": true,
+        "limit_reached": false,
+        "retryable": false,
+        "cost_usd": 0.901392,
+        "num_turns": 15,
+        "duration_ms": 369299,
+        "duration_api_ms": 175754,
+        "error": ""
+      }
+    ],
+    "app_diff_file": "cp08.agent.appdiff",
+    "test_diff_file": "cp08.agent.testdiff",
+    "stream_file": "cp08.agent.jsonl",
+    "suite_commit": "149827a2819b835c0f57c2dcaaa9d0d60bba5fcf",
+    "sandbox_leaks": {
+      "hard": [
+        "pom.xml:82: managed by the parent BOM. Found via the cp01 dry run. flyway-core 12.x has H2 support"
+      ],
+      "soft": [
+        "src/main/java/net/officefloor/hq/app/Audit.java:31: /** Append one audit record. Checkpoints assert the exact line(s) in the file. */",
+        "src/main/java/net/officefloor/hq/app/Application.java:12: * At the base this is a bare shell; checkpoints add migrations, officefloor/rest routes + logic,",
+        "src/main/frontend/vite.config.ts:11: // file is gitignored \u2014 it is a build artifact and must never appear in a checkpoint's diff."
+      ]
+    }
+  }
+}

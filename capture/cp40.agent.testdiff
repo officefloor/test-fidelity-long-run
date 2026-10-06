@@ -1,0 +1,105 @@
+diff --git a/money-thousands-separator.spec.ts b/money-thousands-separator.spec.ts
+new file mode 100644
+index 0000000..532d87d
+--- /dev/null
++++ b/money-thousands-separator.spec.ts
+@@ -0,0 +1,99 @@
++// Acceptance tests for the change request:
++//   "For bigger amounts put commas in. Show it like $1,234.50. Do this everywhere an amount shows,
++//    including on the invoices and on the client statement."
++//
++// The app already renders money with a dollar sign and two decimal places (see money-format.spec.ts,
++// which pins "$120.00" / "$99.50" / "$0.00" for amounts below a thousand — those stay exactly as
++// they are). This change adds a THOUSANDS SEPARATOR: once an amount reaches a thousand it is grouped
++// with commas, so 1234.50 shows as "$1,234.50" and a million shows as "$1,000,000.00" (two commas).
++// Because money is formatted the same way everywhere, this must hold wherever an amount is surfaced;
++// the request calls out the invoices and the client statement by name, so those are what this spec
++// pins — exactly, with toHaveText, including the commas.
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed, which honours
++// clients { id, name, email }, projects { id, clientId, name }, invoices { id, projectId, amount,
++// status } and payments { id, invoiceId, amount, date }. No audit record is involved.
++//
++// Amounts are chosen so every asserted value is at or above a thousand and so carries a comma, and so
++// that no two expected strings collide. Against the app BEFORE this change (a bare "$1234.50" with no
++// comma) every assertion here fails, which is expected.
++import { test, expect } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++test.describe('bigger amounts are grouped with commas, like $1,234.50', () => {
++  test("a project's invoice amounts and their total carry thousands commas", async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
++      invoices: [
++        // A four-figure amount with cents -> one comma: $1,234.50 (the example from the request).
++        { id: 1, projectId: 1, amount: 1234.5, status: 'SENT' },
++        // A seven-figure amount -> two commas, cents still padded: $1,000,000.00.
++        { id: 2, projectId: 1, amount: 1000000, status: 'SENT' },
++      ],
++    });
++
++    await page.goto('/projects');
++    await page.getByTestId('project-open-1').click();
++    await expect(page.getByTestId('project-detail-page')).toBeVisible();
++
++    await expect(page.getByTestId('invoice-row-1').getByTestId('invoice-amount')).toHaveText('$1,234.50');
++    await expect(page.getByTestId('invoice-row-2').getByTestId('invoice-amount')).toHaveText('$1,000,000.00');
++
++    // The invoices total (1234.50 + 1,000,000 = 1,001,234.50) is money too, grouped the same way.
++    await expect(page.getByTestId('project-invoices-total')).toHaveText('$1,001,234.50');
++  });
++
++  test('the all-invoices list groups each amount with commas', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
++      invoices: [
++        { id: 1, projectId: 1, amount: 2500, status: 'SENT' },
++        { id: 2, projectId: 1, amount: 12345.67, status: 'SENT' },
++      ],
++    });
++
++    await page.goto('/invoices');
++    await expect(page.getByTestId('all-invoices-table')).toBeVisible();
++
++    await expect(page.getByTestId('invoice-row-1').getByTestId('invoice-amount')).toHaveText('$2,500.00');
++    await expect(page.getByTestId('invoice-row-2').getByTestId('invoice-amount')).toHaveText('$12,345.67');
++  });
++
++  test('the client statement groups amount, paid, due and the owed total with commas', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
++      invoices: [
++        // 5234.50 billed, 1234.50 paid -> 4000.00 still due; still SENT (part paid, counts toward owed).
++        { id: 1, projectId: 1, amount: 5234.5, status: 'SENT' },
++        // 2500 billed, nothing paid -> 2500.00 still due.
++        { id: 2, projectId: 1, amount: 2500, status: 'SENT' },
++      ],
++      payments: [{ id: 1, invoiceId: 1, amount: 1234.5, date: '2025-06-15' }],
++    });
++
++    await page.goto('/clients');
++    await page.getByTestId('client-open-1').click();
++    await expect(page.getByTestId('client-detail-page')).toBeVisible();
++    await page.getByTestId('client-statement-open').click();
++    await expect(page.getByTestId('client-statement')).toBeVisible();
++    await expect(page.getByTestId('client-statement-table')).toBeVisible();
++
++    // Invoice 1: billed $5,234.50, paid $1,234.50, due $4,000.00 — every money cell grouped.
++    const row1 = page.getByTestId('statement-invoice-row-1');
++    await expect(row1.getByTestId('statement-invoice-amount')).toHaveText('$5,234.50');
++    await expect(row1.getByTestId('statement-invoice-paid')).toHaveText('$1,234.50');
++    await expect(row1.getByTestId('statement-invoice-due')).toHaveText('$4,000.00');
++
++    // Invoice 2: billed $2,500.00, nothing paid, $2,500.00 due.
++    const row2 = page.getByTestId('statement-invoice-row-2');
++    await expect(row2.getByTestId('statement-invoice-amount')).toHaveText('$2,500.00');
++    await expect(row2.getByTestId('statement-invoice-paid')).toHaveText('$0.00');
++    await expect(row2.getByTestId('statement-invoice-due')).toHaveText('$2,500.00');
++
++    // Still owed = 4000.00 + 2500.00 = 6500.00, grouped: $6,500.00.
++    await expect(page.getByTestId('client-outstanding-total')).toHaveText('$6,500.00');
++  });
++});

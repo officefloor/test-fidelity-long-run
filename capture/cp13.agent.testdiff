@@ -1,0 +1,304 @@
+diff --git a/dashboard.spec.ts b/dashboard.spec.ts
+index 86680b1..6df8389 100644
+--- a/dashboard.spec.ts
++++ b/dashboard.spec.ts
+@@ -6,8 +6,9 @@
+ //   - how many CLIENTS there are              -> dashboard-clients-count
+ //   - how many PROJECTS there are             -> dashboard-projects-count
+ //   - how much money is STILL OWED            -> dashboard-outstanding-total
+-// "Still owed" is the sum of the UNPAID invoice amounts across every project — invoices already
+-// marked PAID are not owed and must not count (status is UNPAID/PAID, see invoice-paid.spec.ts).
++// "Still owed" is the sum of the amounts not yet paid across every project — invoices already marked
++// PAID are not owed and must not count. Invoices now move through stages DRAFT -> SENT -> PAID (see
++// invoice-send.spec.ts); a SENT invoice has gone out but not been paid, so it is money still owed.
+ //
+ // Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed. Seed honours
+ // clients: { id, name, email }, projects: { id, clientId, name } and invoices: { id, projectId,
+@@ -56,10 +57,10 @@ test.describe('dashboard home screen', () => {
+         { id: 3, clientId: 2, name: 'Warehouse automation' },
+       ],
+       invoices: [
+-        // Unpaid invoices across several projects -> still owed = 120 + 300 + 55 = 475.
+-        { id: 1, projectId: 1, amount: 120, status: 'UNPAID' },
+-        { id: 2, projectId: 1, amount: 300, status: 'UNPAID' },
+-        { id: 3, projectId: 3, amount: 55, status: 'UNPAID' },
++        // Sent-but-unpaid invoices across several projects -> still owed = 120 + 300 + 55 = 475.
++        { id: 1, projectId: 1, amount: 120, status: 'SENT' },
++        { id: 2, projectId: 1, amount: 300, status: 'SENT' },
++        { id: 3, projectId: 3, amount: 55, status: 'SENT' },
+         // Already PAID -> not owed, must NOT be counted into the outstanding total.
+         { id: 4, projectId: 2, amount: 999, status: 'PAID' },
+       ],
+@@ -75,8 +76,8 @@ test.describe('dashboard home screen', () => {
+     await expect(page.getByTestId('dashboard-clients-count')).toContainText('2');
+     await expect(page.getByTestId('dashboard-projects-count')).toContainText('3');
+ 
+-    // Still owed is the sum of the UNPAID amounts only (475), not including the paid 999 — shown as
+-    // money, with a dollar sign and cents.
++    // Still owed is the sum of the not-yet-paid amounts only (475), not including the paid 999 —
++    // shown as money, with a dollar sign and cents.
+     await expect(page.getByTestId('dashboard-outstanding-total')).toContainText('$475.00');
+     await expect(page.getByTestId('dashboard-outstanding-total')).not.toContainText('999');
+   });
+diff --git a/invoice-paid.spec.ts b/invoice-paid.spec.ts
+index 31f4af7..a501cc8 100644
+--- a/invoice-paid.spec.ts
++++ b/invoice-paid.spec.ts
+@@ -1,11 +1,15 @@
+ // Acceptance tests for the change request:
+ //   "Let me mark an invoice as paid. Keep a record every time I do so I can check back later."
+ //
+-// On a project's detail page each invoice shows its status (invoice-status) and offers a control to
+-// mark it paid (invoice-pay-<id>). Marking an invoice paid flips THAT invoice's status to paid and
+-// appends one audit record — INVOICE_PAID id=<id> amount=<amount> — so the action can be checked
+-// back later. Marking one invoice must not touch its siblings, and each marking writes its own
+-// record ("every time I do").
++// On a project's detail page each invoice shows its status (invoice-status) and, once it has been
++// SENT, offers a control to mark it paid (invoice-pay-<id>). Marking an invoice paid flips THAT
++// invoice's status to paid and appends one audit record — INVOICE_PAID id=<id> amount=<amount> — so
++// the action can be checked back later. Marking one invoice must not touch its siblings, and each
++// marking writes its own record ("every time I do").
++//
++// Invoices now move through stages (DRAFT -> SENT -> PAID) and payment is only allowed once an
++// invoice has been sent (see invoice-send.spec.ts). So these tests seed invoices already at the SENT
++// stage (status: 'SENT') — the point where they are payable — and drive the pay flow from there.
+ //
+ // Asserts ONLY through the two public channels: the UI (data-testid) and the audit file
+ // (auditLines()). Data is arranged via resetAndSeed; the pay flow is driven through the UI.
+@@ -24,7 +28,7 @@ test.describe('mark invoice paid', () => {
+     await resetAndSeed({
+       clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+       projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
+-      invoices: [{ id: 1, projectId: 1, amount: 120, status: 'UNPAID' }],
++      invoices: [{ id: 1, projectId: 1, amount: 120, status: 'SENT' }],
+     });
+ 
+     await page.goto('/projects');
+@@ -58,8 +62,8 @@ test.describe('mark invoice paid', () => {
+       clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+       projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
+       invoices: [
+-        { id: 1, projectId: 1, amount: 120, status: 'UNPAID' },
+-        { id: 2, projectId: 1, amount: 80, status: 'UNPAID' },
++        { id: 1, projectId: 1, amount: 120, status: 'SENT' },
++        { id: 2, projectId: 1, amount: 80, status: 'SENT' },
+       ],
+     });
+ 
+diff --git a/invoice-send.spec.ts b/invoice-send.spec.ts
+new file mode 100644
+index 0000000..906da2c
+--- /dev/null
++++ b/invoice-send.spec.ts
+@@ -0,0 +1,171 @@
++// Acceptance tests for the change request:
++//   "Invoices should move through stages. First a draft. Then I send it. Then it gets paid. Keep a
++//    record when I send one. Only let me take payment once it has been sent."
++//
++// An invoice now moves through three stages: DRAFT -> SENT -> PAID. A freshly created invoice is a
++// DRAFT. A draft offers a control to SEND it (invoice-send-<id>); sending flips THAT invoice's
++// status to SENT and appends one audit record — INVOICE_SENT id=<id> amount=<amount> — so the send
++// can be checked back later (the UI only shows the status). Payment is GATED on sending: the mark-
++// paid control (invoice-pay-<id>) is only offered once the invoice has been sent — a draft cannot
++// be paid. Once sent, paying it works as before (status -> PAID, INVOICE_PAID record).
++//
++// Asserts ONLY through the two public channels: the UI (data-testid) and the audit file
++// (auditLines()). Data is arranged via resetAndSeed; the send/pay flows are driven through the UI.
++// Seed honours invoices: { id, projectId, amount, status } — status is seeded to place an invoice at
++// a chosen stage ('DRAFT' / 'SENT' / 'PAID').
++//
++// Status labels are asserted case-insensitively (/^draft$/i, /^sent$/i, /^paid$/i) so the test
++// tolerates whichever casing the feature renders. The audit amount is matched with an optional
++// trailing ".00" so a plain or two-decimal rendering both pass. Amounts are distinct whole numbers so
++// no value is a substring of another. This test SHOULD FAIL before the change: today a draft has no
++// send control and can be paid directly.
++import { test, expect } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++import { auditLines } from '../support/audit';
++
++test.describe('invoice stages: draft -> sent -> paid', () => {
++  test('a newly created invoice is a draft: it can be sent but not yet paid', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
++      invoices: [],
++    });
++
++    await page.goto('/projects');
++    await page.getByTestId('project-open-1').click();
++    await expect(page.getByTestId('project-detail-page')).toBeVisible();
++
++    // Create a new invoice through the form. RESTART IDENTITY + empty invoices => it gets id 1.
++    await page.getByTestId('invoice-form-amount').fill('250');
++    await page.getByTestId('invoice-form-submit').click();
++
++    const row = page.getByTestId('invoice-row-1');
++    await expect(row).toBeVisible();
++
++    // First a draft: the new invoice starts in the DRAFT stage.
++    await expect(row.getByTestId('invoice-status')).toHaveText(/^draft$/i);
++
++    // A draft can be sent, but cannot yet be paid — payment is only offered once it has been sent.
++    await expect(page.getByTestId('invoice-send-1')).toBeVisible();
++    await expect(page.getByTestId('invoice-pay-1')).toHaveCount(0);
++  });
++
++  test('sending a draft moves it to sent, keeps a record, and only then allows payment', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
++      invoices: [{ id: 1, projectId: 1, amount: 120, status: 'DRAFT' }],
++    });
++
++    await page.goto('/projects');
++    await page.getByTestId('project-open-1').click();
++    await expect(page.getByTestId('project-detail-page')).toBeVisible();
++
++    const row = page.getByTestId('invoice-row-1');
++    await expect(row).toBeVisible();
++
++    // Starts as a draft: a send control is offered, and it cannot be paid yet.
++    await expect(row.getByTestId('invoice-status')).toHaveText(/^draft$/i);
++    await expect(page.getByTestId('invoice-send-1')).toBeVisible();
++    await expect(page.getByTestId('invoice-pay-1')).toHaveCount(0);
++
++    // reset cleared the audit file — nothing has been sent yet.
++    expect(auditLines()).toEqual([]);
++
++    await page.getByTestId('invoice-send-1').click();
++
++    // Now sent: the status reflects the SENT stage.
++    await expect(row.getByTestId('invoice-status')).toHaveText(/^sent$/i);
++
++    // Exactly one record was kept for the send, naming the invoice and its amount — and only that one.
++    await expect
++      .poll(() => auditLines().filter((l) => /^INVOICE_SENT id=1 amount=120(\.0+)?$/.test(l)))
++      .toHaveLength(1);
++    expect(auditLines()).toHaveLength(1);
++
++    // Only now that it has been sent is payment offered; there is nothing left to send.
++    await expect(page.getByTestId('invoice-pay-1')).toBeVisible();
++    await expect(page.getByTestId('invoice-send-1')).toHaveCount(0);
++
++    // And paying it still works: status -> PAID, with its own INVOICE_PAID record alongside the send.
++    await page.getByTestId('invoice-pay-1').click();
++    await expect(row.getByTestId('invoice-status')).toHaveText(/^paid$/i);
++
++    await expect.poll(() => auditLines()).toHaveLength(2);
++    const lines = auditLines();
++    expect(lines.some((l) => /^INVOICE_SENT id=1 amount=120(\.0+)?$/.test(l))).toBe(true);
++    expect(lines.some((l) => /^INVOICE_PAID id=1 amount=120(\.0+)?$/.test(l))).toBe(true);
++  });
++
++  test('a draft cannot be paid but an already-sent invoice can', async ({ page }) => {
++    // Two invoices side by side: one still a DRAFT, one already SENT.
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
++      invoices: [
++        { id: 1, projectId: 1, amount: 120, status: 'DRAFT' },
++        { id: 2, projectId: 1, amount: 340, status: 'SENT' },
++      ],
++    });
++
++    await page.goto('/projects');
++    await page.getByTestId('project-open-1').click();
++    await expect(page.getByTestId('project-detail-page')).toBeVisible();
++
++    const draft = page.getByTestId('invoice-row-1');
++    const sent = page.getByTestId('invoice-row-2');
++
++    // The draft: sendable, not payable.
++    await expect(draft.getByTestId('invoice-status')).toHaveText(/^draft$/i);
++    await expect(page.getByTestId('invoice-send-1')).toBeVisible();
++    await expect(page.getByTestId('invoice-pay-1')).toHaveCount(0);
++
++    // The already-sent invoice: payable, with nothing left to send.
++    await expect(sent.getByTestId('invoice-status')).toHaveText(/^sent$/i);
++    await expect(page.getByTestId('invoice-pay-2')).toBeVisible();
++    await expect(page.getByTestId('invoice-send-2')).toHaveCount(0);
++
++    // Seeded straight into their stages — no send happened, so the audit file is empty.
++    expect(auditLines()).toEqual([]);
++  });
++
++  test('sending one draft records its own line and leaves its siblings untouched', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
++      invoices: [
++        { id: 1, projectId: 1, amount: 120, status: 'DRAFT' },
++        { id: 2, projectId: 1, amount: 340, status: 'DRAFT' },
++      ],
++    });
++
++    await page.goto('/projects');
++    await page.getByTestId('project-open-1').click();
++    await expect(page.getByTestId('project-detail-page')).toBeVisible();
++
++    const first = page.getByTestId('invoice-row-1');
++    const second = page.getByTestId('invoice-row-2');
++
++    // Send the first draft. It moves to SENT; the second is still a draft (untouched).
++    await page.getByTestId('invoice-send-1').click();
++    await expect(first.getByTestId('invoice-status')).toHaveText(/^sent$/i);
++    await expect(second.getByTestId('invoice-status')).toHaveText(/^draft$/i);
++    await expect(page.getByTestId('invoice-send-2')).toBeVisible();
++    await expect(page.getByTestId('invoice-pay-2')).toHaveCount(0);
++
++    // One record so far, for invoice 1 and its amount — and only that one.
++    await expect
++      .poll(() => auditLines().filter((l) => /^INVOICE_SENT id=1 amount=120(\.0+)?$/.test(l)))
++      .toHaveLength(1);
++    expect(auditLines()).toHaveLength(1);
++
++    // Now send the second draft too — a separate record is kept for it as well.
++    await page.getByTestId('invoice-send-2').click();
++    await expect(second.getByTestId('invoice-status')).toHaveText(/^sent$/i);
++
++    await expect.poll(() => auditLines()).toHaveLength(2);
++    const lines = auditLines();
++    expect(lines.some((l) => /^INVOICE_SENT id=1 amount=120(\.0+)?$/.test(l))).toBe(true);
++    expect(lines.some((l) => /^INVOICE_SENT id=2 amount=340(\.0+)?$/.test(l))).toBe(true);
++  });
++});
+diff --git a/money-format.spec.ts b/money-format.spec.ts
+index 2ad5646..2c958a5 100644
+--- a/money-format.spec.ts
++++ b/money-format.spec.ts
+@@ -26,9 +26,9 @@ test.describe('money is shown with a dollar sign and cents', () => {
+       clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+       projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
+       invoices: [
+-        { id: 1, projectId: 1, amount: 120, status: 'UNPAID' },
++        { id: 1, projectId: 1, amount: 120, status: 'SENT' },
+         // A non-whole amount: cents must still be padded to two places -> $99.50.
+-        { id: 2, projectId: 1, amount: 99.5, status: 'UNPAID' },
++        { id: 2, projectId: 1, amount: 99.5, status: 'SENT' },
+       ],
+     });
+ 
+@@ -45,8 +45,8 @@ test.describe('money is shown with a dollar sign and cents', () => {
+       clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+       projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
+       invoices: [
+-        { id: 1, projectId: 1, amount: 120, status: 'UNPAID' },
+-        { id: 2, projectId: 1, amount: 99.5, status: 'UNPAID' },
++        { id: 1, projectId: 1, amount: 120, status: 'SENT' },
++        { id: 2, projectId: 1, amount: 99.5, status: 'SENT' },
+       ],
+     });
+ 
+@@ -63,9 +63,9 @@ test.describe('money is shown with a dollar sign and cents', () => {
+       clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+       projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
+       invoices: [
+-        { id: 1, projectId: 1, amount: 120, status: 'UNPAID' },
+-        { id: 2, projectId: 1, amount: 300, status: 'UNPAID' },
+-        { id: 3, projectId: 1, amount: 55, status: 'UNPAID' },
++        { id: 1, projectId: 1, amount: 120, status: 'SENT' },
++        { id: 2, projectId: 1, amount: 300, status: 'SENT' },
++        { id: 3, projectId: 1, amount: 55, status: 'SENT' },
+         // PAID -> not owed, not counted.
+         { id: 4, projectId: 1, amount: 999, status: 'PAID' },
+       ],

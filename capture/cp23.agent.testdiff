@@ -1,0 +1,202 @@
+diff --git a/project-task-filter.spec.ts b/project-task-filter.spec.ts
+new file mode 100644
+index 0000000..7633db7
+--- /dev/null
++++ b/project-task-filter.spec.ts
+@@ -0,0 +1,196 @@
++// Acceptance tests for the change request:
++//   "Let me see just the open tasks on a project. Or just the finished ones."
++//
++// A project's detail page already lists all of that project's tasks (project-tasks-table), each row
++// (task-row-<id>) carrying a status (task-status) that reads one way while the task is open and a
++// different way once it is finished/done. This change adds a control (task-filter) on the project
++// detail page that narrows that list to ONE state: pick "open" and only the not-done tasks remain;
++// pick "finished" and only the done tasks remain. With nothing picked (the default) every task is
++// still shown, exactly as before, so this is a pure narrowing on top of the existing checklist.
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed; the filter is driven
++// through the task-filter control. Seed honours clients: { id, name, email },
++// projects: { id, clientId, name } and tasks: { id, projectId, title, done }.
++//
++// The filter is a single control (one testid), so it is a <select> of the states — mirroring the
++// sibling invoice-status-filter. We do not assume the casing or exact wording of its option labels or
++// values: for a wanted state we locate the option whose visible text OR value matches the state
++// (open vs finished/done) case-insensitively and select it by its own value, and to clear we select
++// the "all" option (value === '' or an "all" label). So a correct implementation passes whether it
++// renders the finished state as 'DONE'/'Done'/'Finished' and whatever value it carries.
++//
++// The status LABEL text is not hard-coded (the request does not fix any wording): the test reads the
++// open status and the finished status off reference rows while all are shown, then asserts that each
++// surviving row carries the matching status after a narrow. This SHOULD FAIL before the change: there
++// is no task-filter on the project detail page today.
++import { test, expect, type Page } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++// A single project's checklist with a mix: two OPEN tasks (1, 2) and two FINISHED tasks (3, 4). A
++// genuine "narrow to open" keeps 1 and 2 while hiding 3 and 4, and "narrow to finished" does the
++// reverse — so neither narrow can be faked by always keeping one hard-coded row. A second project
++// with its own task exists so the per-project scoping that already holds is not disturbed.
++const FIXTURE = {
++  clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++  projects: [
++    { id: 1, clientId: 1, name: 'Website redesign' },
++    { id: 2, clientId: 1, name: 'Warehouse automation' },
++  ],
++  tasks: [
++    { id: 1, projectId: 1, title: 'Design the homepage', done: false },
++    { id: 2, projectId: 1, title: 'Write the copy', done: false },
++    { id: 3, projectId: 1, title: 'Register the domain', done: true },
++    { id: 4, projectId: 1, title: 'Sign off the brief', done: true },
++    // Belongs to another project — never shown on project 1's page, filter or no filter.
++    { id: 5, projectId: 2, title: 'Install the conveyor', done: false },
++  ],
++};
++
++// The <option> value whose visible text OR value matches `state` (case-insensitive). Selecting by the
++// option's own value keeps us agnostic to the label/value casing the feature chose.
++async function optionValueFor(page: Page, state: RegExp): Promise<string> {
++  const value = await page
++    .getByTestId('task-filter')
++    .locator('option')
++    .evaluateAll((opts, src) => {
++      const re = new RegExp(src as string, 'i');
++      const match = (opts as HTMLOptionElement[]).find(
++        (o) => re.test((o.textContent ?? '').trim()) || re.test(o.value),
++      );
++      return match ? match.value : null;
++    }, state.source);
++  if (value === null) {
++    throw new Error(`task-filter has no option matching ${state}`);
++  }
++  return value;
++}
++
++// Narrow the list to a single state through the control. "open" tasks are the not-done ones;
++// "finished" tasks read as done (DONE / Done / Finished / Complete — matched loosely).
++async function narrowTo(page: Page, state: RegExp): Promise<void> {
++  await page.getByTestId('task-filter').selectOption(await optionValueFor(page, state));
++}
++
++// The "show every task" option: an empty value by convention, or an option labelled "all".
++async function showAll(page: Page): Promise<void> {
++  const value = await page
++    .getByTestId('task-filter')
++    .locator('option')
++    .evaluateAll((opts) => {
++      const match = (opts as HTMLOptionElement[]).find(
++        (o) => o.value === '' || /all/i.test((o.textContent ?? '').trim()),
++      );
++      return match ? match.value : null;
++    });
++  if (value === null) {
++    throw new Error('task-filter has no "all" option');
++  }
++  await page.getByTestId('task-filter').selectOption(value);
++}
++
++const OPEN = /open/i;
++const FINISHED = /finish|done|complete/i;
++
++// Read the status wording the app uses for an open row and a finished row, off reference rows while
++// every task is still shown. Done and open must look different, else "status" conveys nothing.
++async function referenceStatuses(page: Page): Promise<{ open: string; finished: string }> {
++  const open = ((await page.getByTestId('task-row-1').getByTestId('task-status').textContent()) ?? '').trim();
++  const finished = ((await page.getByTestId('task-row-3').getByTestId('task-status').textContent()) ?? '').trim();
++  expect(finished).not.toBe(open);
++  return { open, finished };
++}
++
++test.describe('narrow a project task list to open or finished', () => {
++  test.beforeEach(async ({ page }) => {
++    await resetAndSeed(FIXTURE);
++    await page.goto('/projects');
++    await page.getByTestId('project-open-1').click();
++    await expect(page.getByTestId('project-detail-page')).toBeVisible();
++    await expect(page.getByTestId('project-tasks-table')).toBeVisible();
++  });
++
++  test('with nothing picked, the filter is present and every task is shown', async ({ page }) => {
++    await expect(page.getByTestId('task-filter')).toBeVisible();
++
++    // Default view: all four of project 1's tasks, open and finished alike.
++    await expect(page.getByTestId('task-row-1')).toBeVisible();
++    await expect(page.getByTestId('task-row-2')).toBeVisible();
++    await expect(page.getByTestId('task-row-3')).toBeVisible();
++    await expect(page.getByTestId('task-row-4')).toBeVisible();
++    await expect(page.locator('[data-testid^="task-row-"]')).toHaveCount(4);
++
++    // The other project's task is not shown here.
++    await expect(page.getByTestId('task-row-5')).toHaveCount(0);
++  });
++
++  test('narrowing to open keeps only the not-done tasks', async ({ page }) => {
++    const { open } = await referenceStatuses(page);
++
++    // "Just the open tasks."
++    await narrowTo(page, OPEN);
++
++    // The two open tasks (1, 2) remain; the two finished ones (3, 4) are gone.
++    await expect(page.getByTestId('task-row-1')).toBeVisible();
++    await expect(page.getByTestId('task-row-2')).toBeVisible();
++    await expect(page.getByTestId('task-row-3')).toHaveCount(0);
++    await expect(page.getByTestId('task-row-4')).toHaveCount(0);
++    await expect(page.locator('[data-testid^="task-row-"]')).toHaveCount(2);
++
++    // Every row still showing reads as open.
++    await expect(page.getByTestId('task-row-1').getByTestId('task-status')).toHaveText(open);
++    await expect(page.getByTestId('task-row-2').getByTestId('task-status')).toHaveText(open);
++  });
++
++  test('narrowing to finished keeps only the done tasks', async ({ page }) => {
++    const { finished } = await referenceStatuses(page);
++
++    // "Or just the finished ones."
++    await narrowTo(page, FINISHED);
++
++    // The two finished tasks (3, 4) remain; the two open ones (1, 2) are gone.
++    await expect(page.getByTestId('task-row-3')).toBeVisible();
++    await expect(page.getByTestId('task-row-4')).toBeVisible();
++    await expect(page.getByTestId('task-row-1')).toHaveCount(0);
++    await expect(page.getByTestId('task-row-2')).toHaveCount(0);
++    await expect(page.locator('[data-testid^="task-row-"]')).toHaveCount(2);
++
++    // Every row still showing reads as finished.
++    await expect(page.getByTestId('task-row-3').getByTestId('task-status')).toHaveText(finished);
++    await expect(page.getByTestId('task-row-4').getByTestId('task-status')).toHaveText(finished);
++  });
++
++  test('switching from open to finished follows the chosen state', async ({ page }) => {
++    await referenceStatuses(page);
++
++    // Open first: only the not-done tasks.
++    await narrowTo(page, OPEN);
++    await expect(page.getByTestId('task-row-1')).toBeVisible();
++    await expect(page.getByTestId('task-row-2')).toBeVisible();
++    await expect(page.getByTestId('task-row-3')).toHaveCount(0);
++    await expect(page.getByTestId('task-row-4')).toHaveCount(0);
++    await expect(page.locator('[data-testid^="task-row-"]')).toHaveCount(2);
++
++    // Switch to finished: the set flips — proving the control reads the choice, not a fixed state.
++    await narrowTo(page, FINISHED);
++    await expect(page.getByTestId('task-row-3')).toBeVisible();
++    await expect(page.getByTestId('task-row-4')).toBeVisible();
++    await expect(page.getByTestId('task-row-1')).toHaveCount(0);
++    await expect(page.getByTestId('task-row-2')).toHaveCount(0);
++    await expect(page.locator('[data-testid^="task-row-"]')).toHaveCount(2);
++  });
++
++  test('clearing the filter brings every task back', async ({ page }) => {
++    await referenceStatuses(page);
++
++    await narrowTo(page, OPEN);
++    await expect(page.locator('[data-testid^="task-row-"]')).toHaveCount(2);
++
++    // Back to all: the finished tasks return alongside the open ones.
++    await showAll(page);
++    await expect(page.getByTestId('task-row-1')).toBeVisible();
++    await expect(page.getByTestId('task-row-2')).toBeVisible();
++    await expect(page.getByTestId('task-row-3')).toBeVisible();
++    await expect(page.getByTestId('task-row-4')).toBeVisible();
++    await expect(page.locator('[data-testid^="task-row-"]')).toHaveCount(4);
++  });
++});

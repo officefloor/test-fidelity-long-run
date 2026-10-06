@@ -1,0 +1,139 @@
+diff --git a/client-archive.spec.ts b/client-archive.spec.ts
+new file mode 100644
+index 0000000..2159dd0
+--- /dev/null
++++ b/client-archive.spec.ts
+@@ -0,0 +1,133 @@
++// Acceptance tests for the change request:
++//   "Let me tuck away clients I no longer work with. They should drop off my list and my search.
++//    I do not want to lose them. Note it when I do."
++//
++// ARCHIVING a client is a soft hide, NOT a delete — nothing is lost. Each client in the list offers
++// a control to archive it (client-archive-<id>). Archiving a client:
++//   - drops it off the clients list (clients-page), leaving its siblings untouched;
++//   - drops it off the client SEARCH too — a search by its name no longer finds it;
++//   - loses NOTHING — the client is still there (its own detail page, reached by URL, still renders
++//     the client with its projects intact);
++//   - appends exactly one audit record — CLIENT_ARCHIVED id=<id> — so the act is noted (the list
++//     only stops showing the client; it cannot show that it was archived).
++//
++// Asserts ONLY through the two public channels: the UI (data-testid) and the audit file
++// (auditLines()). Data is arranged via resetAndSeed; the archive is driven through the UI. Seed
++// honours clients: { id, name, email, archived } — `archived` places a client directly in the
++// tucked-away state so the hiding can be checked without a click, and projects: { id, clientId,
++// name } so the client's retained data can be confirmed.
++//
++// This SHOULD FAIL before the change: today a client row has no archive control and nothing is
++// recorded when a client is tucked away.
++import { test, expect } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++import { auditLines } from '../support/audit';
++
++test.describe('archive a client instead of losing them', () => {
++  test('archiving drops a client off the list, keeps a record, and loses nothing', async ({ page }) => {
++    await resetAndSeed({
++      clients: [
++        { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
++        { id: 2, name: 'Globex', email: 'hello@globex.example' },
++      ],
++      // The archived client keeps its data: a project under it must still be reachable afterwards.
++      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
++    });
++
++    await page.goto('/clients');
++    await expect(page.getByTestId('clients-page')).toBeVisible();
++
++    const first = page.getByTestId('client-row-1');
++    const second = page.getByTestId('client-row-2');
++    await expect(first).toBeVisible();
++    await expect(second).toBeVisible();
++
++    // reset cleared the audit file — nothing has been archived yet.
++    expect(auditLines()).toEqual([]);
++
++    // Tuck the first client away.
++    await page.getByTestId('client-archive-1').click();
++
++    // It drops off the list; its sibling is untouched.
++    await expect(first).toHaveCount(0);
++    await expect(second).toBeVisible();
++    await expect(second.getByTestId('client-name')).toHaveText('Globex');
++
++    // Exactly one record was kept, naming the archived client.
++    await expect.poll(() => auditLines()).toEqual(['CLIENT_ARCHIVED id=1']);
++
++    // Nothing was lost: the client still exists. Its own detail page, reached by URL, still renders
++    // the client with its project intact.
++    await page.goto('/clients/1');
++    await expect(page.getByTestId('client-detail-page')).toBeVisible();
++    await expect(page.getByTestId('client-projects-table')).toBeVisible();
++    await expect(page.getByTestId('project-row-1')).toBeVisible();
++    await expect(page.getByTestId('project-row-1').getByTestId('project-name')).toHaveText('Website redesign');
++
++    // Reaching the detail page is a read — it does not record anything new.
++    await expect.poll(() => auditLines()).toEqual(['CLIENT_ARCHIVED id=1']);
++  });
++
++  test('an already-archived client is absent from the list and cannot be found by search', async ({ page }) => {
++    await resetAndSeed({
++      clients: [
++        { id: 1, name: 'Acme Corp', email: 'ops@acme.example', archived: false },
++        // Already tucked away — it must not show in the list, nor be found by search.
++        { id: 2, name: 'Globex', email: 'hello@globex.example', archived: true },
++        { id: 3, name: 'Initech', email: 'accounts@initech.example', archived: false },
++      ],
++    });
++
++    await page.goto('/clients');
++    await expect(page.getByTestId('clients-page')).toBeVisible();
++
++    // Default view: the live clients only; the archived one is absent, but the list is not empty.
++    await expect(page.getByTestId('client-row-1')).toBeVisible();
++    await expect(page.getByTestId('client-row-3')).toBeVisible();
++    await expect(page.getByTestId('client-row-2')).toHaveCount(0);
++    await expect(page.getByTestId('clients-empty')).toHaveCount(0);
++
++    // Searching by the archived client's name finds nothing — it is off the search too.
++    await page.getByTestId('client-search').fill('glob');
++    await expect(page.getByTestId('client-row-2')).toHaveCount(0);
++    await expect(page.getByTestId('client-name')).toHaveCount(0);
++
++    // A live client is still found by its name.
++    await page.getByTestId('client-search').fill('initech');
++    await expect(page.getByTestId('client-row-3')).toBeVisible();
++    await expect(page.getByTestId('client-row-3').getByTestId('client-name')).toHaveText('Initech');
++    await expect(page.getByTestId('client-row-1')).toHaveCount(0);
++  });
++
++  test('archiving a client via the UI keeps it out of the search too', async ({ page }) => {
++    await resetAndSeed({
++      clients: [
++        { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
++        { id: 2, name: 'Globex', email: 'hello@globex.example' },
++      ],
++    });
++
++    await page.goto('/clients');
++    await expect(page.getByTestId('client-row-1')).toBeVisible();
++
++    // Before archiving, the client is found by its name.
++    await page.getByTestId('client-search').fill('acme');
++    await expect(page.getByTestId('client-row-1')).toBeVisible();
++    await page.getByTestId('client-search').fill('');
++
++    // Tuck it away.
++    await page.getByTestId('client-archive-1').click();
++    await expect(page.getByTestId('client-row-1')).toHaveCount(0);
++
++    // Now a search by its name finds nothing; the other client is unaffected and still searchable.
++    await page.getByTestId('client-search').fill('acme');
++    await expect(page.getByTestId('client-row-1')).toHaveCount(0);
++    await expect(page.getByTestId('client-name')).toHaveCount(0);
++
++    await page.getByTestId('client-search').fill('globex');
++    await expect(page.getByTestId('client-row-2')).toBeVisible();
++
++    // The act was noted, exactly once.
++    await expect.poll(() => auditLines()).toEqual(['CLIENT_ARCHIVED id=1']);
++  });
++});

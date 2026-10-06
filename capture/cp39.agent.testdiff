@@ -1,0 +1,132 @@
+diff --git a/invoice-pager.spec.ts b/invoice-pager.spec.ts
+new file mode 100644
+index 0000000..305887b
+--- /dev/null
++++ b/invoice-pager.spec.ts
+@@ -0,0 +1,126 @@
++// Acceptance tests for the change request:
++//   "The invoice list is huge now. Show it a page at a time with next and previous."
++//
++// The all-invoices page (invoices-page, at /invoices) lists every invoice from every project. It is
++// now shown a PAGE AT A TIME instead of all at once: a pager (invoice-pager) with a current-page
++// label (invoice-page-label) and a next (invoice-page-next) and previous (invoice-page-prev) control.
++// Next moves forward to the following page of invoices; previous moves back. The whole list is still
++// reachable — paging only decides which slice is on screen at any moment.
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed; paging is driven
++// through the next/prev controls. Seed honours clients: { id, name, email },
++// projects: { id, clientId, name } and invoices: { id, projectId, amount, status }.
++//
++// PAGE-SIZE AGNOSTIC: the implementer chooses the page size, so these tests never assume a particular
++// one. They seed a list long enough (30 invoices) to force more than one page for any sensible page
++// size, then assert the OBSERVABLE pagination contract by comparing the SET of invoice-row ids shown
++// on each page:
++//   - the first page shows a strict SUBSET of the invoices (some, not all 30) — i.e. "a page at a
++//     time", which is exactly what fails today when all 30 render at once;
++//   - clicking next shows a DISJOINT, non-empty set of invoices (a genuinely different page, moving
++//     forward through the list) and changes the page label;
++//   - clicking prev returns to the very same first page (same ids, same label).
++// Row order is never assumed; only membership of the per-page sets is compared, so any correct
++// pagination passes regardless of the order the rows are listed in or the exact page size.
++//
++// This SHOULD FAIL before the change: there is no invoice-pager today and the page renders every
++// invoice at once (so the first-page set is the whole list, not a subset, and there are no
++// next/prev controls to click).
++import { test, expect, type Page } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++const CLIENTS = [
++  { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
++  { id: 2, name: 'Globex', email: 'hello@globex.example' },
++];
++
++const PROJECTS = [
++  { id: 1, clientId: 1, name: 'Website redesign' },
++  { id: 2, clientId: 2, name: 'Warehouse automation' },
++];
++
++const STATUSES = ['DRAFT', 'SENT', 'PAID'];
++
++// A "huge" list: 30 invoices spread across the two projects and all three stages. 30 is more than any
++// sensible page size, so a correctly paged list MUST split it over several pages.
++const TOTAL = 30;
++const INVOICES = Array.from({ length: TOTAL }, (_, i) => {
++  const id = i + 1;
++  return {
++    id,
++    projectId: PROJECTS[i % PROJECTS.length].id,
++    amount: 100 + id,
++    status: STATUSES[i % STATUSES.length],
++  };
++});
++
++const FIXTURE = { clients: CLIENTS, projects: PROJECTS, invoices: INVOICES };
++
++// The invoice-row-<id> testids currently in the DOM, in document order. Only their membership (as a
++// set) is compared across pages, never their order, so no ordering is assumed.
++async function rowIds(page: Page): Promise<string[]> {
++  return page
++    .locator('[data-testid^="invoice-row-"]')
++    .evaluateAll((els) => els.map((el) => el.getAttribute('data-testid') ?? ''));
++}
++
++const sorted = (ids: string[]): string[] => [...ids].sort();
++
++// Wait until the all-invoices list has rendered at least one row before reading it.
++async function openInvoices(page: Page): Promise<void> {
++  await page.goto('/invoices');
++  await expect(page.getByTestId('invoices-page')).toBeVisible();
++  await expect(page.getByTestId('all-invoices-table')).toBeVisible();
++  await expect(page.locator('[data-testid^="invoice-row-"]').first()).toBeVisible();
++}
++
++test.describe('all-invoices list is shown a page at a time', () => {
++  test.beforeEach(async () => {
++    await resetAndSeed(FIXTURE);
++  });
++
++  test('shows one page of invoices, with a pager and next/previous controls', async ({ page }) => {
++    await openInvoices(page);
++
++    // The pager and its three controls are present.
++    await expect(page.getByTestId('invoice-pager')).toBeVisible();
++    await expect(page.getByTestId('invoice-page-label')).toBeVisible();
++    await expect(page.getByTestId('invoice-page-next')).toBeVisible();
++    await expect(page.getByTestId('invoice-page-prev')).toBeVisible();
++
++    // Only a PAGE of the 30 invoices is on screen — some, not all. This is the heart of the request
++    // ("a page at a time"), and it is exactly what fails today when every invoice renders at once.
++    const firstPage = await rowIds(page);
++    expect(firstPage.length).toBeGreaterThan(0);
++    expect(firstPage.length).toBeLessThan(TOTAL);
++  });
++
++  test('next moves forward to a different page; previous moves back to the first', async ({ page }) => {
++    await openInvoices(page);
++
++    const firstPage = await rowIds(page);
++    expect(firstPage.length).toBeGreaterThan(0);
++    expect(firstPage.length).toBeLessThan(TOTAL);
++    const firstLabel = ((await page.getByTestId('invoice-page-label').textContent()) ?? '').trim();
++
++    // Go forward one page.
++    await page.getByTestId('invoice-page-next').click();
++
++    // The page label changes to reflect the new page...
++    await expect(page.getByTestId('invoice-page-label')).not.toHaveText(firstLabel);
++
++    // ...and a genuinely different, non-empty set of invoices is shown: none of the second page's
++    // rows were on the first page (we moved forward through the list, not re-rendered the same slice).
++    const secondPage = await rowIds(page);
++    expect(secondPage.length).toBeGreaterThan(0);
++    expect(secondPage.some((id) => firstPage.includes(id))).toBe(false);
++
++    // Go back one page: previous returns to the very first page — the same invoices and the same
++    // label as we started with.
++    await page.getByTestId('invoice-page-prev').click();
++    await expect(page.getByTestId('invoice-page-label')).toHaveText(firstLabel);
++
++    const backToFirst = await rowIds(page);
++    expect(sorted(backToFirst)).toEqual(sorted(firstPage));
++  });
++});

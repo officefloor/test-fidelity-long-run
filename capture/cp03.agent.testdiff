@@ -1,0 +1,101 @@
+diff --git a/projects.spec.ts b/projects.spec.ts
+new file mode 100644
+index 0000000..591a1c2
+--- /dev/null
++++ b/projects.spec.ts
+@@ -0,0 +1,95 @@
++// Acceptance tests for the change request:
++//   "I want to track the projects I do for clients. Let me add a project and pick which client it
++//    is for. Show each project with the client's name."
++//
++// A project belongs to a client. The projects page lists every project showing its own name and the
++// NAME of the client it is for. New projects are added through a form where you pick which client the
++// project is for.
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed; the add flow is
++// driven through the form. Seed honours clients: { id, name, email } and projects: { id, clientId, name }.
++import { test, expect } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++test.describe('projects', () => {
++  test('lists all seeded projects, each with its name and the client it is for', async ({ page }) => {
++    await resetAndSeed({
++      clients: [
++        { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
++        { id: 2, name: 'Globex', email: 'hello@globex.example' },
++      ],
++      projects: [
++        { id: 1, clientId: 1, name: 'Website redesign' },
++        { id: 2, clientId: 2, name: 'Warehouse automation' },
++      ],
++    });
++
++    await page.goto('/projects');
++
++    await expect(page.getByTestId('projects-page')).toBeVisible();
++    await expect(page.getByTestId('projects-table')).toBeVisible();
++    await expect(page.getByTestId('projects-empty')).toHaveCount(0);
++
++    const first = page.getByTestId('project-row-1');
++    await expect(first).toBeVisible();
++    await expect(first.getByTestId('project-name')).toHaveText('Website redesign');
++    await expect(first.getByTestId('project-client')).toHaveText('Acme Corp');
++
++    const second = page.getByTestId('project-row-2');
++    await expect(second).toBeVisible();
++    await expect(second.getByTestId('project-name')).toHaveText('Warehouse automation');
++    await expect(second.getByTestId('project-client')).toHaveText('Globex');
++  });
++
++  test('shows an empty state when there are no projects', async ({ page }) => {
++    // A client exists so the page can only be empty of PROJECTS, not of everything.
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [],
++    });
++
++    await page.goto('/projects');
++
++    await expect(page.getByTestId('projects-page')).toBeVisible();
++    await expect(page.getByTestId('projects-empty')).toBeVisible();
++    await expect(page.getByTestId('project-name')).toHaveCount(0);
++  });
++
++  test('adds a project and picks which client it is for, then shows it with the client name', async ({ page }) => {
++    await resetAndSeed({
++      clients: [
++        { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
++        { id: 2, name: 'Globex', email: 'hello@globex.example' },
++      ],
++      projects: [],
++    });
++
++    await page.goto('/projects');
++    await expect(page.getByTestId('projects-empty')).toBeVisible();
++
++    await expect(page.getByTestId('project-form')).toBeVisible();
++    await page.getByTestId('project-form-name').fill('Mobile app');
++    // Pick which client the project is for, by the client's name.
++    await page.getByTestId('project-form-client').selectOption({ label: 'Globex' });
++    await page.getByTestId('project-form-submit').click();
++
++    // Reset RESTART IDENTITY + empty projects seed => the first created project has id 1.
++    const row = page.getByTestId('project-row-1');
++    await expect(row).toBeVisible();
++    await expect(row.getByTestId('project-name')).toHaveText('Mobile app');
++    await expect(row.getByTestId('project-client')).toHaveText('Globex');
++
++    await expect(page.getByTestId('projects-empty')).toHaveCount(0);
++  });
++
++  test('reaches the projects list from the nav', async ({ page }) => {
++    await resetAndSeed({ clients: [], projects: [] });
++
++    await page.goto('/');
++    await expect(page.getByTestId('app-root')).toBeVisible();
++
++    await page.getByTestId('nav-projects').click();
++
++    await expect(page.getByTestId('projects-page')).toBeVisible();
++  });
++});

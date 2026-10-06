@@ -1,0 +1,191 @@
+diff --git a/project-status-filter.spec.ts b/project-status-filter.spec.ts
+new file mode 100644
+index 0000000..992bf4f
+--- /dev/null
++++ b/project-status-filter.spec.ts
+@@ -0,0 +1,185 @@
++// Acceptance tests for the change request:
++//   "Let me filter projects by active, on hold or finished."
++//
++// The projects page (projects-page, at /projects) lists every (live) project. Projects already carry
++// a lifecycle STATUS — active, on hold or finished (the project-status feature). This change adds a
++// control (project-status-filter) on the projects page that narrows that list to ONE status: pick a
++// status and only the projects in that state remain — every other project is hidden. With nothing
++// picked (the default) every project is still shown, exactly as before, so this is a pure narrowing
++// on top of the existing list — mirroring the sibling invoice-status-filter / project-tag-filter.
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed; the filter is driven
++// through the project-status-filter control. Seed honours clients: { id, name, email } and
++// projects: { id, clientId, name, status } — `status` seeds a project directly into one of the three
++// states so the narrowing can be checked without a click.
++//
++// Statuses are seeded with the CANONICAL codes the schema stores ('ACTIVE' / 'ON_HOLD' / 'FINISHED',
++// per Flyway V21 and the project form's option values) rather than free-text, because a FILTER must
++// compare the project's stored status against the chosen one exactly — unlike the display, which is
++// asserted tolerantly. The filter is a single control (one testid), so it is a <select> of the
++// statuses: we do not assume the casing/wording of its option labels or values — for a wanted status
++// we locate the option whose visible text OR value matches the status case-insensitively and select
++// it by its own value, and to clear we select the "all" option (value === '' or an "all" label). So
++// a correct implementation passes however it renders and values its status options.
++//
++// The fixture puts TWO projects at ACTIVE (1 and 4, under two different clients), one ON_HOLD (2) and
++// one FINISHED (3). So narrowing to active must keep a SET (1 and 4, not a single hard-coded row) and
++// drop the on-hold and finished ones; narrowing to on hold, then finished, flips to DISJOINT single
++// sets — proving the control reads the chosen status rather than always filtering to one. Clearing
++// brings every project back. This SHOULD FAIL before the change: there is no project-status-filter on
++// the projects page today.
++import { test, expect, type Page } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++// Two projects are ACTIVE (1, 4) and sit under different clients, so a genuine "narrow to active"
++// keeps both while hiding the ON_HOLD (2) and the FINISHED (3). The three statuses form disjoint sets.
++const FIXTURE = {
++  clients: [
++    { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
++    { id: 2, name: 'Globex', email: 'hello@globex.example' },
++  ],
++  projects: [
++    { id: 1, clientId: 1, name: 'Website redesign', status: 'ACTIVE' },
++    { id: 2, clientId: 1, name: 'Warehouse automation', status: 'ON_HOLD' },
++    { id: 3, clientId: 2, name: 'Mobile app', status: 'FINISHED' },
++    { id: 4, clientId: 2, name: 'Billing portal', status: 'ACTIVE' },
++  ],
++};
++
++// The distinguishing token for each state. Mutually exclusive: ACTIVE carries only "active", ON_HOLD
++// only "hold", FINISHED only "finish" — so each can be told apart from the other two, and from the
++// "all" option (which reads "all"/"every", never one of these). Matches how project-status.spec and
++// the invoice-stage specs assert status tolerantly.
++const ACTIVE = /active/i;
++const HOLD = /hold/i;
++const FINISHED = /finish|complete|done/i;
++
++// The <option> value whose visible text OR value matches `status` (case-insensitive). Selecting by the
++// option's own value keeps us agnostic to the label/value casing/wording the feature chose.
++async function optionValueFor(page: Page, status: RegExp): Promise<string> {
++  const value = await page
++    .getByTestId('project-status-filter')
++    .locator('option')
++    .evaluateAll((opts, src) => {
++      const re = new RegExp(src as string, 'i');
++      const match = (opts as HTMLOptionElement[]).find(
++        (o) => re.test((o.textContent ?? '').trim()) || re.test(o.value),
++      );
++      return match ? match.value : null;
++    }, status.source);
++  if (value === null) {
++    throw new Error(`project-status-filter has no option matching ${status}`);
++  }
++  return value;
++}
++
++// Narrow the list to a single status through the control.
++async function narrowTo(page: Page, status: RegExp): Promise<void> {
++  await page.getByTestId('project-status-filter').selectOption(await optionValueFor(page, status));
++}
++
++// The "show every status" option: an empty value by convention, or an option labelled "all".
++async function showAllStatuses(page: Page): Promise<void> {
++  const value = await page
++    .getByTestId('project-status-filter')
++    .locator('option')
++    .evaluateAll((opts) => {
++      const match = (opts as HTMLOptionElement[]).find(
++        (o) => o.value === '' || /all/i.test((o.textContent ?? '').trim()),
++      );
++      return match ? match.value : null;
++    });
++  if (value === null) {
++    throw new Error('project-status-filter has no "all statuses" option');
++  }
++  await page.getByTestId('project-status-filter').selectOption(value);
++}
++
++test.describe('filter projects by status', () => {
++  test.beforeEach(async () => {
++    await resetAndSeed(FIXTURE);
++  });
++
++  test('with nothing picked, the filter is present and every project is shown', async ({ page }) => {
++    await page.goto('/projects');
++
++    await expect(page.getByTestId('projects-page')).toBeVisible();
++    await expect(page.getByTestId('project-status-filter')).toBeVisible();
++
++    // Default view: all four projects, across every status.
++    await expect(page.getByTestId('project-row-1')).toBeVisible();
++    await expect(page.getByTestId('project-row-2')).toBeVisible();
++    await expect(page.getByTestId('project-row-3')).toBeVisible();
++    await expect(page.getByTestId('project-row-4')).toBeVisible();
++    await expect(page.locator('[data-testid^="project-row-"]')).toHaveCount(4);
++  });
++
++  test('narrowing to active keeps only the active projects', async ({ page }) => {
++    await page.goto('/projects');
++    await expect(page.getByTestId('project-row-1')).toBeVisible();
++
++    // "Filter projects by active."
++    await narrowTo(page, ACTIVE);
++
++    // The two active projects (1 and 4) remain; the on-hold (2) and the finished (3) are gone.
++    await expect(page.getByTestId('project-row-1')).toBeVisible();
++    await expect(page.getByTestId('project-row-4')).toBeVisible();
++    await expect(page.getByTestId('project-row-2')).toHaveCount(0);
++    await expect(page.getByTestId('project-row-3')).toHaveCount(0);
++    await expect(page.locator('[data-testid^="project-row-"]')).toHaveCount(2);
++
++    // Every surviving row genuinely reads as active — not on hold, not finished.
++    for (const id of [1, 4]) {
++      const status = page.getByTestId(`project-row-${id}`).getByTestId('project-status');
++      await expect(status).toContainText(ACTIVE);
++      await expect(status).not.toContainText(HOLD);
++      await expect(status).not.toContainText(FINISHED);
++    }
++  });
++
++  test('switching status follows the chosen status to disjoint sets', async ({ page }) => {
++    await page.goto('/projects');
++    await expect(page.getByTestId('project-row-1')).toBeVisible();
++
++    // On hold: only project 2 remains.
++    await narrowTo(page, HOLD);
++    await expect(page.getByTestId('project-row-2')).toBeVisible();
++    const onHold = page.getByTestId('project-row-2').getByTestId('project-status');
++    await expect(onHold).toContainText(HOLD);
++    await expect(onHold).not.toContainText(ACTIVE);
++    await expect(onHold).not.toContainText(FINISHED);
++    await expect(page.getByTestId('project-row-1')).toHaveCount(0);
++    await expect(page.getByTestId('project-row-3')).toHaveCount(0);
++    await expect(page.getByTestId('project-row-4')).toHaveCount(0);
++    await expect(page.locator('[data-testid^="project-row-"]')).toHaveCount(1);
++
++    // Finished: the set flips to just project 3 — a different single status, proving the control reads
++    // the choice rather than always filtering to one.
++    await narrowTo(page, FINISHED);
++    await expect(page.getByTestId('project-row-3')).toBeVisible();
++    const finished = page.getByTestId('project-row-3').getByTestId('project-status');
++    await expect(finished).toContainText(FINISHED);
++    await expect(finished).not.toContainText(ACTIVE);
++    await expect(finished).not.toContainText(HOLD);
++    await expect(page.getByTestId('project-row-1')).toHaveCount(0);
++    await expect(page.getByTestId('project-row-2')).toHaveCount(0);
++    await expect(page.getByTestId('project-row-4')).toHaveCount(0);
++    await expect(page.locator('[data-testid^="project-row-"]')).toHaveCount(1);
++  });
++
++  test('clearing the filter brings every project back', async ({ page }) => {
++    await page.goto('/projects');
++    await expect(page.getByTestId('project-row-1')).toBeVisible();
++
++    await narrowTo(page, ACTIVE);
++    await expect(page.locator('[data-testid^="project-row-"]')).toHaveCount(2);
++
++    // Back to all statuses: the on-hold and finished projects return alongside the two active ones.
++    await showAllStatuses(page);
++    await expect(page.getByTestId('project-row-1')).toBeVisible();
++    await expect(page.getByTestId('project-row-2')).toBeVisible();
++    await expect(page.getByTestId('project-row-3')).toBeVisible();
++    await expect(page.getByTestId('project-row-4')).toBeVisible();
++    await expect(page.locator('[data-testid^="project-row-"]')).toHaveCount(4);
++  });
++});

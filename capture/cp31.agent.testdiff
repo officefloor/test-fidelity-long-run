@@ -1,0 +1,100 @@
+diff --git a/invoice-due-amount.spec.ts b/invoice-due-amount.spec.ts
+new file mode 100644
+index 0000000..1171a2f
+--- /dev/null
++++ b/invoice-due-amount.spec.ts
+@@ -0,0 +1,94 @@
++// Acceptance tests for the change request:
++//   "Show me how much is still left to pay on each invoice after any payments."
++//
++// An invoice now surfaces how much is STILL LEFT to pay on it once what has been paid is taken off:
++// invoice-due-amount = the invoice's amount MINUS the sum of every payment recorded against it. It
++// lives on the invoice's own detail page (invoice-detail-page, reached at /invoices/<id> — the same
++// public URL surface the invoice specs already use), the one place that shows that invoice's
++// payments (invoice-payments). Because it is derived "after any payments", it is scoped to the ONE
++// invoice: each invoice's due amount is worked out from its OWN payments, never a sibling's.
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed, which honours
++// invoices: { id, projectId, amount, status } and payments: { id, invoiceId, amount, date }
++// (alongside clients / projects). This change introduces NO new audit record, so nothing is asserted
++// through the audit channel here.
++//
++// invoice-due-amount is MONEY but a NEW anchor, not one of the three money-format anchors the
++// money-format spec pins exactly; so — like the sibling payment-amount anchor — it is matched
++// leniently (a leading "$" and a trailing ".00" both optional). What this change pins is the VALUE
++// left to pay, not its exact presentation. Amounts and the resulting remainders are chosen so no
++// value is a substring of another, of a payment, of a date number, or of the full invoice amount:
++// a buggy implementation that showed the full amount, or the total paid, instead of the remainder
++// would therefore fail. This test SHOULD FAIL before the change: there is no invoice-due-amount today.
++import { test, expect } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++test.describe('how much is left to pay on an invoice after payments', () => {
++  test('shows the amount still left after subtracting the payments recorded on that invoice', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
++      invoices: [
++        // 500 billed; 200 + 120 = 320 paid => 180 still left to pay.
++        { id: 1, projectId: 1, amount: 500, status: 'SENT' },
++        // A second invoice with its OWN payment, so invoice 1's remainder is worked out from
++        // invoice 1's payments only, never invoice 2's.
++        { id: 2, projectId: 1, amount: 900, status: 'SENT' },
++      ],
++      payments: [
++        { id: 1, invoiceId: 1, amount: 200, date: '2025-06-15' },
++        { id: 2, invoiceId: 1, amount: 120, date: '2025-08-20' },
++        // Belongs to invoice 2 — must NOT reduce invoice 1's due amount.
++        { id: 3, invoiceId: 2, amount: 777, date: '2025-01-09' },
++      ],
++    });
++
++    await page.goto('/invoices/1');
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++
++    // 500 - (200 + 120) = 180 still left to pay. Not the full 500, not the 320 paid.
++    const due = page.getByTestId('invoice-due-amount');
++    await expect(due).toBeVisible();
++    await expect(due).toHaveText(/^\$?180(\.00)?$/);
++
++    // Invoice 2's remainder is 900 - 777 = 123, derived from its own payment alone — proving the
++    // figure is per-invoice and did not leak invoice 1's payments onto it.
++    await page.goto('/invoices/2');
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++    await expect(page.getByTestId('invoice-due-amount')).toHaveText(/^\$?123(\.00)?$/);
++  });
++
++  test('with no payments yet, the whole amount is still left to pay', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
++      invoices: [{ id: 1, projectId: 1, amount: 250, status: 'SENT' }],
++      payments: [],
++    });
++
++    await page.goto('/invoices/1');
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++
++    // Nothing paid => the full amount is still owed.
++    await expect(page.getByTestId('invoice-due-amount')).toHaveText(/^\$?250(\.00)?$/);
++  });
++
++  test('once the payments cover the amount, nothing is left to pay', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
++      invoices: [{ id: 1, projectId: 1, amount: 400, status: 'SENT' }],
++      payments: [
++        // 150 + 250 = 400 => the invoice is fully covered, so 0 is left to pay.
++        { id: 1, invoiceId: 1, amount: 150, date: '2025-03-11' },
++        { id: 2, invoiceId: 1, amount: 250, date: '2025-04-22' },
++      ],
++    });
++
++    await page.goto('/invoices/1');
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++
++    // Fully paid off => nothing still left to pay.
++    await expect(page.getByTestId('invoice-due-amount')).toHaveText(/^\$?0(\.00)?$/);
++  });
++});

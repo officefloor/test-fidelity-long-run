@@ -1,0 +1,82 @@
+diff --git a/clients.spec.ts b/clients.spec.ts
+new file mode 100644
+index 0000000..3166bba
+--- /dev/null
++++ b/clients.spec.ts
+@@ -0,0 +1,76 @@
++// Acceptance tests for the change request:
++//   "I want to keep track of my clients. Let me add a client with their name and email.
++//    Show me all my clients in one list."
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed; the add flow is
++// driven through the form. Seed honours clients: { id, name, email }.
++import { test, expect } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++test.describe('clients', () => {
++  test('lists all seeded clients in one list, each with name and email', async ({ page }) => {
++    await resetAndSeed({
++      clients: [
++        { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
++        { id: 2, name: 'Globex', email: 'hello@globex.example' },
++      ],
++    });
++
++    await page.goto('/clients');
++
++    await expect(page.getByTestId('clients-page')).toBeVisible();
++    await expect(page.getByTestId('clients-table')).toBeVisible();
++    await expect(page.getByTestId('clients-empty')).toHaveCount(0);
++
++    const acme = page.getByTestId('client-row-1');
++    await expect(acme).toBeVisible();
++    await expect(acme.getByTestId('client-name')).toHaveText('Acme Corp');
++    await expect(acme.getByTestId('client-email')).toHaveText('ops@acme.example');
++
++    const globex = page.getByTestId('client-row-2');
++    await expect(globex).toBeVisible();
++    await expect(globex.getByTestId('client-name')).toHaveText('Globex');
++    await expect(globex.getByTestId('client-email')).toHaveText('hello@globex.example');
++  });
++
++  test('shows an empty state when there are no clients', async ({ page }) => {
++    await resetAndSeed({ clients: [] });
++
++    await page.goto('/clients');
++
++    await expect(page.getByTestId('clients-page')).toBeVisible();
++    await expect(page.getByTestId('clients-empty')).toBeVisible();
++    await expect(page.getByTestId('client-name')).toHaveCount(0);
++  });
++
++  test('adds a client with their name and email through the form', async ({ page }) => {
++    await resetAndSeed({ clients: [] });
++
++    await page.goto('/clients');
++    await expect(page.getByTestId('clients-empty')).toBeVisible();
++
++    await expect(page.getByTestId('client-form')).toBeVisible();
++    await page.getByTestId('client-form-name').fill('Initech');
++    await page.getByTestId('client-form-email').fill('accounts@initech.example');
++    await page.getByTestId('client-form-submit').click();
++
++    // Reset RESTART IDENTITY + empty seed => the first created client has id 1.
++    const row = page.getByTestId('client-row-1');
++    await expect(row).toBeVisible();
++    await expect(row.getByTestId('client-name')).toHaveText('Initech');
++    await expect(row.getByTestId('client-email')).toHaveText('accounts@initech.example');
++
++    await expect(page.getByTestId('clients-empty')).toHaveCount(0);
++  });
++
++  test('reaches the clients list from the nav', async ({ page }) => {
++    await resetAndSeed({ clients: [] });
++
++    await page.goto('/');
++    await expect(page.getByTestId('app-root')).toBeVisible();
++
++    await page.getByTestId('nav-clients').click();
++
++    await expect(page.getByTestId('clients-page')).toBeVisible();
++  });
++});

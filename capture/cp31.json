@@ -1,0 +1,1506 @@
+{
+  "checkpoint": 31,
+  "checkpoint_id": "cp31_invoice_amount_due",
+  "type": "additive",
+  "mutates": [],
+  "mode": "agent",
+  "code_view": "previous",
+  "no_code_change": false,
+  "request": "Show me how much is still left to pay on each invoice after any payments.\n",
+  "prompt": "You are writing ACCEPTANCE TESTS for one change to this application.\n\nYou write TESTS ONLY. Do not modify application source, build scripts, or the test support\nhelpers (e2e/support/*). A run that changes application code is void.\n\nTHE CHANGE REQUEST (as the user wrote it):\nShow me how much is still left to pay on each invoice after any payments.\n\nWHAT TO DO\nWrite Playwright acceptance test(s) under e2e/specs/ that verify this change request has been\nimplemented. Where the request revises behaviour that your EXISTING tests already assert, update\nthose tests too \u2014 the suite must describe the application as it is meant to be after this change,\nnot as it was before.\n\nAssert only through the two public channels below. Never reach into the database, the REST API, or\napplication internals.\n\nCHANNEL 1 \u2014 the UI, via data-testid\n  Introduced by THIS change (1):\n    invoice-due-amount\n  Every anchor available to you (130):\n    all-invoices-empty\n    all-invoices-table\n    app-home\n    app-nav\n    app-root\n    client-archive-<id>\n    client-contacts\n    client-contacts-count\n    client-contacts-table\n    client-counts\n    client-detail-page\n    client-email\n    client-form\n    client-form-email\n    client-form-email-error\n    client-form-name\n    client-form-submit\n    client-name\n    client-open-<id>\n    client-projects-count\n    client-projects-empty\n    client-projects-table\n    client-row-<id>\n    client-search\n    clients-empty\n    clients-page\n    clients-table\n    contact-email\n    contact-form\n    contact-form-email\n    contact-form-email-error\n    contact-form-name\n    contact-form-role\n    contact-form-submit\n    contact-name\n    contact-role\n    contact-row-<id>\n    dashboard\n    dashboard-clients-count\n    dashboard-error\n    dashboard-loading\n    dashboard-outstanding-total\n    dashboard-page\n    dashboard-projects-count\n    home-empty\n    invoice-amount\n    invoice-detail-page\n    invoice-due\n    invoice-due-amount\n    invoice-form\n    invoice-form-amount\n    invoice-form-amount-error\n    invoice-form-submit\n    invoice-issued\n    invoice-lineitems-table\n    invoice-open-<id>\n    invoice-pay-<id>\n    invoice-payments\n    invoice-payments-table\n    invoice-project\n    invoice-row-<id>\n    invoice-send-<id>\n    invoice-sort-due\n    invoice-status\n    invoice-status-filter\n    invoices-page\n    lineitem-amount\n    lineitem-description\n    lineitem-form\n    lineitem-form-description\n    lineitem-form-error\n    lineitem-form-qty\n    lineitem-form-submit\n    lineitem-form-unitprice\n    lineitem-qty\n    lineitem-remove-<id>\n    lineitem-row-<id>\n    lineitem-unitprice\n    nav-clients\n    nav-dashboard\n    nav-home\n    nav-invoices\n    nav-projects\n    note-form\n    note-form-submit\n    note-form-text\n    note-row-<id>\n    note-text\n    payment-amount\n    payment-date\n    payment-form\n    payment-form-amount\n    payment-form-date\n    payment-form-error\n    payment-form-submit\n    payment-row-<id>\n    project-archive-<id>\n    project-client\n    project-delete-<id>\n    project-detail-page\n    project-form\n    project-form-client\n    project-form-name\n    project-form-submit\n    project-invoices-table\n    project-invoices-total\n    project-name\n    project-notes\n    project-notes-empty\n    project-notes-list\n    project-open-<id>\n    project-row-<id>\n    project-tag-<id>\n    project-tag-add\n    project-tag-add-submit\n    project-tag-filter\n    project-tag-remove-<id>\n    project-tags\n    project-tags-list\n    project-tasks-empty\n    project-tasks-table\n    projects-empty\n    projects-page\n    projects-show-archived\n    projects-table\n    task-filter\n    task-row-<id>\n    task-status\n    task-title\n    task-toggle-<id>\n  `<id>` / `<currency>` are placeholders: the concrete value comes from the data\n  your test seeds, e.g. client-row-1. Anchors are a stable contract \u2014 use them\n  exactly as written.\n\nCHANNEL 2 \u2014 the audit file, via auditLines() from ../support/audit\n  Introduced by THIS change (0):\n    (none)\n  Every record format available to you (8):\n    CLIENT_ARCHIVED id=<id>\n    INVOICE_PAID id=<id> amount=<amount>\n    INVOICE_SENT id=<id> amount=<amount>\n    PROJECT_ARCHIVED id=<id>\n    PROJECT_DELETED id=<id>\n    PROJECT_TAGGED project=<project> tag=<tag>\n    PROJECT_UNTAGGED project=<project> tag=<tag>\n    TASK_TOGGLED id=<id> done=<done>\n\nSEED FIELDS HONOURED by /__test__/seed (anything else is ignored):\n    clients: archived, email, id, name\n    contacts: clientId, email, id, name, role\n    invoices: amount, description, dueDate, id, issuedDate, lineItems, projectId, qty, status, unitPrice\n    notes: at, id, targetId, targetType, text\n    payments: amount, date, id, invoiceId\n    projectTags: projectId, tagId\n    projects: archived, clientId, id, name\n    tags: id, name\n    tasks: done, id, projectId, title\n\nHOW DATA IS ARRANGED\nCall `resetAndSeed({...})` from `../support/seed` to put the application into the state your test\nneeds (it clears all data and the audit file first). Only the seed fields listed above are\nhonoured \u2014 a field that is not listed is accepted and SILENTLY IGNORED, so seeding it will look\nlike it worked and your assertion will fail for an unrelated-looking reason.\n\nTHE APPLICATION\nThe source in this directory is the application as it stands BEFORE this change request has been\nimplemented. You can read it and run it. Your new test SHOULD FAIL against it \u2014 the behaviour\nbeing requested is not there yet. That is expected, and is not a reason to weaken the test. Your\nexisting tests should still pass.\n\nYOUR EXISTING TESTS\n  e2e/specs/ holds the 30 spec file(s) you have written so far (98 tests).\n  Their git history is available. Update them where this change request revises\n  behaviour they assert; otherwise leave them alone.\n    all-invoices.spec.ts\n    client-archive.spec.ts\n    client-contacts.spec.ts\n    client-counts.spec.ts\n    client-email.spec.ts\n    client-projects.spec.ts\n    client-search.spec.ts\n    clients.spec.ts\n    contact-email.spec.ts\n    dashboard.spec.ts\n    invoice-amount.spec.ts\n    invoice-dates.spec.ts\n    invoice-lineitem-remove.spec.ts\n    invoice-lineitems.spec.ts\n    invoice-owed-sent-only.spec.ts\n    invoice-paid.spec.ts\n    invoice-payments.spec.ts\n    invoice-send.spec.ts\n    invoice-sort-due.spec.ts\n    invoice-status-filter.spec.ts\n    money-format.spec.ts\n    project-archive.spec.ts\n    project-delete.spec.ts\n    project-invoices.spec.ts\n    project-notes.spec.ts\n    project-tag-filter.spec.ts\n    project-tags.spec.ts\n    project-task-filter.spec.ts\n    project-tasks.spec.ts\n    projects.spec.ts\n",
+  "contract": {
+    "checkpoint": 31,
+    "no_code_change": false,
+    "new_testids": [
+      "invoice-due-amount"
+    ],
+    "new_audit_records": null,
+    "available_testids": [
+      "all-invoices-empty",
+      "all-invoices-table",
+      "app-home",
+      "app-nav",
+      "app-root",
+      "client-archive-<id>",
+      "client-contacts",
+      "client-contacts-count",
+      "client-contacts-table",
+      "client-counts",
+      "client-detail-page",
+      "client-email",
+      "client-form",
+      "client-form-email",
+      "client-form-email-error",
+      "client-form-name",
+      "client-form-submit",
+      "client-name",
+      "client-open-<id>",
+      "client-projects-count",
+      "client-projects-empty",
+      "client-projects-table",
+      "client-row-<id>",
+      "client-search",
+      "clients-empty",
+      "clients-page",
+      "clients-table",
+      "contact-email",
+      "contact-form",
+      "contact-form-email",
+      "contact-form-email-error",
+      "contact-form-name",
+      "contact-form-role",
+      "contact-form-submit",
+      "contact-name",
+      "contact-role",
+      "contact-row-<id>",
+      "dashboard",
+      "dashboard-clients-count",
+      "dashboard-error",
+      "dashboard-loading",
+      "dashboard-outstanding-total",
+      "dashboard-page",
+      "dashboard-projects-count",
+      "home-empty",
+      "invoice-amount",
+      "invoice-detail-page",
+      "invoice-due",
+      "invoice-due-amount",
+      "invoice-form",
+      "invoice-form-amount",
+      "invoice-form-amount-error",
+      "invoice-form-submit",
+      "invoice-issued",
+      "invoice-lineitems-table",
+      "invoice-open-<id>",
+      "invoice-pay-<id>",
+      "invoice-payments",
+      "invoice-payments-table",
+      "invoice-project",
+      "invoice-row-<id>",
+      "invoice-send-<id>",
+      "invoice-sort-due",
+      "invoice-status",
+      "invoice-status-filter",
+      "invoices-page",
+      "lineitem-amount",
+      "lineitem-description",
+      "lineitem-form",
+      "lineitem-form-description",
+      "lineitem-form-error",
+      "lineitem-form-qty",
+      "lineitem-form-submit",
+      "lineitem-form-unitprice",
+      "lineitem-qty",
+      "lineitem-remove-<id>",
+      "lineitem-row-<id>",
+      "lineitem-unitprice",
+      "nav-clients",
+      "nav-dashboard",
+      "nav-home",
+      "nav-invoices",
+      "nav-projects",
+      "note-form",
+      "note-form-submit",
+      "note-form-text",
+      "note-row-<id>",
+      "note-text",
+      "payment-amount",
+      "payment-date",
+      "payment-form",
+      "payment-form-amount",
+      "payment-form-date",
+      "payment-form-error",
+      "payment-form-submit",
+      "payment-row-<id>",
+      "project-archive-<id>",
+      "project-client",
+      "project-delete-<id>",
+      "project-detail-page",
+      "project-form",
+      "project-form-client",
+      "project-form-name",
+      "project-form-submit",
+      "project-invoices-table",
+      "project-invoices-total",
+      "project-name",
+      "project-notes",
+      "project-notes-empty",
+      "project-notes-list",
+      "project-open-<id>",
+      "project-row-<id>",
+      "project-tag-<id>",
+      "project-tag-add",
+      "project-tag-add-submit",
+      "project-tag-filter",
+      "project-tag-remove-<id>",
+      "project-tags",
+      "project-tags-list",
+      "project-tasks-empty",
+      "project-tasks-table",
+      "projects-empty",
+      "projects-page",
+      "projects-show-archived",
+      "projects-table",
+      "task-filter",
+      "task-row-<id>",
+      "task-status",
+      "task-title",
+      "task-toggle-<id>"
+    ],
+    "available_audit_records": [
+      "CLIENT_ARCHIVED id=<id>",
+      "INVOICE_PAID id=<id> amount=<amount>",
+      "INVOICE_SENT id=<id> amount=<amount>",
+      "PROJECT_ARCHIVED id=<id>",
+      "PROJECT_DELETED id=<id>",
+      "PROJECT_TAGGED project=<project> tag=<tag>",
+      "PROJECT_UNTAGGED project=<project> tag=<tag>",
+      "TASK_TOGGLED id=<id> done=<done>"
+    ],
+    "seed_accepts": {
+      "clients": [
+        "archived",
+        "email",
+        "id",
+        "name"
+      ],
+      "contacts": [
+        "clientId",
+        "email",
+        "id",
+        "name",
+        "role"
+      ],
+      "invoices": [
+        "amount",
+        "description",
+        "dueDate",
+        "id",
+        "issuedDate",
+        "lineItems",
+        "projectId",
+        "qty",
+        "status",
+        "unitPrice"
+      ],
+      "notes": [
+        "at",
+        "id",
+        "targetId",
+        "targetType",
+        "text"
+      ],
+      "payments": [
+        "amount",
+        "date",
+        "id",
+        "invoiceId"
+      ],
+      "projectTags": [
+        "projectId",
+        "tagId"
+      ],
+      "projects": [
+        "archived",
+        "clientId",
+        "id",
+        "name"
+      ],
+      "tags": [
+        "id",
+        "name"
+      ],
+      "tasks": [
+        "done",
+        "id",
+        "projectId",
+        "title"
+      ]
+    }
+  },
+  "reference": {
+    "repo": "officehq-tanstack-officefloor",
+    "origin": "git@github.com:officefloor/officehq-tanstack-officefloor.git",
+    "branch": "evolve/202610020135/just-solve/chain2",
+    "repairs_applied": [
+      "001-projects-archived-pre-status",
+      "003-clients-archived",
+      "005-seed-advances-the-clients-identity"
+    ]
+  },
+  "suite": {
+    "files": {
+      "all-invoices.spec.ts": [
+        "all-invoices.spec.ts::lists every invoice from every project, each with its project and stage",
+        "all-invoices.spec.ts::shows an empty state when there are no invoices at all",
+        "all-invoices.spec.ts::reaches the all-invoices page from the nav"
+      ],
+      "client-archive.spec.ts": [
+        "client-archive.spec.ts::archiving drops a client off the list, keeps a record, and loses nothing",
+        "client-archive.spec.ts::an already-archived client is absent from the list and cannot be found by search",
+        "client-archive.spec.ts::archiving a client via the UI keeps it out of the search too"
+      ],
+      "client-contacts.spec.ts": [
+        "client-contacts.spec.ts::opening a client shows that client's contacts, each with name, email and role",
+        "client-contacts.spec.ts::a client with no contacts of their own shows none (another client's do not leak)",
+        "client-contacts.spec.ts::adds a contact with a name, email and role through the form",
+        "client-contacts.spec.ts::a freshly added contact joins the client's existing contacts"
+      ],
+      "client-counts.spec.ts": [
+        "client-counts.spec.ts::a client's page shows how many projects and contacts they have",
+        "client-counts.spec.ts::a client with no projects or contacts of their own shows zero for each",
+        "client-counts.spec.ts::each client's page shows its own counts"
+      ],
+      "client-email.spec.ts": [
+        "client-email.spec.ts::does not show the email error before the user tries to save",
+        "client-email.spec.ts::refuses to save a client with no email",
+        "client-email.spec.ts::refuses to save a client with a malformed email",
+        "client-email.spec.ts::saves the client once a proper email is provided, clearing the error"
+      ],
+      "client-projects.spec.ts": [
+        "client-projects.spec.ts::opening a client shows the projects being done for them",
+        "client-projects.spec.ts::a client with no projects of their own shows an empty state"
+      ],
+      "client-search.spec.ts": [
+        "client-search.spec.ts::narrows the list to clients whose name matches what is typed",
+        "client-search.spec.ts::clearing the box shows every client again",
+        "client-search.spec.ts::a search that matches no client hides every row"
+      ],
+      "clients.spec.ts": [
+        "clients.spec.ts::lists all seeded clients in one list, each with name and email",
+        "clients.spec.ts::shows an empty state when there are no clients",
+        "clients.spec.ts::adds a client with their name and email through the form",
+        "clients.spec.ts::reaches the clients list from the nav"
+      ],
+      "contact-email.spec.ts": [
+        "contact-email.spec.ts::does not show the email error before the user tries to save",
+        "contact-email.spec.ts::refuses to save a contact with no email",
+        "contact-email.spec.ts::refuses to save a contact with a malformed email",
+        "contact-email.spec.ts::saves the contact once a proper email is provided, clearing the error"
+      ],
+      "dashboard.spec.ts": [
+        "dashboard.spec.ts::reaches the dashboard from the nav",
+        "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed",
+        "dashboard.spec.ts::a paid invoice is not money still owed",
+        "dashboard.spec.ts::with no data at all the figures are zero"
+      ],
+      "invoice-amount.spec.ts": [
+        "invoice-amount.spec.ts::does not show the amount error before the user tries to add",
+        "invoice-amount.spec.ts::refuses to add an invoice for zero, surfacing the error and creating nothing",
+        "invoice-amount.spec.ts::adds the invoice once a positive amount is provided, clearing the error"
+      ],
+      "invoice-dates.spec.ts": [
+        "invoice-dates.spec.ts::an invoice shows both its issued date and its due date, each in its own slot",
+        "invoice-dates.spec.ts::each invoice shows its own pair of dates, not a sibling invoice's"
+      ],
+      "invoice-due-amount.spec.ts": [
+        "invoice-due-amount.spec.ts::shows the amount still left after subtracting the payments recorded on that invoice",
+        "invoice-due-amount.spec.ts::with no payments yet, the whole amount is still left to pay",
+        "invoice-due-amount.spec.ts::once the payments cover the amount, nothing is left to pay"
+      ],
+      "invoice-lineitem-remove.spec.ts": [
+        "invoice-lineitem-remove.spec.ts::removing one line drops only that line, keeps the rest, and re-works the total",
+        "invoice-lineitem-remove.spec.ts::removing the last line empties the invoice and the total falls to zero"
+      ],
+      "invoice-lineitems.spec.ts": [
+        "invoice-lineitems.spec.ts::opening an invoice lists each thing \u2014 description, how many, price each \u2014 with the total worked out",
+        "invoice-lineitems.spec.ts::adds a thing through the form; it appears with its worked-out amount and lifts the total",
+        "invoice-lineitems.spec.ts::refuses an incomplete line item, surfacing an error and adding nothing"
+      ],
+      "invoice-owed-sent-only.spec.ts": [
+        "invoice-owed-sent-only.spec.ts::a draft is not counted as money owed; only sent invoices are",
+        "invoice-owed-sent-only.spec.ts::a draft alone is not money owed, but sending it makes it owed",
+        "invoice-owed-sent-only.spec.ts::with every invoice still a draft, nothing is owed"
+      ],
+      "invoice-paid.spec.ts": [
+        "invoice-paid.spec.ts::marking an unpaid invoice paid flips its status and records it",
+        "invoice-paid.spec.ts::keeps a separate record each time, and marking one leaves the others untouched"
+      ],
+      "invoice-payments.spec.ts": [
+        "invoice-payments.spec.ts::an invoice shows each payment recorded on it, with its amount and date",
+        "invoice-payments.spec.ts::records a payment through the form; it appears on the invoice with its amount and date",
+        "invoice-payments.spec.ts::refuses an incomplete payment, surfacing an error and recording nothing"
+      ],
+      "invoice-send.spec.ts": [
+        "invoice-send.spec.ts::a newly created invoice is a draft: it can be sent but not yet paid",
+        "invoice-send.spec.ts::sending a draft moves it to sent, keeps a record, and only then allows payment",
+        "invoice-send.spec.ts::a draft cannot be paid but an already-sent invoice can",
+        "invoice-send.spec.ts::sending one draft records its own line and leaves its siblings untouched"
+      ],
+      "invoice-sort-due.spec.ts": [
+        "invoice-sort-due.spec.ts::activating the control orders the invoices earliest-due first",
+        "invoice-sort-due.spec.ts::the control sorts by due date whatever the seeded order"
+      ],
+      "invoice-status-filter.spec.ts": [
+        "invoice-status-filter.spec.ts::with nothing picked, the filter is present and every invoice is shown",
+        "invoice-status-filter.spec.ts::narrowing to SENT keeps only the sent invoices",
+        "invoice-status-filter.spec.ts::narrowing to DRAFT, then to PAID, follows the chosen stage",
+        "invoice-status-filter.spec.ts::clearing the filter brings every invoice back"
+      ],
+      "money-format.spec.ts": [
+        "money-format.spec.ts::an invoice amount is shown like $120.00",
+        "money-format.spec.ts::the project invoices total is shown like $219.50",
+        "money-format.spec.ts::the dashboard outstanding total is shown like $475.00",
+        "money-format.spec.ts::a zero money total is shown like $0.00"
+      ],
+      "project-archive.spec.ts": [
+        "project-archive.spec.ts::archiving drops a project off the main list, keeps a record, and loses nothing",
+        "project-archive.spec.ts::an already-archived project is hidden by default and revealed by the toggle",
+        "project-archive.spec.ts::an archived project drops off the client's page, leaving the client's live projects",
+        "project-archive.spec.ts::archiving a project via the UI drops it off the client page too, and records it"
+      ],
+      "project-delete.spec.ts": [
+        "project-delete.spec.ts::deletes a project, removing it from the list and keeping a record",
+        "project-delete.spec.ts::deleting the last project leaves the list empty, with a record of the deletion"
+      ],
+      "project-invoices.spec.ts": [
+        "project-invoices.spec.ts::opening a project shows its invoices and what they add up to",
+        "project-invoices.spec.ts::adds a new invoice for an amount, which then appears and is added into the total",
+        "project-invoices.spec.ts::a freshly added invoice adds onto the existing total"
+      ],
+      "project-notes.spec.ts": [
+        "project-notes.spec.ts::a project shows its own notes newest-first, and other projects' notes do not leak in",
+        "project-notes.spec.ts::a project with no notes shows an empty state and no note rows",
+        "project-notes.spec.ts::writing a note adds it to the project and shows the newest one first"
+      ],
+      "project-tag-filter.spec.ts": [
+        "project-tag-filter.spec.ts::with nothing picked, the filter is present and every project is shown",
+        "project-tag-filter.spec.ts::narrowing to a label keeps only the projects carrying it",
+        "project-tag-filter.spec.ts::switching labels follows the chosen label to a disjoint set",
+        "project-tag-filter.spec.ts::clearing the filter brings every project back, including the unlabelled one"
+      ],
+      "project-tags.spec.ts": [
+        "project-tags.spec.ts::a project shows its own labels, and labels of other projects do not leak in",
+        "project-tags.spec.ts::adding a label through the form shows it on the project and keeps a record",
+        "project-tags.spec.ts::removing a label takes it off this project only, and keeps a record"
+      ],
+      "project-task-filter.spec.ts": [
+        "project-task-filter.spec.ts::with nothing picked, the filter is present and every task is shown",
+        "project-task-filter.spec.ts::narrowing to open keeps only the not-done tasks",
+        "project-task-filter.spec.ts::narrowing to finished keeps only the done tasks",
+        "project-task-filter.spec.ts::switching from open to finished follows the chosen state",
+        "project-task-filter.spec.ts::clearing the filter brings every task back"
+      ],
+      "project-tasks.spec.ts": [
+        "project-tasks.spec.ts::opening a project lists its own tasks with their titles, and a done task reads differently from a not-done one",
+        "project-tasks.spec.ts::a project with no tasks shows an empty state and no task rows",
+        "project-tasks.spec.ts::ticking a task off flips its status and keeps a record; toggling back flips it and records again",
+        "project-tasks.spec.ts::toggling one task leaves its siblings untouched, and each toggle writes its own record"
+      ],
+      "projects.spec.ts": [
+        "projects.spec.ts::lists all seeded projects, each with its name and the client it is for",
+        "projects.spec.ts::shows an empty state when there are no projects",
+        "projects.spec.ts::adds a project and picks which client it is for, then shows it with the client name",
+        "projects.spec.ts::reaches the projects list from the nav"
+      ]
+    },
+    "total_tests": 101,
+    "file_delta": {
+      "added": [
+        "invoice-due-amount.spec.ts"
+      ],
+      "removed": [],
+      "modified": []
+    },
+    "test_delta": {
+      "added": [
+        "invoice-due-amount.spec.ts::once the payments cover the amount, nothing is left to pay",
+        "invoice-due-amount.spec.ts::shows the amount still left after subtracting the payments recorded on that invoice",
+        "invoice-due-amount.spec.ts::with no payments yet, the whole amount is still left to pay"
+      ],
+      "removed": []
+    },
+    "test_moves": {
+      "added": [
+        "invoice-due-amount.spec.ts::shows the amount still left after subtracting the payments recorded on that invoice",
+        "invoice-due-amount.spec.ts::with no payments yet, the whole amount is still left to pay",
+        "invoice-due-amount.spec.ts::once the payments cover the amount, nothing is left to pay"
+      ],
+      "revised": [],
+      "dropped": [],
+      "file_gone": []
+    },
+    "gate_id_delta": {
+      "added": [
+        "invoice-due-amount.spec.ts::once the payments cover the amount, nothing is left to pay",
+        "invoice-due-amount.spec.ts::shows the amount still left after subtracting the payments recorded on that invoice",
+        "invoice-due-amount.spec.ts::with no payments yet, the whole amount is still left to pay"
+      ],
+      "removed": []
+    }
+  },
+  "source": {
+    "kind": "agent",
+    "suite_repo": "/home/daniel/test-fidelity-long-run/runs/202610060034/chain1/suite",
+    "suite_commit": "6ce2d30c64cd61758d9961fe5a6da50c460ea65f",
+    "code_view": "previous",
+    "view_checkpoint": 30,
+    "files_added": [
+      "invoice-due-amount.spec.ts"
+    ],
+    "files_removed": []
+  },
+  "gate": {
+    "build_ok": true,
+    "total_selected": 101,
+    "passed": 90,
+    "failed_count": 11,
+    "failed": [
+      "client-contacts.spec.ts::a freshly added contact joins the client's existing contacts",
+      "invoice-due-amount.spec.ts::once the payments cover the amount, nothing is left to pay",
+      "invoice-due-amount.spec.ts::shows the amount still left after subtracting the payments recorded on that invoice",
+      "invoice-due-amount.spec.ts::with no payments yet, the whole amount is still left to pay",
+      "invoice-lineitems.spec.ts::adds a thing through the form; it appears with its worked-out amount and lifts the total",
+      "invoice-lineitems.spec.ts::opening an invoice lists each thing \u2014 description, how many, price each \u2014 with the total worked out",
+      "invoice-lineitems.spec.ts::refuses an incomplete line item, surfacing an error and adding nothing",
+      "project-invoices.spec.ts::a freshly added invoice adds onto the existing total",
+      "project-notes.spec.ts::a project shows its own notes newest-first, and other projects' notes do not leak in",
+      "project-notes.spec.ts::writing a note adds it to the project and shows the newest one first",
+      "project-tags.spec.ts::adding a label through the form shows it on the project and keeps a record"
+    ],
+    "repeats": 2,
+    "flaky": [],
+    "flaky_count": 0,
+    "results": {
+      "all-invoices.spec.ts::lists every invoice from every project, each with its project and stage": true,
+      "all-invoices.spec.ts::shows an empty state when there are no invoices at all": true,
+      "all-invoices.spec.ts::reaches the all-invoices page from the nav": true,
+      "client-archive.spec.ts::archiving drops a client off the list, keeps a record, and loses nothing": true,
+      "client-archive.spec.ts::an already-archived client is absent from the list and cannot be found by search": true,
+      "client-archive.spec.ts::archiving a client via the UI keeps it out of the search too": true,
+      "client-contacts.spec.ts::opening a client shows that client's contacts, each with name, email and role": true,
+      "client-contacts.spec.ts::a client with no contacts of their own shows none (another client's do not leak)": true,
+      "client-contacts.spec.ts::adds a contact with a name, email and role through the form": true,
+      "client-contacts.spec.ts::a freshly added contact joins the client's existing contacts": false,
+      "client-counts.spec.ts::a client's page shows how many projects and contacts they have": true,
+      "client-counts.spec.ts::a client with no projects or contacts of their own shows zero for each": true,
+      "client-counts.spec.ts::each client's page shows its own counts": true,
+      "client-email.spec.ts::does not show the email error before the user tries to save": true,
+      "client-email.spec.ts::refuses to save a client with no email": true,
+      "client-email.spec.ts::refuses to save a client with a malformed email": true,
+      "client-email.spec.ts::saves the client once a proper email is provided, clearing the error": true,
+      "client-projects.spec.ts::opening a client shows the projects being done for them": true,
+      "client-projects.spec.ts::a client with no projects of their own shows an empty state": true,
+      "client-search.spec.ts::narrows the list to clients whose name matches what is typed": true,
+      "client-search.spec.ts::clearing the box shows every client again": true,
+      "client-search.spec.ts::a search that matches no client hides every row": true,
+      "clients.spec.ts::lists all seeded clients in one list, each with name and email": true,
+      "clients.spec.ts::shows an empty state when there are no clients": true,
+      "clients.spec.ts::adds a client with their name and email through the form": true,
+      "clients.spec.ts::reaches the clients list from the nav": true,
+      "contact-email.spec.ts::does not show the email error before the user tries to save": true,
+      "contact-email.spec.ts::refuses to save a contact with no email": true,
+      "contact-email.spec.ts::refuses to save a contact with a malformed email": true,
+      "contact-email.spec.ts::saves the contact once a proper email is provided, clearing the error": true,
+      "dashboard.spec.ts::reaches the dashboard from the nav": true,
+      "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed": true,
+      "dashboard.spec.ts::a paid invoice is not money still owed": true,
+      "dashboard.spec.ts::with no data at all the figures are zero": true,
+      "invoice-amount.spec.ts::does not show the amount error before the user tries to add": true,
+      "invoice-amount.spec.ts::refuses to add an invoice for zero, surfacing the error and creating nothing": true,
+      "invoice-amount.spec.ts::adds the invoice once a positive amount is provided, clearing the error": true,
+      "invoice-dates.spec.ts::an invoice shows both its issued date and its due date, each in its own slot": true,
+      "invoice-dates.spec.ts::each invoice shows its own pair of dates, not a sibling invoice's": true,
+      "invoice-due-amount.spec.ts::shows the amount still left after subtracting the payments recorded on that invoice": false,
+      "invoice-due-amount.spec.ts::with no payments yet, the whole amount is still left to pay": false,
+      "invoice-due-amount.spec.ts::once the payments cover the amount, nothing is left to pay": false,
+      "invoice-lineitem-remove.spec.ts::removing one line drops only that line, keeps the rest, and re-works the total": true,
+      "invoice-lineitem-remove.spec.ts::removing the last line empties the invoice and the total falls to zero": true,
+      "invoice-lineitems.spec.ts::opening an invoice lists each thing \u2014 description, how many, price each \u2014 with the total worked out": false,
+      "invoice-lineitems.spec.ts::adds a thing through the form; it appears with its worked-out amount and lifts the total": false,
+      "invoice-lineitems.spec.ts::refuses an incomplete line item, surfacing an error and adding nothing": false,
+      "invoice-owed-sent-only.spec.ts::a draft is not counted as money owed; only sent invoices are": true,
+      "invoice-owed-sent-only.spec.ts::a draft alone is not money owed, but sending it makes it owed": true,
+      "invoice-owed-sent-only.spec.ts::with every invoice still a draft, nothing is owed": true,
+      "invoice-paid.spec.ts::marking an unpaid invoice paid flips its status and records it": true,
+      "invoice-paid.spec.ts::keeps a separate record each time, and marking one leaves the others untouched": true,
+      "invoice-payments.spec.ts::an invoice shows each payment recorded on it, with its amount and date": true,
+      "invoice-payments.spec.ts::records a payment through the form; it appears on the invoice with its amount and date": true,
+      "invoice-payments.spec.ts::refuses an incomplete payment, surfacing an error and recording nothing": true,
+      "invoice-send.spec.ts::a newly created invoice is a draft: it can be sent but not yet paid": true,
+      "invoice-send.spec.ts::sending a draft moves it to sent, keeps a record, and only then allows payment": true,
+      "invoice-send.spec.ts::a draft cannot be paid but an already-sent invoice can": true,
+      "invoice-send.spec.ts::sending one draft records its own line and leaves its siblings untouched": true,
+      "invoice-sort-due.spec.ts::activating the control orders the invoices earliest-due first": true,
+      "invoice-sort-due.spec.ts::the control sorts by due date whatever the seeded order": true,
+      "invoice-status-filter.spec.ts::with nothing picked, the filter is present and every invoice is shown": true,
+      "invoice-status-filter.spec.ts::narrowing to SENT keeps only the sent invoices": true,
+      "invoice-status-filter.spec.ts::narrowing to DRAFT, then to PAID, follows the chosen stage": true,
+      "invoice-status-filter.spec.ts::clearing the filter brings every invoice back": true,
+      "money-format.spec.ts::an invoice amount is shown like $120.00": true,
+      "money-format.spec.ts::the project invoices total is shown like $219.50": true,
+      "money-format.spec.ts::the dashboard outstanding total is shown like $475.00": true,
+      "money-format.spec.ts::a zero money total is shown like $0.00": true,
+      "project-archive.spec.ts::archiving drops a project off the main list, keeps a record, and loses nothing": true,
+      "project-archive.spec.ts::an already-archived project is hidden by default and revealed by the toggle": true,
+      "project-archive.spec.ts::an archived project drops off the client's page, leaving the client's live projects": true,
+      "project-archive.spec.ts::archiving a project via the UI drops it off the client page too, and records it": true,
+      "project-delete.spec.ts::deletes a project, removing it from the list and keeping a record": true,
+      "project-delete.spec.ts::deleting the last project leaves the list empty, with a record of the deletion": true,
+      "project-invoices.spec.ts::opening a project shows its invoices and what they add up to": true,
+      "project-invoices.spec.ts::adds a new invoice for an amount, which then appears and is added into the total": true,
+      "project-invoices.spec.ts::a freshly added invoice adds onto the existing total": false,
+      "project-notes.spec.ts::a project shows its own notes newest-first, and other projects' notes do not leak in": false,
+      "project-notes.spec.ts::a project with no notes shows an empty state and no note rows": true,
+      "project-notes.spec.ts::writing a note adds it to the project and shows the newest one first": false,
+      "project-tag-filter.spec.ts::with nothing picked, the filter is present and every project is shown": true,
+      "project-tag-filter.spec.ts::narrowing to a label keeps only the projects carrying it": true,
+      "project-tag-filter.spec.ts::switching labels follows the chosen label to a disjoint set": true,
+      "project-tag-filter.spec.ts::clearing the filter brings every project back, including the unlabelled one": true,
+      "project-tags.spec.ts::a project shows its own labels, and labels of other projects do not leak in": true,
+      "project-tags.spec.ts::adding a label through the form shows it on the project and keeps a record": false,
+      "project-tags.spec.ts::removing a label takes it off this project only, and keeps a record": true,
+      "project-task-filter.spec.ts::with nothing picked, the filter is present and every task is shown": true,
+      "project-task-filter.spec.ts::narrowing to open keeps only the not-done tasks": true,
+      "project-task-filter.spec.ts::narrowing to finished keeps only the done tasks": true,
+      "project-task-filter.spec.ts::switching from open to finished follows the chosen state": true,
+      "project-task-filter.spec.ts::clearing the filter brings every task back": true,
+      "project-tasks.spec.ts::opening a project lists its own tasks with their titles, and a done task reads differently from a not-done one": true,
+      "project-tasks.spec.ts::a project with no tasks shows an empty state and no task rows": true,
+      "project-tasks.spec.ts::ticking a task off flips its status and keeps a record; toggling back flips it and records again": true,
+      "project-tasks.spec.ts::toggling one task leaves its siblings untouched, and each toggle writes its own record": true,
+      "projects.spec.ts::lists all seeded projects, each with its name and the client it is for": true,
+      "projects.spec.ts::shows an empty state when there are no projects": true,
+      "projects.spec.ts::adds a project and picks which client it is for, then shows it with the client name": true,
+      "projects.spec.ts::reaches the projects list from the nav": true
+    },
+    "results_repeats": [
+      {
+        "all-invoices.spec.ts::lists every invoice from every project, each with its project and stage": true,
+        "all-invoices.spec.ts::shows an empty state when there are no invoices at all": true,
+        "all-invoices.spec.ts::reaches the all-invoices page from the nav": true,
+        "client-archive.spec.ts::archiving drops a client off the list, keeps a record, and loses nothing": true,
+        "client-archive.spec.ts::an already-archived client is absent from the list and cannot be found by search": true,
+        "client-archive.spec.ts::archiving a client via the UI keeps it out of the search too": true,
+        "client-contacts.spec.ts::opening a client shows that client's contacts, each with name, email and role": true,
+        "client-contacts.spec.ts::a client with no contacts of their own shows none (another client's do not leak)": true,
+        "client-contacts.spec.ts::adds a contact with a name, email and role through the form": true,
+        "client-contacts.spec.ts::a freshly added contact joins the client's existing contacts": false,
+        "client-counts.spec.ts::a client's page shows how many projects and contacts they have": true,
+        "client-counts.spec.ts::a client with no projects or contacts of their own shows zero for each": true,
+        "client-counts.spec.ts::each client's page shows its own counts": true,
+        "client-email.spec.ts::does not show the email error before the user tries to save": true,
+        "client-email.spec.ts::refuses to save a client with no email": true,
+        "client-email.spec.ts::refuses to save a client with a malformed email": true,
+        "client-email.spec.ts::saves the client once a proper email is provided, clearing the error": true,
+        "client-projects.spec.ts::opening a client shows the projects being done for them": true,
+        "client-projects.spec.ts::a client with no projects of their own shows an empty state": true,
+        "client-search.spec.ts::narrows the list to clients whose name matches what is typed": true,
+        "client-search.spec.ts::clearing the box shows every client again": true,
+        "client-search.spec.ts::a search that matches no client hides every row": true,
+        "clients.spec.ts::lists all seeded clients in one list, each with name and email": true,
+        "clients.spec.ts::shows an empty state when there are no clients": true,
+        "clients.spec.ts::adds a client with their name and email through the form": true,
+        "clients.spec.ts::reaches the clients list from the nav": true,
+        "contact-email.spec.ts::does not show the email error before the user tries to save": true,
+        "contact-email.spec.ts::refuses to save a contact with no email": true,
+        "contact-email.spec.ts::refuses to save a contact with a malformed email": true,
+        "contact-email.spec.ts::saves the contact once a proper email is provided, clearing the error": true,
+        "dashboard.spec.ts::reaches the dashboard from the nav": true,
+        "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed": true,
+        "dashboard.spec.ts::a paid invoice is not money still owed": true,
+        "dashboard.spec.ts::with no data at all the figures are zero": true,
+        "invoice-amount.spec.ts::does not show the amount error before the user tries to add": true,
+        "invoice-amount.spec.ts::refuses to add an invoice for zero, surfacing the error and creating nothing": true,
+        "invoice-amount.spec.ts::adds the invoice once a positive amount is provided, clearing the error": true,
+        "invoice-dates.spec.ts::an invoice shows both its issued date and its due date, each in its own slot": true,
+        "invoice-dates.spec.ts::each invoice shows its own pair of dates, not a sibling invoice's": true,
+        "invoice-due-amount.spec.ts::shows the amount still left after subtracting the payments recorded on that invoice": false,
+        "invoice-due-amount.spec.ts::with no payments yet, the whole amount is still left to pay": false,
+        "invoice-due-amount.spec.ts::once the payments cover the amount, nothing is left to pay": false,
+        "invoice-lineitem-remove.spec.ts::removing one line drops only that line, keeps the rest, and re-works the total": true,
+        "invoice-lineitem-remove.spec.ts::removing the last line empties the invoice and the total falls to zero": true,
+        "invoice-lineitems.spec.ts::opening an invoice lists each thing \u2014 description, how many, price each \u2014 with the total worked out": false,
+        "invoice-lineitems.spec.ts::adds a thing through the form; it appears with its worked-out amount and lifts the total": false,
+        "invoice-lineitems.spec.ts::refuses an incomplete line item, surfacing an error and adding nothing": false,
+        "invoice-owed-sent-only.spec.ts::a draft is not counted as money owed; only sent invoices are": true,
+        "invoice-owed-sent-only.spec.ts::a draft alone is not money owed, but sending it makes it owed": true,
+        "invoice-owed-sent-only.spec.ts::with every invoice still a draft, nothing is owed": true,
+        "invoice-paid.spec.ts::marking an unpaid invoice paid flips its status and records it": true,
+        "invoice-paid.spec.ts::keeps a separate record each time, and marking one leaves the others untouched": true,
+        "invoice-payments.spec.ts::an invoice shows each payment recorded on it, with its amount and date": true,
+        "invoice-payments.spec.ts::records a payment through the form; it appears on the invoice with its amount and date": true,
+        "invoice-payments.spec.ts::refuses an incomplete payment, surfacing an error and recording nothing": true,
+        "invoice-send.spec.ts::a newly created invoice is a draft: it can be sent but not yet paid": true,
+        "invoice-send.spec.ts::sending a draft moves it to sent, keeps a record, and only then allows payment": true,
+        "invoice-send.spec.ts::a draft cannot be paid but an already-sent invoice can": true,
+        "invoice-send.spec.ts::sending one draft records its own line and leaves its siblings untouched": true,
+        "invoice-sort-due.spec.ts::activating the control orders the invoices earliest-due first": true,
+        "invoice-sort-due.spec.ts::the control sorts by due date whatever the seeded order": true,
+        "invoice-status-filter.spec.ts::with nothing picked, the filter is present and every invoice is shown": true,
+        "invoice-status-filter.spec.ts::narrowing to SENT keeps only the sent invoices": true,
+        "invoice-status-filter.spec.ts::narrowing to DRAFT, then to PAID, follows the chosen stage": true,
+        "invoice-status-filter.spec.ts::clearing the filter brings every invoice back": true,
+        "money-format.spec.ts::an invoice amount is shown like $120.00": true,
+        "money-format.spec.ts::the project invoices total is shown like $219.50": true,
+        "money-format.spec.ts::the dashboard outstanding total is shown like $475.00": true,
+        "money-format.spec.ts::a zero money total is shown like $0.00": true,
+        "project-archive.spec.ts::archiving drops a project off the main list, keeps a record, and loses nothing": true,
+        "project-archive.spec.ts::an already-archived project is hidden by default and revealed by the toggle": true,
+        "project-archive.spec.ts::an archived project drops off the client's page, leaving the client's live projects": true,
+        "project-archive.spec.ts::archiving a project via the UI drops it off the client page too, and records it": true,
+        "project-delete.spec.ts::deletes a project, removing it from the list and keeping a record": true,
+        "project-delete.spec.ts::deleting the last project leaves the list empty, with a record of the deletion": true,
+        "project-invoices.spec.ts::opening a project shows its invoices and what they add up to": true,
+        "project-invoices.spec.ts::adds a new invoice for an amount, which then appears and is added into the total": true,
+        "project-invoices.spec.ts::a freshly added invoice adds onto the existing total": false,
+        "project-notes.spec.ts::a project shows its own notes newest-first, and other projects' notes do not leak in": false,
+        "project-notes.spec.ts::a project with no notes shows an empty state and no note rows": true,
+        "project-notes.spec.ts::writing a note adds it to the project and shows the newest one first": false,
+        "project-tag-filter.spec.ts::with nothing picked, the filter is present and every project is shown": true,
+        "project-tag-filter.spec.ts::narrowing to a label keeps only the projects carrying it": true,
+        "project-tag-filter.spec.ts::switching labels follows the chosen label to a disjoint set": true,
+        "project-tag-filter.spec.ts::clearing the filter brings every project back, including the unlabelled one": true,
+        "project-tags.spec.ts::a project shows its own labels, and labels of other projects do not leak in": true,
+        "project-tags.spec.ts::adding a label through the form shows it on the project and keeps a record": false,
+        "project-tags.spec.ts::removing a label takes it off this project only, and keeps a record": true,
+        "project-task-filter.spec.ts::with nothing picked, the filter is present and every task is shown": true,
+        "project-task-filter.spec.ts::narrowing to open keeps only the not-done tasks": true,
+        "project-task-filter.spec.ts::narrowing to finished keeps only the done tasks": true,
+        "project-task-filter.spec.ts::switching from open to finished follows the chosen state": true,
+        "project-task-filter.spec.ts::clearing the filter brings every task back": true,
+        "project-tasks.spec.ts::opening a project lists its own tasks with their titles, and a done task reads differently from a not-done one": true,
+        "project-tasks.spec.ts::a project with no tasks shows an empty state and no task rows": true,
+        "project-tasks.spec.ts::ticking a task off flips its status and keeps a record; toggling back flips it and records again": true,
+        "project-tasks.spec.ts::toggling one task leaves its siblings untouched, and each toggle writes its own record": true,
+        "projects.spec.ts::lists all seeded projects, each with its name and the client it is for": true,
+        "projects.spec.ts::shows an empty state when there are no projects": true,
+        "projects.spec.ts::adds a project and picks which client it is for, then shows it with the client name": true,
+        "projects.spec.ts::reaches the projects list from the nav": true
+      }
+    ],
+    "detail": [
+      {
+        "test_id": "all-invoices.spec.ts::lists every invoice from every project, each with its project and stage",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 618,
+        "failure": ""
+      },
+      {
+        "test_id": "all-invoices.spec.ts::shows an empty state when there are no invoices at all",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 237,
+        "failure": ""
+      },
+      {
+        "test_id": "all-invoices.spec.ts::reaches the all-invoices page from the nav",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 170,
+        "failure": ""
+      },
+      {
+        "test_id": "client-archive.spec.ts::archiving drops a client off the list, keeps a record, and loses nothing",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 348,
+        "failure": ""
+      },
+      {
+        "test_id": "client-archive.spec.ts::an already-archived client is absent from the list and cannot be found by search",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 166,
+        "failure": ""
+      },
+      {
+        "test_id": "client-archive.spec.ts::archiving a client via the UI keeps it out of the search too",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 357,
+        "failure": ""
+      },
+      {
+        "test_id": "client-contacts.spec.ts::opening a client shows that client's contacts, each with name, email and role",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 210,
+        "failure": ""
+      },
+      {
+        "test_id": "client-contacts.spec.ts::a client with no contacts of their own shows none (another client's do not leak)",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 165,
+        "failure": ""
+      },
+      {
+        "test_id": "client-contacts.spec.ts::adds a contact with a name, email and role through the form",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 656,
+        "failure": ""
+      },
+      {
+        "test_id": "client-contacts.spec.ts::a freshly added contact joins the client's existing contacts",
+        "category": "functionality",
+        "passed": false,
+        "duration_ms": 5384,
+        "failure": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m()\u001b[22m\n\nLocator: getByTestId('contact-row-2')\nExpected: visible\nReceived: <element(s) not found>\nCall log:\n  \u001b[2m- expect.toBeVisible with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('contact-row-2')\u001b[22m\n\n\n  126 |     await expect(page.getByTestId('contact-row-1').getByTestId('contact-name')).toHaveText('Dana Wells');\n  127 |     const added = page.getByTestId('contact-row-2');\n> 128 |     await expect(added).toBeVisible();\n      |                         ^\n  129 |     await expect(added.getByTestId('contact-name')).toHaveText('Omar Reed');\n  130 |     await expect(added.getByTestId('contact-email')).toHaveText('omar@acme.example');\n  131 |     await expect(added.getByTestId('contact-role')).toHaveText('Engineering');\n\n    at /home/daniel/test-fidelity-long-run/work/202610060034/cp31/e2e/specs/client-contacts.spec.ts:128:25 | Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m()\u001b[22m\n\nLocator: getByTestId('contact-row-2')\nExpected: visible\nReceived: <element(s) not found>\nCall log:\n  \u001b[2m- expect.toBeVisible with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('contact-row-2')\u001b[22m\n"
+      },
+      {
+        "test_id": "client-counts.spec.ts::a client's page shows how many projects and contacts they have",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 238,
+        "failure": ""
+      },
+      {
+        "test_id": "client-counts.spec.ts::a client with no projects or contacts of their own shows zero for each",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 199,
+        "failure": ""
+      },
+      {
+        "test_id": "client-counts.spec.ts::each client's page shows its own counts",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 275,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email.spec.ts::does not show the email error before the user tries to save",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 116,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email.spec.ts::refuses to save a client with no email",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 202,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email.spec.ts::refuses to save a client with a malformed email",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 206,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email.spec.ts::saves the client once a proper email is provided, clearing the error",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 374,
+        "failure": ""
+      },
+      {
+        "test_id": "client-projects.spec.ts::opening a client shows the projects being done for them",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 211,
+        "failure": ""
+      },
+      {
+        "test_id": "client-projects.spec.ts::a client with no projects of their own shows an empty state",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 170,
+        "failure": ""
+      },
+      {
+        "test_id": "client-search.spec.ts::narrows the list to clients whose name matches what is typed",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 147,
+        "failure": ""
+      },
+      {
+        "test_id": "client-search.spec.ts::clearing the box shows every client again",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 159,
+        "failure": ""
+      },
+      {
+        "test_id": "client-search.spec.ts::a search that matches no client hides every row",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 139,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::lists all seeded clients in one list, each with name and email",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 137,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::shows an empty state when there are no clients",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 117,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::adds a client with their name and email through the form",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 434,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::reaches the clients list from the nav",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 177,
+        "failure": ""
+      },
+      {
+        "test_id": "contact-email.spec.ts::does not show the email error before the user tries to save",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 171,
+        "failure": ""
+      },
+      {
+        "test_id": "contact-email.spec.ts::refuses to save a contact with no email",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 219,
+        "failure": ""
+      },
+      {
+        "test_id": "contact-email.spec.ts::refuses to save a contact with a malformed email",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 258,
+        "failure": ""
+      },
+      {
+        "test_id": "contact-email.spec.ts::saves the contact once a proper email is provided, clearing the error",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 432,
+        "failure": ""
+      },
+      {
+        "test_id": "dashboard.spec.ts::reaches the dashboard from the nav",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 244,
+        "failure": ""
+      },
+      {
+        "test_id": "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 193,
+        "failure": ""
+      },
+      {
+        "test_id": "dashboard.spec.ts::a paid invoice is not money still owed",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 180,
+        "failure": ""
+      },
+      {
+        "test_id": "dashboard.spec.ts::with no data at all the figures are zero",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 153,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-amount.spec.ts::does not show the amount error before the user tries to add",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 176,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-amount.spec.ts::refuses to add an invoice for zero, surfacing the error and creating nothing",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 328,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-amount.spec.ts::adds the invoice once a positive amount is provided, clearing the error",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 422,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-dates.spec.ts::an invoice shows both its issued date and its due date, each in its own slot",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 207,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-dates.spec.ts::each invoice shows its own pair of dates, not a sibling invoice's",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 214,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-due-amount.spec.ts::shows the amount still left after subtracting the payments recorded on that invoice",
+        "category": "functionality",
+        "passed": false,
+        "duration_ms": 5125,
+        "failure": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m()\u001b[22m\n\nLocator: getByTestId('invoice-due-amount')\nExpected: visible\nReceived: <element(s) not found>\nCall log:\n  \u001b[2m- expect.toBeVisible with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('invoice-due-amount')\u001b[22m\n\n\n  49 |     // 500 - (200 + 120) = 180 still left to pay. Not the full 500, not the 320 paid.\n  50 |     const due = page.getByTestId('invoice-due-amount');\n> 51 |     await expect(due).toBeVisible();\n     |                       ^\n  52 |     await expect(due).toHaveText(/^\\$?180(\\.00)?$/);\n  53 |\n  54 |     // Invoice 2's remainder is 900 - 777 = 123, derived from its own payment alone \u2014 proving the\n\n    at /home/daniel/test-fidelity-long-run/work/202610060034/cp31/e2e/specs/invoice-due-amount.spec.ts:51:23 | Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m()\u001b[22m\n\nLocator: getByTestId('invoice-due-amount')\nExpected: visible\nReceived: <element(s) not found>\nCall log:\n  \u001b[2m- expect.toBeVisible with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('invoice-due-amount')\u001b[22m\n"
+      },
+      {
+        "test_id": "invoice-due-amount.spec.ts::with no payments yet, the whole amount is still left to pay",
+        "category": "functionality",
+        "passed": false,
+        "duration_ms": 5184,
+        "failure": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: getByTestId('invoice-due-amount')\nExpected pattern: \u001b[32m/^\\$?250(\\.00)?$/\u001b[39m\nReceived: <element(s) not found>\nCall log:\n  \u001b[2m- expect.toHaveText with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('invoice-due-amount')\u001b[22m\n\n\n  71 |\n  72 |     // Nothing paid => the full amount is still owed.\n> 73 |     await expect(page.getByTestId('invoice-due-amount')).toHaveText(/^\\$?250(\\.00)?$/);\n     |                                                          ^\n  74 |   });\n  75 |\n  76 |   test('once the payments cover the amount, nothing is left to pay', async ({ page }) => {\n\n    at /home/daniel/test-fidelity-long-run/work/202610060034/cp31/e2e/specs/invoice-due-amount.spec.ts:73:58 | Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: getByTestId('invoice-due-amount')\nExpected pattern: \u001b[32m/^\\$?250(\\.00)?$/\u001b[39m\nReceived: <element(s) not found>\nCall log:\n  \u001b[2m- expect.toHaveText with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('invoice-due-amount')\u001b[22m\n"
+      },
+      {
+        "test_id": "invoice-due-amount.spec.ts::once the payments cover the amount, nothing is left to pay",
+        "category": "functionality",
+        "passed": false,
+        "duration_ms": 5178,
+        "failure": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: getByTestId('invoice-due-amount')\nExpected pattern: \u001b[32m/^\\$?0(\\.00)?$/\u001b[39m\nReceived: <element(s) not found>\nCall log:\n  \u001b[2m- expect.toHaveText with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('invoice-due-amount')\u001b[22m\n\n\n  90 |\n  91 |     // Fully paid off => nothing still left to pay.\n> 92 |     await expect(page.getByTestId('invoice-due-amount')).toHaveText(/^\\$?0(\\.00)?$/);\n     |                                                          ^\n  93 |   });\n  94 | });\n  95 |\n\n    at /home/daniel/test-fidelity-long-run/work/202610060034/cp31/e2e/specs/invoice-due-amount.spec.ts:92:58 | Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: getByTestId('invoice-due-amount')\nExpected pattern: \u001b[32m/^\\$?0(\\.00)?$/\u001b[39m\nReceived: <element(s) not found>\nCall log:\n  \u001b[2m- expect.toHaveText with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('invoice-due-amount')\u001b[22m\n"
+      },
+      {
+        "test_id": "invoice-lineitem-remove.spec.ts::removing one line drops only that line, keeps the rest, and re-works the total",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 440,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-lineitem-remove.spec.ts::removing the last line empties the invoice and the total falls to zero",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 503,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-lineitems.spec.ts::opening an invoice lists each thing \u2014 description, how many, price each \u2014 with the total worked out",
+        "category": "functionality",
+        "passed": false,
+        "duration_ms": 30008,
+        "failure": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m | Error: locator.click: Test timeout of 30000ms exceeded.\nCall log:\n  \u001b[2m- waiting for getByTestId('invoice-row-1').getByTestId('invoice-open-1')\u001b[22m\n\n\n  60 |\n  61 |     // Drill into the invoice to see what it is made of \u2014 a child route, reached via its open control.\n> 62 |     await listRow.getByTestId('invoice-open-1').click();\n     |                                                 ^\n  63 |\n  64 |     await expect(page.getByTestId('invoice-detail-page')).toBeVisible();\n  65 |     await expect(page.getByTestId('invoice-lineitems-table')).toBeVisible();\n\n    at /home/daniel/test-fidelity-long-run/work/202610060034/cp31/e2e/specs/invoice-lineitems.spec.ts:62:49 | \u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+      },
+      {
+        "test_id": "invoice-lineitems.spec.ts::adds a thing through the form; it appears with its worked-out amount and lifts the total",
+        "category": "functionality",
+        "passed": false,
+        "duration_ms": 30010,
+        "failure": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m | Error: locator.click: Test timeout of 30000ms exceeded.\nCall log:\n  \u001b[2m- waiting for getByTestId('invoice-row-1').getByTestId('invoice-open-1')\u001b[22m\n\n\n   95 |     await expect(page.getByTestId('invoice-row-1').getByTestId('invoice-amount')).toHaveText('$0.00');\n   96 |\n>  97 |     await page.getByTestId('invoice-row-1').getByTestId('invoice-open-1').click();\n      |                                                                           ^\n   98 |     await expect(page.getByTestId('invoice-detail-page')).toBeVisible();\n   99 |     await expect(page.getByTestId('lineitem-form')).toBeVisible();\n  100 |     // No line items seeded, so no rows yet.\n\n    at /home/daniel/test-fidelity-long-run/work/202610060034/cp31/e2e/specs/invoice-lineitems.spec.ts:97:75 | \u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+      },
+      {
+        "test_id": "invoice-lineitems.spec.ts::refuses an incomplete line item, surfacing an error and adding nothing",
+        "category": "functionality",
+        "passed": false,
+        "duration_ms": 30009,
+        "failure": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m | Error: locator.click: Test timeout of 30000ms exceeded.\nCall log:\n  \u001b[2m- waiting for getByTestId('invoice-row-1').getByTestId('invoice-open-1')\u001b[22m\n\n\n  130 |\n  131 |     await page.goto('/invoices');\n> 132 |     await page.getByTestId('invoice-row-1').getByTestId('invoice-open-1').click();\n      |                                                                           ^\n  133 |\n  134 |     await expect(page.getByTestId('invoice-detail-page')).toBeVisible();\n  135 |     await expect(page.getByTestId('lineitem-form')).toBeVisible();\n\n    at /home/daniel/test-fidelity-long-run/work/202610060034/cp31/e2e/specs/invoice-lineitems.spec.ts:132:75 | \u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+      },
+      {
+        "test_id": "invoice-owed-sent-only.spec.ts::a draft is not counted as money owed; only sent invoices are",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 227,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-owed-sent-only.spec.ts::a draft alone is not money owed, but sending it makes it owed",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 563,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-owed-sent-only.spec.ts::with every invoice still a draft, nothing is owed",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 171,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-paid.spec.ts::marking an unpaid invoice paid flips its status and records it",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 376,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-paid.spec.ts::keeps a separate record each time, and marking one leaves the others untouched",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 496,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-payments.spec.ts::an invoice shows each payment recorded on it, with its amount and date",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 152,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-payments.spec.ts::records a payment through the form; it appears on the invoice with its amount and date",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 331,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-payments.spec.ts::refuses an incomplete payment, surfacing an error and recording nothing",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 384,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-send.spec.ts::a newly created invoice is a draft: it can be sent but not yet paid",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 347,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-send.spec.ts::sending a draft moves it to sent, keeps a record, and only then allows payment",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 536,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-send.spec.ts::a draft cannot be paid but an already-sent invoice can",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 229,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-send.spec.ts::sending one draft records its own line and leaves its siblings untouched",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 507,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-sort-due.spec.ts::activating the control orders the invoices earliest-due first",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 409,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-sort-due.spec.ts::the control sorts by due date whatever the seeded order",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 353,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-status-filter.spec.ts::with nothing picked, the filter is present and every invoice is shown",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 125,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-status-filter.spec.ts::narrowing to SENT keeps only the sent invoices",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 276,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-status-filter.spec.ts::narrowing to DRAFT, then to PAID, follows the chosen stage",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 310,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-status-filter.spec.ts::clearing the filter brings every invoice back",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 294,
+        "failure": ""
+      },
+      {
+        "test_id": "money-format.spec.ts::an invoice amount is shown like $120.00",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 180,
+        "failure": ""
+      },
+      {
+        "test_id": "money-format.spec.ts::the project invoices total is shown like $219.50",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 177,
+        "failure": ""
+      },
+      {
+        "test_id": "money-format.spec.ts::the dashboard outstanding total is shown like $475.00",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 259,
+        "failure": ""
+      },
+      {
+        "test_id": "money-format.spec.ts::a zero money total is shown like $0.00",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 287,
+        "failure": ""
+      },
+      {
+        "test_id": "project-archive.spec.ts::archiving drops a project off the main list, keeps a record, and loses nothing",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 328,
+        "failure": ""
+      },
+      {
+        "test_id": "project-archive.spec.ts::an already-archived project is hidden by default and revealed by the toggle",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 218,
+        "failure": ""
+      },
+      {
+        "test_id": "project-archive.spec.ts::an archived project drops off the client's page, leaving the client's live projects",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 177,
+        "failure": ""
+      },
+      {
+        "test_id": "project-archive.spec.ts::archiving a project via the UI drops it off the client page too, and records it",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 475,
+        "failure": ""
+      },
+      {
+        "test_id": "project-delete.spec.ts::deletes a project, removing it from the list and keeping a record",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 291,
+        "failure": ""
+      },
+      {
+        "test_id": "project-delete.spec.ts::deleting the last project leaves the list empty, with a record of the deletion",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 394,
+        "failure": ""
+      },
+      {
+        "test_id": "project-invoices.spec.ts::opening a project shows its invoices and what they add up to",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 222,
+        "failure": ""
+      },
+      {
+        "test_id": "project-invoices.spec.ts::adds a new invoice for an amount, which then appears and is added into the total",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 343,
+        "failure": ""
+      },
+      {
+        "test_id": "project-invoices.spec.ts::a freshly added invoice adds onto the existing total",
+        "category": "functionality",
+        "passed": false,
+        "duration_ms": 5230,
+        "failure": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: getByTestId('invoice-row-2').getByTestId('invoice-amount')\nExpected string: \u001b[32m\"$300.00\"\u001b[39m\nReceived: <element(s) not found>\nCall log:\n  \u001b[2m- expect.toContainText with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('invoice-row-2').getByTestId('invoice-amount')\u001b[22m\n\n\n  104 |     // Both invoices now listed, and the total is 120 + 300 = 420.\n  105 |     await expect(page.getByTestId('invoice-row-1').getByTestId('invoice-amount')).toContainText('$120.00');\n> 106 |     await expect(page.getByTestId('invoice-row-2').getByTestId('invoice-amount')).toContainText('$300.00');\n      |                                                                                   ^\n  107 |     await expect(page.getByTestId('project-invoices-total')).toContainText('$420.00');\n  108 |   });\n  109 | });\n\n    at /home/daniel/test-fidelity-long-run/work/202610060034/cp31/e2e/specs/project-invoices.spec.ts:106:83 | Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: getByTestId('invoice-row-2').getByTestId('invoice-amount')\nExpected string: \u001b[32m\"$300.00\"\u001b[39m\nReceived: <element(s) not found>\nCall log:\n  \u001b[2m- expect.toContainText with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('invoice-row-2').getByTestId('invoice-amount')\u001b[22m\n"
+      },
+      {
+        "test_id": "project-notes.spec.ts::a project shows its own notes newest-first, and other projects' notes do not leak in",
+        "category": "functionality",
+        "passed": false,
+        "duration_ms": 5256,
+        "failure": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m()\u001b[22m\n\nLocator: getByTestId('project-notes-list')\nExpected: visible\nReceived: <element(s) not found>\nCall log:\n  \u001b[2m- expect.toBeVisible with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('project-notes-list')\u001b[22m\n\n\n  53 |     await expect(notes).toBeVisible();\n  54 |     const list = page.getByTestId('project-notes-list');\n> 55 |     await expect(list).toBeVisible();\n     |                        ^\n  56 |     // There are notes, so this project is not in the empty state.\n  57 |     await expect(page.getByTestId('project-notes-empty')).toHaveCount(0);\n  58 |\n\n    at /home/daniel/test-fidelity-long-run/work/202610060034/cp31/e2e/specs/project-notes.spec.ts:55:24 | Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m()\u001b[22m\n\nLocator: getByTestId('project-notes-list')\nExpected: visible\nReceived: <element(s) not found>\nCall log:\n  \u001b[2m- expect.toBeVisible with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('project-notes-list')\u001b[22m\n"
+      },
+      {
+        "test_id": "project-notes.spec.ts::a project with no notes shows an empty state and no note rows",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 251,
+        "failure": ""
+      },
+      {
+        "test_id": "project-notes.spec.ts::writing a note adds it to the project and shows the newest one first",
+        "category": "functionality",
+        "passed": false,
+        "duration_ms": 5198,
+        "failure": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: getByTestId('project-notes-list').getByTestId('note-text')\n\u001b[32m- Expected  - 3\u001b[39m\n\u001b[31m+ Received  + 1\u001b[39m\n\n\u001b[32m- Array [\u001b[39m\n\u001b[32m-   \"Old existing note\",\u001b[39m\n\u001b[32m- ]\u001b[39m\n\u001b[31m+ Array []\u001b[39m\nCall log:\n  \u001b[2m- expect.toHaveText with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('project-notes-list').getByTestId('note-text')\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\n\n  109 |     const list = page.getByTestId('project-notes-list');\n  110 |     // The existing note is shown to begin with.\n> 111 |     await expect(list.getByTestId('note-text')).toHaveText(['Old existing note']);\n      |                                                 ^\n  112 |\n  113 |     // Write a new note through the form.\n  114 |     await expect(page.getByTestId('note-form')).toBeVisible();\n\n    at /home/daniel/test-fidelity-long-run/work/202610060034/cp31/e2e/specs/project-notes.spec.ts:111:49 | Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: getByTestId('project-notes-list').getByTestId('note-text')\n\u001b[32m- Expected  - 3\u001b[39m\n\u001b[31m+ Received  + 1\u001b[39m\n\n\u001b[32m- Array [\u001b[39m\n\u001b[32m-   \"Old existing note\",\u001b[39m\n\u001b[32m- ]\u001b[39m\n\u001b[31m+ Array []\u001b[39m\nCall log:\n  \u001b[2m- expect.toHaveText with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('project-notes-list').getByTestId('note-text')\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   locator resolved to 0 elemen"
+      },
+      {
+        "test_id": "project-tag-filter.spec.ts::with nothing picked, the filter is present and every project is shown",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 197,
+        "failure": ""
+      },
+      {
+        "test_id": "project-tag-filter.spec.ts::narrowing to a label keeps only the projects carrying it",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 171,
+        "failure": ""
+      },
+      {
+        "test_id": "project-tag-filter.spec.ts::switching labels follows the chosen label to a disjoint set",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 318,
+        "failure": ""
+      },
+      {
+        "test_id": "project-tag-filter.spec.ts::clearing the filter brings every project back, including the unlabelled one",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 302,
+        "failure": ""
+      },
+      {
+        "test_id": "project-tags.spec.ts::a project shows its own labels, and labels of other projects do not leak in",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 309,
+        "failure": ""
+      },
+      {
+        "test_id": "project-tags.spec.ts::adding a label through the form shows it on the project and keeps a record",
+        "category": "functionality",
+        "passed": false,
+        "duration_ms": 213,
+        "failure": "Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element\nCall log:\n  \u001b[2m- waiting for getByTestId('project-tag-add')\u001b[22m\n\u001b[2m  -   locator resolved to <select data-testid=\"project-tag-add\">\u2026</select>\u001b[22m\n\u001b[2m  -   fill(\"Urgent\")\u001b[22m\n\u001b[2m  - attempting fill action\u001b[22m\n\u001b[2m  -   waiting for element to be visible, enabled and editable\u001b[22m\n\n\n  106 |\n  107 |     // Put a label on the project.\n> 108 |     await page.getByTestId('project-tag-add').fill('Urgent');\n      |                                               ^\n  109 |     await page.getByTestId('project-tag-add-submit').click();\n  110 |\n  111 |     // It appears as a chip in the list, carrying its name.\n\n    at /home/daniel/test-fidelity-long-run/work/202610060034/cp31/e2e/specs/project-tags.spec.ts:108:47 | Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element\nCall log:\n  \u001b[2m- waiting for getByTestId('project-tag-add')\u001b[22m\n\u001b[2m  -   locator resolved to <select data-testid=\"project-tag-add\">\u2026</select>\u001b[22m\n\u001b[2m  -   fill(\"Urgent\")\u001b[22m\n\u001b[2m  - attempting fill action\u001b[22m\n\u001b[2m  -   waiting for element to be visible, enabled and editable\u001b[22m\n"
+      },
+      {
+        "test_id": "project-tags.spec.ts::removing a label takes it off this project only, and keeps a record",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 494,
+        "failure": ""
+      },
+      {
+        "test_id": "project-task-filter.spec.ts::with nothing picked, the filter is present and every task is shown",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 207,
+        "failure": ""
+      },
+      {
+        "test_id": "project-task-filter.spec.ts::narrowing to open keeps only the not-done tasks",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 239,
+        "failure": ""
+      },
+      {
+        "test_id": "project-task-filter.spec.ts::narrowing to finished keeps only the done tasks",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 246,
+        "failure": ""
+      },
+      {
+        "test_id": "project-task-filter.spec.ts::switching from open to finished follows the chosen state",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 265,
+        "failure": ""
+      },
+      {
+        "test_id": "project-task-filter.spec.ts::clearing the filter brings every task back",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 248,
+        "failure": ""
+      },
+      {
+        "test_id": "project-tasks.spec.ts::opening a project lists its own tasks with their titles, and a done task reads differently from a not-done one",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 209,
+        "failure": ""
+      },
+      {
+        "test_id": "project-tasks.spec.ts::a project with no tasks shows an empty state and no task rows",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 221,
+        "failure": ""
+      },
+      {
+        "test_id": "project-tasks.spec.ts::ticking a task off flips its status and keeps a record; toggling back flips it and records again",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 553,
+        "failure": ""
+      },
+      {
+        "test_id": "project-tasks.spec.ts::toggling one task leaves its siblings untouched, and each toggle writes its own record",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 540,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::lists all seeded projects, each with its name and the client it is for",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 133,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::shows an empty state when there are no projects",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 113,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::adds a project and picks which client it is for, then shows it with the client name",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 442,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::reaches the projects list from the nav",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 151,
+        "failure": ""
+      }
+    ],
+    "error": "",
+    "gate_invalid": false,
+    "gate_attempts": 1,
+    "test_seconds": 152.28,
+    "wall_seconds": 358.0
+  },
+  "mutations": [
+    {
+      "id": "zero",
+      "kind": "zero",
+      "description": "application at cp30 \u2014 this change's feature absent",
+      "expect_kill": true,
+      "killed": false,
+      "correct": false,
+      "new_failures": [],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 101,
+      "failed_count": 11,
+      "error": ""
+    },
+    {
+      "id": "001-due-ignores-the-payments",
+      "kind": "authored",
+      "description": "Payments are summed as zero, so the amount due is always the full invoice amount.\nIdentical to the correct answer whenever nothing has been paid \u2014 which is why this needs a\nfixture with a part payment and an exact assertion.",
+      "expect_kill": true,
+      "killed": false,
+      "correct": false,
+      "new_failures": [],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 101,
+      "failed_count": 11,
+      "error": "",
+      "file": "src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java",
+      "applied": true,
+      "clause": "after any payments",
+      "uncalibrated": false
+    },
+    {
+      "id": "002-due-is-what-has-been-paid",
+      "kind": "authored",
+      "description": "The figure shown is the amount PAID rather than what is left. A real number from\nthe right invoice, on the right row, answering the opposite question.",
+      "expect_kill": true,
+      "killed": false,
+      "correct": false,
+      "new_failures": [],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 101,
+      "failed_count": 11,
+      "error": "",
+      "file": "src/main/java/net/officefloor/hq/app/InvoiceDueGetLogic.java",
+      "applied": true,
+      "clause": "how much is still left to pay",
+      "uncalibrated": false
+    }
+  ],
+  "verdict": {
+    "green": false,
+    "flaky_tests": [],
+    "test_seconds": 152.28,
+    "wall_seconds": 358.0,
+    "suite_non_decreasing": true,
+    "tests_total": 101,
+    "tests_delta": 3,
+    "tests_added": 3,
+    "tests_revised": 0,
+    "tests_dropped": 0,
+    "app_code_touched": [],
+    "mutation_zero_correct": false,
+    "kill_rate": 0.0,
+    "mutations_authored": 2,
+    "mutations_killed": 0,
+    "survived": [
+      "001-due-ignores-the-payments",
+      "002-due-is-what-has-been-paid"
+    ]
+  },
+  "files": {
+    "prompt": "cp31.prompt.txt",
+    "build_log": "cp31.build.log"
+  },
+  "agent": {
+    "ok": true,
+    "cost_usd": 1.054599,
+    "input_tokens": 32,
+    "output_tokens": 11930,
+    "cache_read_tokens": 627994,
+    "cache_creation_tokens": 43925,
+    "num_turns": 23,
+    "duration_ms": 685942,
+    "duration_api_ms": 165054,
+    "model": "claude-opus-4-8",
+    "session_id": "7955f9d3-4f1e-4783-bf8e-ab3f6318b843",
+    "stop_reason": "success",
+    "result_text": "Done. I wrote one new acceptance spec for the change request.\n\n## What I added\n\n`e2e/specs/invoice-due-amount.spec.ts` \u2014 three tests verifying the new `invoice-due-amount` anchor on the invoice detail page (`/invoices/<id>`), the one place that already surfaces an invoice's payments:\n\n1. **Partial payments** \u2014 invoice of 500 with payments 200 + 120 shows **180** still left to pay (not the full 500, not the 320 paid). A second invoice (900, paid 777 \u2192 **123**) proves the figure is derived from *that* invoice's own payments, not a sibling's.\n2. **No payments** \u2014 the whole amount (250) is still left to pay.\n3. **Fully covered** \u2014 400 billed, 150 + 250 paid \u2192 **0** left.\n\n## Design choices (matching the existing suite's conventions)\n\n- **Asserts only through the UI** via `data-testid`, data arranged with `resetAndSeed` (honouring `invoices` and `payments`). No audit channel \u2014 this change introduces no new record.\n- **Money matched leniently** (`/^\\$?180(\\.00)?$/`), exactly like the sibling `payment-amount` anchor in `invoice-payments.spec.ts`, since `invoice-due-amount` is a new anchor, not one of the three the `money-format` spec pins exactly.\n- **Amounts chosen so no value is a substring of another** (500/200/120/900/777 \u2192 remainders 180/123), so a buggy implementation showing the full amount or the total paid would fail.\n\n## Verification\n\n- My 3 tests **fail for the right reason** against the pre-change app: seed and page load succeed, then `getByTestId('invoice-due-amount')` is \"element(s) not found\" \u2014 the anchor doesn't exist yet. Expected.\n- I changed **no application code, build scripts, or support helpers** \u2014 only added one spec file. No existing test asserted `invoice-due-amount` (`invoice-due` is the due *date*, unrelated), so nothing needed revising.\n\nOne note for transparency: the full suite has **8 other failing tests** (in `client-contacts`, `invoice-lineitems`, `project-invoices`, `project-notes`, `project-tags`). I confirmed these fail identically with my spec removed \u2014 they're pre-existing baseline issues (e.g. `project-tag-add` is a `<select>` but that spec calls `.fill()`; `invoice-lineitems` times out at 30s) unrelated to this change request, so they're out of scope and I left them untouched.",
+    "error": "",
+    "attempts": [
+      {
+        "ok": true,
+        "limit_reached": false,
+        "retryable": false,
+        "cost_usd": 1.054599,
+        "num_turns": 23,
+        "duration_ms": 685942,
+        "duration_api_ms": 165054,
+        "error": ""
+      }
+    ],
+    "app_diff_file": "cp31.agent.appdiff",
+    "test_diff_file": "cp31.agent.testdiff",
+    "stream_file": "cp31.agent.jsonl",
+    "suite_commit": "6ce2d30c64cd61758d9961fe5a6da50c460ea65f",
+    "sandbox_leaks": {
+      "hard": [
+        "pom.xml:82: managed by the parent BOM. Found via the cp01 dry run. flyway-core 12.x has H2 support"
+      ],
+      "soft": [
+        "src/main/java/net/officefloor/hq/app/Audit.java:31: /** Append one audit record. Checkpoints assert the exact line(s) in the file. */",
+        "src/main/java/net/officefloor/hq/app/Application.java:12: * At the base this is a bare shell; checkpoints add migrations, officefloor/rest routes + logic,",
+        "src/main/frontend/vite.config.ts:11: // file is gitignored \u2014 it is a build artifact and must never appear in a checkpoint's diff."
+      ]
+    }
+  }
+}

@@ -1,0 +1,698 @@
+{
+  "checkpoint": 12,
+  "checkpoint_id": "cp12_invoice_sort_due",
+  "type": "additive",
+  "mutates": [],
+  "mode": "agent",
+  "code_view": "previous",
+  "no_code_change": false,
+  "request": "Let me sort a project's invoices by their due date.\n",
+  "prompt": "You are writing ACCEPTANCE TESTS for one change to this application.\n\nYou write TESTS ONLY. Do not modify application source, build scripts, or the test support\nhelpers (e2e/support/*). A run that changes application code is void.\n\nTHE CHANGE REQUEST (as the user wrote it):\nLet me sort a project's invoices by their due date.\n\nWHAT TO DO\nWrite Playwright acceptance test(s) under e2e/specs/ that verify this change request has been\nimplemented. Where the request revises behaviour that your EXISTING tests already assert, update\nthose tests too \u2014 the suite must describe the application as it is meant to be after this change,\nnot as it was before.\n\nAssert only through the two public channels below. Never reach into the database, the REST API, or\napplication internals.\n\nCHANNEL 1 \u2014 the UI, via data-testid\n  Introduced by THIS change (1):\n    invoice-sort-due\n  Every anchor available to you (56):\n    app-home\n    app-nav\n    app-root\n    client-detail-page\n    client-email\n    client-form\n    client-form-email\n    client-form-email-error\n    client-form-name\n    client-form-submit\n    client-name\n    client-open-<id>\n    client-projects-empty\n    client-projects-table\n    client-row-<id>\n    client-search\n    clients-empty\n    clients-page\n    clients-table\n    dashboard\n    dashboard-clients-count\n    dashboard-error\n    dashboard-loading\n    dashboard-outstanding-total\n    dashboard-page\n    dashboard-projects-count\n    home-empty\n    invoice-amount\n    invoice-due\n    invoice-form\n    invoice-form-amount\n    invoice-form-amount-error\n    invoice-form-submit\n    invoice-issued\n    invoice-pay-<id>\n    invoice-row-<id>\n    invoice-sort-due\n    invoice-status\n    nav-clients\n    nav-dashboard\n    nav-home\n    nav-projects\n    project-client\n    project-detail-page\n    project-form\n    project-form-client\n    project-form-name\n    project-form-submit\n    project-invoices-table\n    project-invoices-total\n    project-name\n    project-open-<id>\n    project-row-<id>\n    projects-empty\n    projects-page\n    projects-table\n  `<id>` / `<currency>` are placeholders: the concrete value comes from the data\n  your test seeds, e.g. client-row-1. Anchors are a stable contract \u2014 use them\n  exactly as written.\n\nCHANNEL 2 \u2014 the audit file, via auditLines() from ../support/audit\n  Introduced by THIS change (0):\n    (none)\n  Every record format available to you (1):\n    INVOICE_PAID id=<id> amount=<amount>\n\nSEED FIELDS HONOURED by /__test__/seed (anything else is ignored):\n    clients: email, id, name\n    invoices: amount, dueDate, id, issuedDate, projectId, status\n    projects: clientId, id, name\n\nHOW DATA IS ARRANGED\nCall `resetAndSeed({...})` from `../support/seed` to put the application into the state your test\nneeds (it clears all data and the audit file first). Only the seed fields listed above are\nhonoured \u2014 a field that is not listed is accepted and SILENTLY IGNORED, so seeding it will look\nlike it worked and your assertion will fail for an unrelated-looking reason.\n\nTHE APPLICATION\nThe source in this directory is the application as it stands BEFORE this change request has been\nimplemented. You can read it and run it. Your new test SHOULD FAIL against it \u2014 the behaviour\nbeing requested is not there yet. That is expected, and is not a reason to weaken the test. Your\nexisting tests should still pass.\n\nYOUR EXISTING TESTS\n  e2e/specs/ holds the 11 spec file(s) you have written so far (35 tests).\n  Their git history is available. Update them where this change request revises\n  behaviour they assert; otherwise leave them alone.\n    client-email.spec.ts\n    client-projects.spec.ts\n    client-search.spec.ts\n    clients.spec.ts\n    dashboard.spec.ts\n    invoice-amount.spec.ts\n    invoice-dates.spec.ts\n    invoice-paid.spec.ts\n    money-format.spec.ts\n    project-invoices.spec.ts\n    projects.spec.ts\n",
+  "contract": {
+    "checkpoint": 12,
+    "no_code_change": false,
+    "new_testids": [
+      "invoice-sort-due"
+    ],
+    "new_audit_records": null,
+    "available_testids": [
+      "app-home",
+      "app-nav",
+      "app-root",
+      "client-detail-page",
+      "client-email",
+      "client-form",
+      "client-form-email",
+      "client-form-email-error",
+      "client-form-name",
+      "client-form-submit",
+      "client-name",
+      "client-open-<id>",
+      "client-projects-empty",
+      "client-projects-table",
+      "client-row-<id>",
+      "client-search",
+      "clients-empty",
+      "clients-page",
+      "clients-table",
+      "dashboard",
+      "dashboard-clients-count",
+      "dashboard-error",
+      "dashboard-loading",
+      "dashboard-outstanding-total",
+      "dashboard-page",
+      "dashboard-projects-count",
+      "home-empty",
+      "invoice-amount",
+      "invoice-due",
+      "invoice-form",
+      "invoice-form-amount",
+      "invoice-form-amount-error",
+      "invoice-form-submit",
+      "invoice-issued",
+      "invoice-pay-<id>",
+      "invoice-row-<id>",
+      "invoice-sort-due",
+      "invoice-status",
+      "nav-clients",
+      "nav-dashboard",
+      "nav-home",
+      "nav-projects",
+      "project-client",
+      "project-detail-page",
+      "project-form",
+      "project-form-client",
+      "project-form-name",
+      "project-form-submit",
+      "project-invoices-table",
+      "project-invoices-total",
+      "project-name",
+      "project-open-<id>",
+      "project-row-<id>",
+      "projects-empty",
+      "projects-page",
+      "projects-table"
+    ],
+    "available_audit_records": [
+      "INVOICE_PAID id=<id> amount=<amount>"
+    ],
+    "seed_accepts": {
+      "clients": [
+        "email",
+        "id",
+        "name"
+      ],
+      "invoices": [
+        "amount",
+        "dueDate",
+        "id",
+        "issuedDate",
+        "projectId",
+        "status"
+      ],
+      "projects": [
+        "clientId",
+        "id",
+        "name"
+      ]
+    }
+  },
+  "reference": {
+    "repo": "officehq-tanstack-officefloor",
+    "origin": "git@github.com:officefloor/officehq-tanstack-officefloor.git",
+    "branch": "evolve/202610020135/just-solve/chain2",
+    "repairs_applied": [
+      "005-seed-advances-the-clients-identity"
+    ]
+  },
+  "suite": {
+    "files": {
+      "client-email.spec.ts": [
+        "client-email.spec.ts::does not show the email error before the user tries to save",
+        "client-email.spec.ts::refuses to save a client with no email",
+        "client-email.spec.ts::refuses to save a client with a malformed email",
+        "client-email.spec.ts::saves the client once a proper email is provided, clearing the error"
+      ],
+      "client-projects.spec.ts": [
+        "client-projects.spec.ts::opening a client shows the projects being done for them",
+        "client-projects.spec.ts::a client with no projects of their own shows an empty state"
+      ],
+      "client-search.spec.ts": [
+        "client-search.spec.ts::narrows the list to clients whose name matches what is typed",
+        "client-search.spec.ts::clearing the box shows every client again",
+        "client-search.spec.ts::a search that matches no client hides every row"
+      ],
+      "clients.spec.ts": [
+        "clients.spec.ts::lists all seeded clients in one list, each with name and email",
+        "clients.spec.ts::shows an empty state when there are no clients",
+        "clients.spec.ts::adds a client with their name and email through the form",
+        "clients.spec.ts::reaches the clients list from the nav"
+      ],
+      "dashboard.spec.ts": [
+        "dashboard.spec.ts::reaches the dashboard from the nav",
+        "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed",
+        "dashboard.spec.ts::a paid invoice is not money still owed",
+        "dashboard.spec.ts::with no data at all the figures are zero"
+      ],
+      "invoice-amount.spec.ts": [
+        "invoice-amount.spec.ts::does not show the amount error before the user tries to add",
+        "invoice-amount.spec.ts::refuses to add an invoice for zero, surfacing the error and creating nothing",
+        "invoice-amount.spec.ts::adds the invoice once a positive amount is provided, clearing the error"
+      ],
+      "invoice-dates.spec.ts": [
+        "invoice-dates.spec.ts::an invoice shows both its issued date and its due date, each in its own slot",
+        "invoice-dates.spec.ts::each invoice shows its own pair of dates, not a sibling invoice's"
+      ],
+      "invoice-paid.spec.ts": [
+        "invoice-paid.spec.ts::marking an unpaid invoice paid flips its status and records it",
+        "invoice-paid.spec.ts::keeps a separate record each time, and marking one leaves the others untouched"
+      ],
+      "invoice-sort-due.spec.ts": [
+        "invoice-sort-due.spec.ts::activating the control orders the invoices earliest-due first",
+        "invoice-sort-due.spec.ts::the control sorts by due date whatever the seeded order"
+      ],
+      "money-format.spec.ts": [
+        "money-format.spec.ts::an invoice amount is shown like $120.00",
+        "money-format.spec.ts::the project invoices total is shown like $219.50",
+        "money-format.spec.ts::the dashboard outstanding total is shown like $475.00",
+        "money-format.spec.ts::a zero money total is shown like $0.00"
+      ],
+      "project-invoices.spec.ts": [
+        "project-invoices.spec.ts::opening a project shows its invoices and what they add up to",
+        "project-invoices.spec.ts::adds a new invoice for an amount, which then appears and is added into the total",
+        "project-invoices.spec.ts::a freshly added invoice adds onto the existing total"
+      ],
+      "projects.spec.ts": [
+        "projects.spec.ts::lists all seeded projects, each with its name and the client it is for",
+        "projects.spec.ts::shows an empty state when there are no projects",
+        "projects.spec.ts::adds a project and picks which client it is for, then shows it with the client name",
+        "projects.spec.ts::reaches the projects list from the nav"
+      ]
+    },
+    "total_tests": 37,
+    "file_delta": {
+      "added": [
+        "invoice-sort-due.spec.ts"
+      ],
+      "removed": [],
+      "modified": []
+    },
+    "test_delta": {
+      "added": [
+        "invoice-sort-due.spec.ts::activating the control orders the invoices earliest-due first",
+        "invoice-sort-due.spec.ts::the control sorts by due date whatever the seeded order"
+      ],
+      "removed": []
+    },
+    "test_moves": {
+      "added": [
+        "invoice-sort-due.spec.ts::activating the control orders the invoices earliest-due first",
+        "invoice-sort-due.spec.ts::the control sorts by due date whatever the seeded order"
+      ],
+      "revised": [],
+      "dropped": [],
+      "file_gone": []
+    },
+    "gate_id_delta": {
+      "added": [
+        "invoice-sort-due.spec.ts::activating the control orders the invoices earliest-due first",
+        "invoice-sort-due.spec.ts::the control sorts by due date whatever the seeded order"
+      ],
+      "removed": []
+    }
+  },
+  "source": {
+    "kind": "agent",
+    "suite_repo": "/home/daniel/test-fidelity-long-run/runs/202610060034/chain1/suite",
+    "suite_commit": "f5acfe1faa990db3e8359ffeb7e47e4e1f863fe9",
+    "code_view": "previous",
+    "view_checkpoint": 11,
+    "files_added": [
+      "invoice-sort-due.spec.ts"
+    ],
+    "files_removed": []
+  },
+  "gate": {
+    "build_ok": true,
+    "total_selected": 37,
+    "passed": 36,
+    "failed_count": 1,
+    "failed": [
+      "project-invoices.spec.ts::a freshly added invoice adds onto the existing total"
+    ],
+    "repeats": 2,
+    "flaky": [],
+    "flaky_count": 0,
+    "results": {
+      "client-email.spec.ts::does not show the email error before the user tries to save": true,
+      "client-email.spec.ts::refuses to save a client with no email": true,
+      "client-email.spec.ts::refuses to save a client with a malformed email": true,
+      "client-email.spec.ts::saves the client once a proper email is provided, clearing the error": true,
+      "client-projects.spec.ts::opening a client shows the projects being done for them": true,
+      "client-projects.spec.ts::a client with no projects of their own shows an empty state": true,
+      "client-search.spec.ts::narrows the list to clients whose name matches what is typed": true,
+      "client-search.spec.ts::clearing the box shows every client again": true,
+      "client-search.spec.ts::a search that matches no client hides every row": true,
+      "clients.spec.ts::lists all seeded clients in one list, each with name and email": true,
+      "clients.spec.ts::shows an empty state when there are no clients": true,
+      "clients.spec.ts::adds a client with their name and email through the form": true,
+      "clients.spec.ts::reaches the clients list from the nav": true,
+      "dashboard.spec.ts::reaches the dashboard from the nav": true,
+      "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed": true,
+      "dashboard.spec.ts::a paid invoice is not money still owed": true,
+      "dashboard.spec.ts::with no data at all the figures are zero": true,
+      "invoice-amount.spec.ts::does not show the amount error before the user tries to add": true,
+      "invoice-amount.spec.ts::refuses to add an invoice for zero, surfacing the error and creating nothing": true,
+      "invoice-amount.spec.ts::adds the invoice once a positive amount is provided, clearing the error": true,
+      "invoice-dates.spec.ts::an invoice shows both its issued date and its due date, each in its own slot": true,
+      "invoice-dates.spec.ts::each invoice shows its own pair of dates, not a sibling invoice's": true,
+      "invoice-paid.spec.ts::marking an unpaid invoice paid flips its status and records it": true,
+      "invoice-paid.spec.ts::keeps a separate record each time, and marking one leaves the others untouched": true,
+      "invoice-sort-due.spec.ts::activating the control orders the invoices earliest-due first": true,
+      "invoice-sort-due.spec.ts::the control sorts by due date whatever the seeded order": true,
+      "money-format.spec.ts::an invoice amount is shown like $120.00": true,
+      "money-format.spec.ts::the project invoices total is shown like $219.50": true,
+      "money-format.spec.ts::the dashboard outstanding total is shown like $475.00": true,
+      "money-format.spec.ts::a zero money total is shown like $0.00": true,
+      "project-invoices.spec.ts::opening a project shows its invoices and what they add up to": true,
+      "project-invoices.spec.ts::adds a new invoice for an amount, which then appears and is added into the total": true,
+      "project-invoices.spec.ts::a freshly added invoice adds onto the existing total": false,
+      "projects.spec.ts::lists all seeded projects, each with its name and the client it is for": true,
+      "projects.spec.ts::shows an empty state when there are no projects": true,
+      "projects.spec.ts::adds a project and picks which client it is for, then shows it with the client name": true,
+      "projects.spec.ts::reaches the projects list from the nav": true
+    },
+    "results_repeats": [
+      {
+        "client-email.spec.ts::does not show the email error before the user tries to save": true,
+        "client-email.spec.ts::refuses to save a client with no email": true,
+        "client-email.spec.ts::refuses to save a client with a malformed email": true,
+        "client-email.spec.ts::saves the client once a proper email is provided, clearing the error": true,
+        "client-projects.spec.ts::opening a client shows the projects being done for them": true,
+        "client-projects.spec.ts::a client with no projects of their own shows an empty state": true,
+        "client-search.spec.ts::narrows the list to clients whose name matches what is typed": true,
+        "client-search.spec.ts::clearing the box shows every client again": true,
+        "client-search.spec.ts::a search that matches no client hides every row": true,
+        "clients.spec.ts::lists all seeded clients in one list, each with name and email": true,
+        "clients.spec.ts::shows an empty state when there are no clients": true,
+        "clients.spec.ts::adds a client with their name and email through the form": true,
+        "clients.spec.ts::reaches the clients list from the nav": true,
+        "dashboard.spec.ts::reaches the dashboard from the nav": true,
+        "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed": true,
+        "dashboard.spec.ts::a paid invoice is not money still owed": true,
+        "dashboard.spec.ts::with no data at all the figures are zero": true,
+        "invoice-amount.spec.ts::does not show the amount error before the user tries to add": true,
+        "invoice-amount.spec.ts::refuses to add an invoice for zero, surfacing the error and creating nothing": true,
+        "invoice-amount.spec.ts::adds the invoice once a positive amount is provided, clearing the error": true,
+        "invoice-dates.spec.ts::an invoice shows both its issued date and its due date, each in its own slot": true,
+        "invoice-dates.spec.ts::each invoice shows its own pair of dates, not a sibling invoice's": true,
+        "invoice-paid.spec.ts::marking an unpaid invoice paid flips its status and records it": true,
+        "invoice-paid.spec.ts::keeps a separate record each time, and marking one leaves the others untouched": true,
+        "invoice-sort-due.spec.ts::activating the control orders the invoices earliest-due first": true,
+        "invoice-sort-due.spec.ts::the control sorts by due date whatever the seeded order": true,
+        "money-format.spec.ts::an invoice amount is shown like $120.00": true,
+        "money-format.spec.ts::the project invoices total is shown like $219.50": true,
+        "money-format.spec.ts::the dashboard outstanding total is shown like $475.00": true,
+        "money-format.spec.ts::a zero money total is shown like $0.00": true,
+        "project-invoices.spec.ts::opening a project shows its invoices and what they add up to": true,
+        "project-invoices.spec.ts::adds a new invoice for an amount, which then appears and is added into the total": true,
+        "project-invoices.spec.ts::a freshly added invoice adds onto the existing total": false,
+        "projects.spec.ts::lists all seeded projects, each with its name and the client it is for": true,
+        "projects.spec.ts::shows an empty state when there are no projects": true,
+        "projects.spec.ts::adds a project and picks which client it is for, then shows it with the client name": true,
+        "projects.spec.ts::reaches the projects list from the nav": true
+      }
+    ],
+    "detail": [
+      {
+        "test_id": "client-email.spec.ts::does not show the email error before the user tries to save",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 195,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email.spec.ts::refuses to save a client with no email",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 354,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email.spec.ts::refuses to save a client with a malformed email",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 331,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email.spec.ts::saves the client once a proper email is provided, clearing the error",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 385,
+        "failure": ""
+      },
+      {
+        "test_id": "client-projects.spec.ts::opening a client shows the projects being done for them",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 321,
+        "failure": ""
+      },
+      {
+        "test_id": "client-projects.spec.ts::a client with no projects of their own shows an empty state",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 174,
+        "failure": ""
+      },
+      {
+        "test_id": "client-search.spec.ts::narrows the list to clients whose name matches what is typed",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 144,
+        "failure": ""
+      },
+      {
+        "test_id": "client-search.spec.ts::clearing the box shows every client again",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 156,
+        "failure": ""
+      },
+      {
+        "test_id": "client-search.spec.ts::a search that matches no client hides every row",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 134,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::lists all seeded clients in one list, each with name and email",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 135,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::shows an empty state when there are no clients",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 111,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::adds a client with their name and email through the form",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 446,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::reaches the clients list from the nav",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 155,
+        "failure": ""
+      },
+      {
+        "test_id": "dashboard.spec.ts::reaches the dashboard from the nav",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 509,
+        "failure": ""
+      },
+      {
+        "test_id": "dashboard.spec.ts::shows how many clients and projects there are, and how much is still owed",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 308,
+        "failure": ""
+      },
+      {
+        "test_id": "dashboard.spec.ts::a paid invoice is not money still owed",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 175,
+        "failure": ""
+      },
+      {
+        "test_id": "dashboard.spec.ts::with no data at all the figures are zero",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 156,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-amount.spec.ts::does not show the amount error before the user tries to add",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 196,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-amount.spec.ts::refuses to add an invoice for zero, surfacing the error and creating nothing",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 278,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-amount.spec.ts::adds the invoice once a positive amount is provided, clearing the error",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 386,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-dates.spec.ts::an invoice shows both its issued date and its due date, each in its own slot",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 192,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-dates.spec.ts::each invoice shows its own pair of dates, not a sibling invoice's",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 228,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-paid.spec.ts::marking an unpaid invoice paid flips its status and records it",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 344,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-paid.spec.ts::keeps a separate record each time, and marking one leaves the others untouched",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 496,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-sort-due.spec.ts::activating the control orders the invoices earliest-due first",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 383,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-sort-due.spec.ts::the control sorts by due date whatever the seeded order",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 251,
+        "failure": ""
+      },
+      {
+        "test_id": "money-format.spec.ts::an invoice amount is shown like $120.00",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 192,
+        "failure": ""
+      },
+      {
+        "test_id": "money-format.spec.ts::the project invoices total is shown like $219.50",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 152,
+        "failure": ""
+      },
+      {
+        "test_id": "money-format.spec.ts::the dashboard outstanding total is shown like $475.00",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 278,
+        "failure": ""
+      },
+      {
+        "test_id": "money-format.spec.ts::a zero money total is shown like $0.00",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 275,
+        "failure": ""
+      },
+      {
+        "test_id": "project-invoices.spec.ts::opening a project shows its invoices and what they add up to",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 199,
+        "failure": ""
+      },
+      {
+        "test_id": "project-invoices.spec.ts::adds a new invoice for an amount, which then appears and is added into the total",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 372,
+        "failure": ""
+      },
+      {
+        "test_id": "project-invoices.spec.ts::a freshly added invoice adds onto the existing total",
+        "category": "functionality",
+        "passed": false,
+        "duration_ms": 5246,
+        "failure": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: getByTestId('invoice-row-2').getByTestId('invoice-amount')\nExpected string: \u001b[32m\"$300.00\"\u001b[39m\nReceived: <element(s) not found>\nCall log:\n  \u001b[2m- expect.toContainText with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('invoice-row-2').getByTestId('invoice-amount')\u001b[22m\n\n\n  104 |     // Both invoices now listed, and the total is 120 + 300 = 420.\n  105 |     await expect(page.getByTestId('invoice-row-1').getByTestId('invoice-amount')).toContainText('$120.00');\n> 106 |     await expect(page.getByTestId('invoice-row-2').getByTestId('invoice-amount')).toContainText('$300.00');\n      |                                                                                   ^\n  107 |     await expect(page.getByTestId('project-invoices-total')).toContainText('$420.00');\n  108 |   });\n  109 | });\n\n    at /home/daniel/test-fidelity-long-run/work/202610060034/cp12/e2e/specs/project-invoices.spec.ts:106:83 | Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: getByTestId('invoice-row-2').getByTestId('invoice-amount')\nExpected string: \u001b[32m\"$300.00\"\u001b[39m\nReceived: <element(s) not found>\nCall log:\n  \u001b[2m- expect.toContainText with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByTestId('invoice-row-2').getByTestId('invoice-amount')\u001b[22m\n"
+      },
+      {
+        "test_id": "projects.spec.ts::lists all seeded projects, each with its name and the client it is for",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 211,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::shows an empty state when there are no projects",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 126,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::adds a project and picks which client it is for, then shows it with the client name",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 446,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::reaches the projects list from the nav",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 147,
+        "failure": ""
+      }
+    ],
+    "error": "",
+    "gate_invalid": false,
+    "gate_attempts": 1,
+    "test_seconds": 14.6,
+    "wall_seconds": 65.6
+  },
+  "mutations": [
+    {
+      "id": "zero",
+      "kind": "zero",
+      "description": "application at cp11 \u2014 this change's feature absent",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "invoice-sort-due.spec.ts::activating the control orders the invoices earliest-due first",
+        "invoice-sort-due.spec.ts::the control sorts by due date whatever the seeded order"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 37,
+      "failed_count": 3,
+      "error": ""
+    },
+    {
+      "id": "001-server-ignores-the-due-date-sort",
+      "kind": "authored",
+      "description": "The sort parameter arrives and is discarded \u2014 rows always come back in id order. The\nbutton still highlights, the page still re-renders, and the order is simply unchanged.",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "invoice-sort-due.spec.ts::activating the control orders the invoices earliest-due first",
+        "invoice-sort-due.spec.ts::the control sorts by due date whatever the seeded order"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 37,
+      "failed_count": 3,
+      "error": "",
+      "file": "src/main/java/net/officefloor/hq/app/InvoicesGetLogic.java",
+      "applied": true,
+      "clause": "sort a project's invoices by their due date",
+      "uncalibrated": false
+    },
+    {
+      "id": "002-sort-button-asks-for-nothing",
+      "kind": "authored",
+      "description": "The control renders and is clickable but sets no sort. The other end of the same\nclause: killed by the same assertion, but a different thing to fix, and a suite that stubs or\nskips the click would miss it.",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "invoice-sort-due.spec.ts::activating the control orders the invoices earliest-due first",
+        "invoice-sort-due.spec.ts::the control sorts by due date whatever the seeded order"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 37,
+      "failed_count": 3,
+      "error": "",
+      "file": "src/main/frontend/features/invoices/sortByDue.slot.tsx",
+      "applied": true,
+      "clause": "Let me sort",
+      "uncalibrated": false
+    }
+  ],
+  "verdict": {
+    "green": false,
+    "flaky_tests": [],
+    "test_seconds": 14.6,
+    "wall_seconds": 65.6,
+    "suite_non_decreasing": true,
+    "tests_total": 37,
+    "tests_delta": 2,
+    "tests_added": 2,
+    "tests_revised": 0,
+    "tests_dropped": 0,
+    "app_code_touched": [],
+    "mutation_zero_correct": true,
+    "kill_rate": 1.0,
+    "mutations_authored": 2,
+    "mutations_killed": 2,
+    "survived": []
+  },
+  "files": {
+    "prompt": "cp12.prompt.txt",
+    "build_log": "cp12.build.log"
+  },
+  "agent": {
+    "ok": true,
+    "cost_usd": 0.8172275000000001,
+    "input_tokens": 22,
+    "output_tokens": 12375,
+    "cache_read_tokens": 341791,
+    "cache_creation_tokens": 33481,
+    "num_turns": 17,
+    "duration_ms": 253061,
+    "duration_api_ms": 172659,
+    "model": "claude-opus-4-8",
+    "session_id": "5877e3d6-b98d-4638-a26d-a65a50ac15bf",
+    "stop_reason": "success",
+    "result_text": "The baseline (without my spec) shows **34 passed, 1 failed** \u2014 and that one failure (`project-invoices.spec.ts:87`) is **pre-existing and unrelated** to the sort-by-due-date change. My new spec doesn't touch it.\n\n## Summary\n\nI added **`e2e/specs/invoice-sort-due.spec.ts`** with two tests for the change request *\"Let me sort a project's invoices by their due date.\"*\n\n**How it asserts (UI only, via `data-testid`):**\n- Seeds a project with three invoices, then opens the project detail page (`/projects` \u2192 `project-open-1`).\n- Clicks the new `invoice-sort-due` control and reads the `invoice-row-<id>` elements **in DOM order**, comparing the id sequence.\n- Each fixture is built so the due-date-ascending order is a **distinctive permutation** that id order, reverse order, amount order, and issued-date order all fail to produce:\n  - Test 1 \u2192 `[2, 1, 3]` (rules out as-seeded, reverse, amount-sort, issued-sort).\n  - Test 2 \u2192 `[3, 2, 1]` with a different fixture (together these rule out any hardcoded/fixed order \u2014 only reading each invoice's own due date satisfies both).\n\n**Results:**\n- Full suite with my spec: my 2 new tests **fail for the right reason** \u2014 the `invoice-sort-due` control doesn't exist yet (`element(s) not found`), confirming the test correctly describes unbuilt behaviour.\n- All 34 previously-passing tests still pass; I changed no application code and touched no existing spec.\n\n**One thing to flag:** `project-invoices.spec.ts:87` (\"a freshly added invoice adds onto the existing total\") fails **at baseline, before and independent of my change** \u2014 it expects `invoice-row-2` after adding an invoice but the row isn't found (looks like an invoice-id/identity-reset issue in the add flow). The sort-by-due-date request doesn't revise that behaviour, so I left that spec untouched. Let me know if you'd like me to look into that separately.",
+    "error": "",
+    "attempts": [
+      {
+        "ok": true,
+        "limit_reached": false,
+        "retryable": false,
+        "cost_usd": 0.8172275000000001,
+        "num_turns": 17,
+        "duration_ms": 253061,
+        "duration_api_ms": 172659,
+        "error": ""
+      }
+    ],
+    "app_diff_file": "cp12.agent.appdiff",
+    "test_diff_file": "cp12.agent.testdiff",
+    "stream_file": "cp12.agent.jsonl",
+    "suite_commit": "f5acfe1faa990db3e8359ffeb7e47e4e1f863fe9",
+    "sandbox_leaks": {
+      "hard": [
+        "pom.xml:82: managed by the parent BOM. Found via the cp01 dry run. flyway-core 12.x has H2 support"
+      ],
+      "soft": [
+        "src/main/java/net/officefloor/hq/app/Audit.java:31: /** Append one audit record. Checkpoints assert the exact line(s) in the file. */",
+        "src/main/java/net/officefloor/hq/app/Application.java:12: * At the base this is a bare shell; checkpoints add migrations, officefloor/rest routes + logic,",
+        "src/main/frontend/vite.config.ts:11: // file is gitignored \u2014 it is a build artifact and must never appear in a checkpoint's diff."
+      ]
+    }
+  }
+}

@@ -1,0 +1,71 @@
+diff --git a/client-email-unique.spec.ts b/client-email-unique.spec.ts
+new file mode 100644
+index 0000000..1e1d9cb
+--- /dev/null
++++ b/client-email-unique.spec.ts
+@@ -0,0 +1,65 @@
++// Acceptance tests for the change request:
++//   "Do not let me add two clients with the same email."
++//
++// A client must not be created when its email already belongs to an existing client. The add flow
++// is refused: the form surfaces `client-form-email-error` and no new client row appears. Adding a
++// client with a brand-new (proper) email still works, so the list grows only for distinct emails.
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed; the add flow is
++// driven through the form. Seed honours clients: { id, name, email }.
++import { test, expect } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++test.describe('clients must have unique emails', () => {
++  test('refuses to add a second client with an email that already exists', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++    });
++
++    await page.goto('/clients');
++
++    // The one seeded client is listed.
++    await expect(page.getByTestId('client-row-1')).toBeVisible();
++    await expect(page.getByTestId('client-row-1').getByTestId('client-email')).toHaveText(
++      'ops@acme.example',
++    );
++
++    // Try to add a different client that reuses the same (proper) email.
++    await page.getByTestId('client-form-name').fill('Globex');
++    await page.getByTestId('client-form-email').fill('ops@acme.example');
++    await page.getByTestId('client-form-submit').click();
++
++    // The duplicate email is rejected and surfaced on the form.
++    await expect(page.getByTestId('client-form-email-error')).toBeVisible();
++
++    // Nothing new was created: still exactly the one original client, no second row.
++    await expect(page.getByTestId('client-row-2')).toHaveCount(0);
++    await expect(page.getByTestId('client-name')).toHaveCount(1);
++    await expect(page.getByTestId('client-row-1').getByTestId('client-name')).toHaveText(
++      'Acme Corp',
++    );
++  });
++
++  test('still adds a client whose email is not already taken', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++    });
++
++    await page.goto('/clients');
++    await expect(page.getByTestId('client-row-1')).toBeVisible();
++
++    // A distinct, proper email saves as usual.
++    await page.getByTestId('client-form-name').fill('Globex');
++    await page.getByTestId('client-form-email').fill('hello@globex.example');
++    await page.getByTestId('client-form-submit').click();
++
++    // Reset RESTART IDENTITY + one seeded client => the newly created client has id 2.
++    const row = page.getByTestId('client-row-2');
++    await expect(row).toBeVisible();
++    await expect(row.getByTestId('client-name')).toHaveText('Globex');
++    await expect(row.getByTestId('client-email')).toHaveText('hello@globex.example');
++
++    // No duplicate-email error was raised for a distinct email.
++    await expect(page.getByTestId('client-form-email-error')).toHaveCount(0);
++  });
++});

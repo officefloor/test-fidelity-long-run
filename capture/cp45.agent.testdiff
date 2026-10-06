@@ -1,0 +1,158 @@
+diff --git a/client-edit.spec.ts b/client-edit.spec.ts
+new file mode 100644
+index 0000000..a657863
+--- /dev/null
++++ b/client-edit.spec.ts
+@@ -0,0 +1,152 @@
++// Acceptance tests for the change request:
++//   "Let me fix a client's name or email from the list."
++//
++// From the clients list, each client offers an edit control (client-edit-<id>). Opening it reveals
++// an edit form (client-edit-form) pre-filled with the client's current name and email, which the
++// user can fix and save (client-edit-form-submit). Saving:
++//   - updates the client's row in the list to the new name and/or email, leaving siblings untouched;
++//   - appends exactly one audit record — CLIENT_UPDATED id=<id> — so the act is noted.
++// A proper email is still required: a malformed email surfaces client-edit-form-email-error and the
++// client is NOT changed. Cancelling (client-edit-cancel-<id>) closes the form and changes nothing.
++//
++// Asserts ONLY through the two public channels: the UI (data-testid) and the audit file
++// (auditLines()). Data is arranged via resetAndSeed; the edit is driven through the UI. Seed honours
++// clients: { id, name, email }.
++//
++// This SHOULD FAIL before the change: today a client row has no edit control and there is no edit
++// form, so a client's name or email cannot be fixed from the list.
++import { test, expect } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++import { auditLines } from '../support/audit';
++
++test.describe("fix a client's name or email from the list", () => {
++  test('opens an edit form pre-filled with the client current name and email', async ({ page }) => {
++    await resetAndSeed({
++      clients: [
++        { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
++        { id: 2, name: 'Globex', email: 'hello@globex.example' },
++      ],
++    });
++
++    await page.goto('/clients');
++    await expect(page.getByTestId('clients-page')).toBeVisible();
++
++    // No edit form is shown until the user asks to edit a client.
++    await expect(page.getByTestId('client-edit-form')).toHaveCount(0);
++
++    // Open the editor for the first client.
++    await page.getByTestId('client-edit-1').click();
++
++    // The form appears, pre-filled with that client's current values.
++    await expect(page.getByTestId('client-edit-form')).toBeVisible();
++    await expect(page.getByTestId('client-edit-form-name')).toHaveValue('Acme Corp');
++    await expect(page.getByTestId('client-edit-form-email')).toHaveValue('ops@acme.example');
++
++    // Opening the editor is not an edit — nothing is recorded.
++    expect(auditLines()).toEqual([]);
++  });
++
++  test('fixes a client name and email, updating the row and recording it once', async ({ page }) => {
++    await resetAndSeed({
++      clients: [
++        { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
++        { id: 2, name: 'Globex', email: 'hello@globex.example' },
++      ],
++    });
++
++    await page.goto('/clients');
++    await expect(page.getByTestId('client-row-1')).toBeVisible();
++
++    // reset cleared the audit file — nothing has been updated yet.
++    expect(auditLines()).toEqual([]);
++
++    // Fix both the name and the email of the first client.
++    await page.getByTestId('client-edit-1').click();
++    await page.getByTestId('client-edit-form-name').fill('Acme Corporation');
++    await page.getByTestId('client-edit-form-email').fill('billing@acme.example');
++    await page.getByTestId('client-edit-form-submit').click();
++
++    // The row now shows the fixed values.
++    const first = page.getByTestId('client-row-1');
++    await expect(first.getByTestId('client-name')).toHaveText('Acme Corporation');
++    await expect(first.getByTestId('client-email')).toHaveText('billing@acme.example');
++
++    // The sibling is untouched.
++    const second = page.getByTestId('client-row-2');
++    await expect(second.getByTestId('client-name')).toHaveText('Globex');
++    await expect(second.getByTestId('client-email')).toHaveText('hello@globex.example');
++
++    // Exactly one record was kept, naming the updated client.
++    await expect.poll(() => auditLines()).toEqual(['CLIENT_UPDATED id=1']);
++  });
++
++  test('fixes just the client name, leaving the email as it was', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++    });
++
++    await page.goto('/clients');
++    await expect(page.getByTestId('client-row-1')).toBeVisible();
++
++    await page.getByTestId('client-edit-1').click();
++    await page.getByTestId('client-edit-form-name').fill('Acme Limited');
++    await page.getByTestId('client-edit-form-submit').click();
++
++    const first = page.getByTestId('client-row-1');
++    await expect(first.getByTestId('client-name')).toHaveText('Acme Limited');
++    // The email, left alone, is unchanged.
++    await expect(first.getByTestId('client-email')).toHaveText('ops@acme.example');
++
++    await expect.poll(() => auditLines()).toEqual(['CLIENT_UPDATED id=1']);
++  });
++
++  test('refuses to save a malformed email and changes nothing', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++    });
++
++    await page.goto('/clients');
++    await expect(page.getByTestId('client-row-1')).toBeVisible();
++
++    await page.getByTestId('client-edit-1').click();
++    await page.getByTestId('client-edit-form-name').fill('Acme Corp');
++    await page.getByTestId('client-edit-form-email').fill('not-an-email');
++    await page.getByTestId('client-edit-form-submit').click();
++
++    // The feature surfaces the email error and refuses the change.
++    await expect(page.getByTestId('client-edit-form-email-error')).toBeVisible();
++
++    // The row is unchanged — the bad email never took effect.
++    const first = page.getByTestId('client-row-1');
++    await expect(first.getByTestId('client-name')).toHaveText('Acme Corp');
++    await expect(first.getByTestId('client-email')).toHaveText('ops@acme.example');
++
++    // Nothing was recorded, because nothing changed.
++    await expect.poll(() => auditLines()).toEqual([]);
++  });
++
++  test('cancelling the editor closes it and changes nothing', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++    });
++
++    await page.goto('/clients');
++    await expect(page.getByTestId('client-row-1')).toBeVisible();
++
++    // Open the editor, type new values, then cancel instead of saving.
++    await page.getByTestId('client-edit-1').click();
++    await expect(page.getByTestId('client-edit-form')).toBeVisible();
++    await page.getByTestId('client-edit-form-name').fill('Should Not Stick');
++    await page.getByTestId('client-edit-form-email').fill('nope@nowhere.example');
++    await page.getByTestId('client-edit-cancel-1').click();
++
++    // The form is gone and the row keeps its original values.
++    await expect(page.getByTestId('client-edit-form')).toHaveCount(0);
++    const first = page.getByTestId('client-row-1');
++    await expect(first.getByTestId('client-name')).toHaveText('Acme Corp');
++    await expect(first.getByTestId('client-email')).toHaveText('ops@acme.example');
++
++    // Cancelling records nothing.
++    await expect.poll(() => auditLines()).toEqual([]);
++  });
++});

@@ -1,0 +1,110 @@
+diff --git a/client-restore.spec.ts b/client-restore.spec.ts
+new file mode 100644
+index 0000000..d3cf96f
+--- /dev/null
++++ b/client-restore.spec.ts
+@@ -0,0 +1,104 @@
++// Acceptance tests for the change request:
++//   "Let me bring back a client I tucked away earlier. I might start working with them again."
++//
++// RESTORING is the inverse of archiving (the client-archive feature soft-hides a client). A client
++// that was tucked away is retained, just off the list and search. This change lets it come back:
++//   - a clients-show-archived toggle on the clients page reveals the tucked-away clients again,
++//     each still carrying its name and email (the toggle genuinely reads the choice — turning it
++//     back off hides them once more);
++//   - each revealed archived client offers a control to bring it back (client-restore-<id>);
++//   - restoring returns the client to the live list and to the search — it is no longer archived,
++//     so it shows in the DEFAULT view (toggle off) and is found by its name again;
++//   - restoring appends exactly one audit record — CLIENT_RESTORED id=<id> — so the act is noted
++//     (the list only starts showing the client again; it cannot show that it was restored).
++//
++// Asserts ONLY through the two public channels: the UI (data-testid) and the audit file
++// (auditLines()). Data is arranged via resetAndSeed; the restore is driven through the UI. Seed
++// honours clients: { id, name, email, archived } — `archived` places a client directly in the
++// tucked-away state so the reveal/restore can be exercised without first archiving by hand.
++//
++// This SHOULD FAIL before the change: today there is no clients-show-archived toggle, archived
++// clients cannot be revealed, there is no restore control, and nothing is recorded on restore.
++import { test, expect } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++import { auditLines } from '../support/audit';
++
++test.describe('bring back a tucked-away client', () => {
++  test('an already-archived client is hidden by default and revealed by the show-archived toggle', async ({ page }) => {
++    await resetAndSeed({
++      clients: [
++        { id: 1, name: 'Acme Corp', email: 'ops@acme.example', archived: false },
++        // Already tucked away — it must not show in the default list.
++        { id: 2, name: 'Globex', email: 'hello@globex.example', archived: true },
++      ],
++    });
++
++    await page.goto('/clients');
++    await expect(page.getByTestId('clients-page')).toBeVisible();
++
++    // Default view: only the live client; the archived one is hidden, but the list is not empty.
++    await expect(page.getByTestId('client-row-1')).toBeVisible();
++    await expect(page.getByTestId('client-row-2')).toHaveCount(0);
++    await expect(page.getByTestId('clients-empty')).toHaveCount(0);
++
++    // Reveal archived: the tucked-away client appears, still carrying its name and email.
++    await page.getByTestId('clients-show-archived').click();
++    const globex = page.getByTestId('client-row-2');
++    await expect(globex).toBeVisible();
++    await expect(globex.getByTestId('client-name')).toHaveText('Globex');
++    await expect(globex.getByTestId('client-email')).toHaveText('hello@globex.example');
++    await expect(page.getByTestId('client-row-1')).toBeVisible();
++
++    // The toggle genuinely reads the choice: turning it back off hides the archived client again.
++    await page.getByTestId('clients-show-archived').click();
++    await expect(page.getByTestId('client-row-2')).toHaveCount(0);
++    await expect(page.getByTestId('client-row-1')).toBeVisible();
++
++    // Revealing/hiding is a read — it records nothing.
++    expect(auditLines()).toEqual([]);
++  });
++
++  test('restoring a tucked-away client brings it back onto the list and search, and records it', async ({ page }) => {
++    await resetAndSeed({
++      clients: [
++        { id: 1, name: 'Acme Corp', email: 'ops@acme.example', archived: false },
++        { id: 2, name: 'Globex', email: 'hello@globex.example', archived: true },
++      ],
++    });
++
++    await page.goto('/clients');
++    await expect(page.getByTestId('clients-page')).toBeVisible();
++
++    // reset cleared the audit file — nothing has been restored yet.
++    expect(auditLines()).toEqual([]);
++
++    // The archived client is off the default list and off the search.
++    await expect(page.getByTestId('client-row-2')).toHaveCount(0);
++    await page.getByTestId('client-search').fill('glob');
++    await expect(page.getByTestId('client-row-2')).toHaveCount(0);
++    await page.getByTestId('client-search').fill('');
++
++    // Reveal archived, then bring the client back.
++    await page.getByTestId('clients-show-archived').click();
++    await expect(page.getByTestId('client-row-2')).toBeVisible();
++    await page.getByTestId('client-restore-2').click();
++
++    // Exactly one record was kept, naming the restored client.
++    await expect.poll(() => auditLines()).toEqual(['CLIENT_RESTORED id=2']);
++
++    // It is genuinely live now: turning the toggle back off still shows it in the default view,
++    // alongside the sibling that was always live.
++    await page.getByTestId('clients-show-archived').click();
++    await expect(page.getByTestId('client-row-2')).toBeVisible();
++    await expect(page.getByTestId('client-row-2').getByTestId('client-name')).toHaveText('Globex');
++    await expect(page.getByTestId('client-row-1')).toBeVisible();
++
++    // And it is back on the search — a search by its name finds it again.
++    await page.getByTestId('client-search').fill('glob');
++    await expect(page.getByTestId('client-row-2')).toBeVisible();
++    await expect(page.getByTestId('client-row-1')).toHaveCount(0);
++
++    // Still exactly the one restore record — the toggle and search are reads.
++    await expect.poll(() => auditLines()).toEqual(['CLIENT_RESTORED id=2']);
++  });
++});

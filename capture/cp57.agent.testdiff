@@ -1,0 +1,162 @@
+diff --git a/statement-by-job.spec.ts b/statement-by-job.spec.ts
+new file mode 100644
+index 0000000..28e7bd0
+--- /dev/null
++++ b/statement-by-job.spec.ts
+@@ -0,0 +1,156 @@
++// Acceptance tests for the change request:
++//   "On a client's statement group the invoices by job. Show a subtotal for each job."
++//
++// The client statement (client-statement, reached from the client detail page through
++// client-statement-open — see client-statement.spec.ts) already gathers in ONE place EVERY invoice
++// belonging to that client, drawn from ALL of the client's projects. This change organises that one
++// list: instead of a flat run of invoice rows, the invoices are GROUPED BY JOB (the app calls a
++// project a "job" — see jobs-terminology.spec.ts; the testids keep their project-* names). Each job
++// the client has invoices on becomes its own group (statement-project-<projectId>) carrying that
++// job's name (statement-project-name) and a SUBTOTAL for the job (statement-project-subtotal).
++//
++// A job's subtotal is the sum of that job's invoice AMOUNTS — the billed figures the statement shows
++// in statement-invoice-amount, across every invoice listed under the job regardless of stage. This is
++// the app's established meaning of a "subtotal" and of what invoices "add up to": invoiceSummary's
++// subtotal is the sum of an invoice's line items, and a job's project-invoices-total is the sum of its
++// invoice amounts (see project-invoices.spec.ts / money-format.spec.ts). It is NOT the still-owed
++// figure: a DRAFT invoice is not yet owed (invoice-owed-sent-only.spec.ts) but IS part of the job's
++// subtotal, and payments reduce what is owed but not what was billed. The seeded data is chosen so
++// the amount subtotal, the owed remainder and the paid figure are three different numbers per job, so
++// each assertion pins the amount interpretation and a buggy "owed" or "paid" subtotal would fail.
++//
++// Grouping must respect ownership: a job belongs to exactly one client, and another client's job
++// never becomes a group on this client's statement.
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed, which honours
++// clients { id, name, email }, projects { id, clientId, name }, invoices { id, projectId, amount,
++// status } and payments { id, invoiceId, amount, date }. This change introduces NO new audit record,
++// so nothing is asserted through the audit channel here.
++//
++// The subtotal is a NEW money anchor, not among the three money-format.spec pins exactly, so it is
++// matched leniently — a leading "$" and a trailing ".00" both optional — exactly as the sibling
++// statement money anchors are (see client-statement.spec.ts). This SHOULD FAIL before the change:
++// today the statement is a flat list with no per-job grouping or subtotal.
++import { test, expect } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++// "$800.00", "800.00" or "800" all pass — the "$" and the ".00" cents are both optional. Matches how
++// the other NEW statement money anchors are asserted; exact presentation is pinned by money-format.spec.
++function money(amount: number): RegExp {
++  return new RegExp(`^\\$?${amount}(\\.00)?$`);
++}
++
++// Reach a client's statement the way a user does (same contract as client-statement.spec.ts): open
++// the client from the list, then open the statement from the client's detail page.
++async function openStatement(page: import('@playwright/test').Page, clientId: number) {
++  await page.goto('/clients');
++  await page.getByTestId(`client-open-${clientId}`).click();
++  await expect(page.getByTestId('client-detail-page')).toBeVisible();
++  await page.getByTestId('client-statement-open').click();
++  await expect(page.getByTestId('client-statement')).toBeVisible();
++}
++
++// One client with TWO jobs that each carry invoices, plus a DIFFERENT client's job that must never
++// surface on client 1's statement.
++//
++//   Job 1 "Website redesign":  inv 1  billed 500 SENT (200 paid), inv 2 billed 300 PAID (300 paid)
++//                              -> amount subtotal 500 + 300 = 800   (owed 300, paid 500 — both differ)
++//   Job 2 "Mobile app":        inv 3  billed 250 SENT (100 paid), inv 4 billed  40 DRAFT (0 paid)
++//                              -> amount subtotal 250 +  40 = 290   (owed 150, paid 100 — both differ)
++//   Job 3 "Warehouse automation" (CLIENT 2): inv 5 billed 777 SENT — must not appear as a group.
++const SEED = {
++  clients: [
++    { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
++    { id: 2, name: 'Globex', email: 'hello@globex.example' },
++  ],
++  projects: [
++    { id: 1, clientId: 1, name: 'Website redesign' },
++    { id: 2, clientId: 1, name: 'Mobile app' },
++    { id: 3, clientId: 2, name: 'Warehouse automation' },
++  ],
++  invoices: [
++    { id: 1, projectId: 1, amount: 500, status: 'SENT' },
++    { id: 2, projectId: 1, amount: 300, status: 'PAID' },
++    { id: 3, projectId: 2, amount: 250, status: 'SENT' },
++    { id: 4, projectId: 2, amount: 40, status: 'DRAFT' },
++    { id: 5, projectId: 3, amount: 777, status: 'SENT' },
++  ],
++  payments: [
++    { id: 1, invoiceId: 1, amount: 200, date: '2025-06-15' },
++    { id: 2, invoiceId: 2, amount: 300, date: '2025-07-01' },
++    { id: 3, invoiceId: 3, amount: 100, date: '2025-07-02' },
++    // Client 2's invoice is fully paid off — it must not touch client 1's statement anyway.
++    { id: 4, invoiceId: 5, amount: 777, date: '2025-02-02' },
++  ],
++};
++
++test.describe('a client statement groups its invoices by job with a per-job subtotal', () => {
++  test('each of the client\'s jobs is its own group carrying the job name; another client\'s job is not', async ({ page }) => {
++    await resetAndSeed(SEED);
++
++    await openStatement(page, 1);
++    await expect(page.getByTestId('client-statement-table')).toBeVisible();
++
++    // Job 1 is a group labelled with its name.
++    const job1 = page.getByTestId('statement-project-1');
++    await expect(job1).toBeVisible();
++    await expect(job1.getByTestId('statement-project-name')).toContainText('Website redesign');
++
++    // Job 2 is a SEPARATE group with its own name — the invoices are organised by job, not one flat run.
++    const job2 = page.getByTestId('statement-project-2');
++    await expect(job2).toBeVisible();
++    await expect(job2.getByTestId('statement-project-name')).toContainText('Mobile app');
++
++    // The other client's job never becomes a group here, and there are exactly the client's own two.
++    await expect(page.getByTestId('statement-project-3')).toHaveCount(0);
++    await expect(page.getByTestId('statement-project-name')).toHaveCount(2);
++
++    // Grouping must not drop invoices: all four of the client's invoices are still listed, each with
++    // its billed amount; the other client's invoice (id 5) is not.
++    await expect(page.getByTestId('statement-invoice-row-1').getByTestId('statement-invoice-amount')).toHaveText(money(500));
++    await expect(page.getByTestId('statement-invoice-row-2').getByTestId('statement-invoice-amount')).toHaveText(money(300));
++    await expect(page.getByTestId('statement-invoice-row-3').getByTestId('statement-invoice-amount')).toHaveText(money(250));
++    await expect(page.getByTestId('statement-invoice-row-4').getByTestId('statement-invoice-amount')).toHaveText(money(40));
++    await expect(page.getByTestId('statement-invoice-row-5')).toHaveCount(0);
++  });
++
++  test('each job shows a subtotal equal to the sum of that job\'s invoice amounts', async ({ page }) => {
++    await resetAndSeed(SEED);
++
++    await openStatement(page, 1);
++
++    // Job 1: 500 + 300 = 800 billed. This is the AMOUNT subtotal — not the 300 still owed on the job
++    // (invoice 2 is paid, invoice 1 has 200 paid), nor the 500 paid against it.
++    const job1Subtotal = page.getByTestId('statement-project-1').getByTestId('statement-project-subtotal');
++    await expect(job1Subtotal).toHaveText(money(800));
++
++    // Job 2: 250 + 40 = 290 billed — and the 40 is a DRAFT, which is NOT owed yet but still counts in
++    // the billed subtotal. Not the 150 still owed, nor the 100 paid.
++    const job2Subtotal = page.getByTestId('statement-project-2').getByTestId('statement-project-subtotal');
++    await expect(job2Subtotal).toHaveText(money(290));
++
++    // Exactly one subtotal per job group — two in all.
++    await expect(page.getByTestId('statement-project-subtotal')).toHaveCount(2);
++  });
++
++  test('a job with a single invoice shows a subtotal equal to that one invoice\'s amount', async ({ page }) => {
++    // One client, one job, one invoice — the subtotal is simply that invoice's billed amount, proving
++    // the subtotal tracks the job's own invoices rather than any client-wide figure.
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
++      invoices: [{ id: 1, projectId: 1, amount: 420, status: 'SENT' }],
++      payments: [{ id: 1, invoiceId: 1, amount: 120, date: '2025-06-15' }],
++    });
++
++    await openStatement(page, 1);
++
++    const job1 = page.getByTestId('statement-project-1');
++    await expect(job1).toBeVisible();
++    await expect(job1.getByTestId('statement-project-name')).toContainText('Website redesign');
++    // 420 billed — not the 300 still owed after the 120 payment, nor the 120 paid.
++    await expect(job1.getByTestId('statement-project-subtotal')).toHaveText(money(420));
++
++    await expect(page.getByTestId('statement-project-subtotal')).toHaveCount(1);
++  });
++});

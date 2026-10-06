@@ -1,0 +1,15 @@
+$ bin/build
+
+$ npm ci --silent (cwd e2e)
+
+$ npx playwright install chromium (cwd e2e)
+
+$ npx playwright test --reporter=json --workers=1 --output=/home/daniel/test-fidelity-long-run/work/202610060034/cp01/.run/pw-artifacts
+
+Running 4 tests using 1 worker
+
+[1A[2K[1/4] [chromium] › clients.spec.ts:11:7 › clients › lists all seeded clients in one list, each with name and email
+[1A[2K[2/4] [chromium] › clients.spec.ts:36:7 › clients › shows an empty state when there are no clients
+[1A[2K[3/4] [chromium] › clients.spec.ts:46:7 › clients › adds a client with their name and email through the form
+[1A[2K[4/4] [chromium] › clients.spec.ts:66:7 › clients › reaches the clients list from the nav
+[1A[2K  4 passed (2.0s)

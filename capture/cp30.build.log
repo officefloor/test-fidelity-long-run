@@ -1,0 +1,306 @@
+$ bin/build
+
+$ npm ci --silent (cwd e2e)
+
+$ npx playwright install chromium (cwd e2e)
+
+$ npx playwright test --reporter=json --workers=1 --output=/home/daniel/test-fidelity-long-run/work/202610060034/cp30/.run/pw-artifacts
+
+Running 98 tests using 1 worker
+
+[1A[2K[1/98] [chromium] › all-invoices.spec.ts:24:7 › all invoices in one place › lists every invoice from every project, each with its project and stage
+[1A[2K[2/98] [chromium] › all-invoices.spec.ts:69:7 › all invoices in one place › shows an empty state when there are no invoices at all
+[1A[2K[3/98] [chromium] › all-invoices.spec.ts:85:7 › all invoices in one place › reaches the all-invoices page from the nav
+[1A[2K[4/98] [chromium] › client-archive.spec.ts:27:7 › archive a client instead of losing them › archiving drops a client off the list, keeps a record, and loses nothing
+[1A[2K[5/98] [chromium] › client-archive.spec.ts:71:7 › archive a client instead of losing them › an already-archived client is absent from the list and cannot be found by search
+[1A[2K[6/98] [chromium] › client-archive.spec.ts:102:7 › archive a client instead of losing them › archiving a client via the UI keeps it out of the search too
+[1A[2K[7/98] [chromium] › client-contacts.spec.ts:18:7 › client contacts › opening a client shows that client's contacts, each with name, email and role
+[1A[2K[8/98] [chromium] › client-contacts.spec.ts:57:7 › client contacts › a client with no contacts of their own shows none (another client's do not leak)
+[1A[2K[9/98] [chromium] › client-contacts.spec.ts:79:7 › client contacts › adds a contact with a name, email and role through the form
+[1A[2K[10/98] [chromium] › client-contacts.spec.ts:106:7 › client contacts › a freshly added contact joins the client's existing contacts
+[1A[2K  1) [chromium] › client-contacts.spec.ts:106:7 › client contacts › a freshly added contact joins the client's existing contacts 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('contact-row-2')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('contact-row-2')[22m
+
+
+      126 |     await expect(page.getByTestId('contact-row-1').getByTestId('contact-name')).toHaveText('Dana Wells');
+      127 |     const added = page.getByTestId('contact-row-2');
+    > 128 |     await expect(added).toBeVisible();
+          |                         ^
+      129 |     await expect(added.getByTestId('contact-name')).toHaveText('Omar Reed');
+      130 |     await expect(added.getByTestId('contact-email')).toHaveText('omar@acme.example');
+      131 |     await expect(added.getByTestId('contact-role')).toHaveText('Engineering');
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp30/e2e/specs/client-contacts.spec.ts:128:25
+
+
+[1A[2K[11/98] [chromium] › client-counts.spec.ts:18:7 › client counts › a client's page shows how many projects and contacts they have
+[1A[2K[12/98] [chromium] › client-counts.spec.ts:51:7 › client counts › a client with no projects or contacts of their own shows zero for each
+[1A[2K[13/98] [chromium] › client-counts.spec.ts:77:7 › client counts › each client's page shows its own counts
+[1A[2K[14/98] [chromium] › client-email.spec.ts:14:7 › client email is required and must be valid › does not show the email error before the user tries to save
+[1A[2K[15/98] [chromium] › client-email.spec.ts:23:7 › client email is required and must be valid › refuses to save a client with no email
+[1A[2K[16/98] [chromium] › client-email.spec.ts:42:7 › client email is required and must be valid › refuses to save a client with a malformed email
+[1A[2K[17/98] [chromium] › client-email.spec.ts:59:7 › client email is required and must be valid › saves the client once a proper email is provided, clearing the error
+[1A[2K[18/98] [chromium] › client-projects.spec.ts:14:7 › client projects › opening a client shows the projects being done for them
+[1A[2K[19/98] [chromium] › client-projects.spec.ts:49:7 › client projects › a client with no projects of their own shows an empty state
+[1A[2K[20/98] [chromium] › client-search.spec.ts:20:7 › client search › narrows the list to clients whose name matches what is typed
+[1A[2K[21/98] [chromium] › client-search.spec.ts:40:7 › client search › clearing the box shows every client again
+[1A[2K[22/98] [chromium] › client-search.spec.ts:57:7 › client search › a search that matches no client hides every row
+[1A[2K[23/98] [chromium] › clients.spec.ts:11:7 › clients › lists all seeded clients in one list, each with name and email
+[1A[2K[24/98] [chromium] › clients.spec.ts:36:7 › clients › shows an empty state when there are no clients
+[1A[2K[25/98] [chromium] › clients.spec.ts:46:7 › clients › adds a client with their name and email through the form
+[1A[2K[26/98] [chromium] › clients.spec.ts:66:7 › clients › reaches the clients list from the nav
+[1A[2K[27/98] [chromium] › contact-email.spec.ts:16:7 › contact email must be valid › does not show the email error before the user tries to save
+[1A[2K[28/98] [chromium] › contact-email.spec.ts:30:7 › contact email must be valid › refuses to save a contact with no email
+[1A[2K[29/98] [chromium] › contact-email.spec.ts:55:7 › contact email must be valid › refuses to save a contact with a malformed email
+[1A[2K[30/98] [chromium] › contact-email.spec.ts:78:7 › contact email must be valid › saves the contact once a proper email is provided, clearing the error
+[1A[2K[31/98] [chromium] › dashboard.spec.ts:37:7 › dashboard home screen › reaches the dashboard from the nav
+[1A[2K[32/98] [chromium] › dashboard.spec.ts:49:7 › dashboard home screen › shows how many clients and projects there are, and how much is still owed
+[1A[2K[33/98] [chromium] › dashboard.spec.ts:89:7 › dashboard home screen › a paid invoice is not money still owed
+[1A[2K[34/98] [chromium] › dashboard.spec.ts:112:7 › dashboard home screen › with no data at all the figures are zero
+[1A[2K[35/98] [chromium] › invoice-amount.spec.ts:18:7 › invoice amount must be more than zero › does not show the amount error before the user tries to add
+[1A[2K[36/98] [chromium] › invoice-amount.spec.ts:33:7 › invoice amount must be more than zero › refuses to add an invoice for zero, surfacing the error and creating nothing
+[1A[2K[37/98] [chromium] › invoice-amount.spec.ts:61:7 › invoice amount must be more than zero › adds the invoice once a positive amount is provided, clearing the error
+[1A[2K[38/98] [chromium] › invoice-dates.spec.ts:25:7 › invoice issued and due dates › an invoice shows both its issued date and its due date, each in its own slot
+[1A[2K[39/98] [chromium] › invoice-dates.spec.ts:57:7 › invoice issued and due dates › each invoice shows its own pair of dates, not a sibling invoice's
+[1A[2K[40/98] [chromium] › invoice-lineitem-remove.spec.ts:28:7 › charge lines can be removed from an invoice, and the total follows › removing one line drops only that line, keeps the rest, and re-works the total
+[1A[2K[41/98] [chromium] › invoice-lineitem-remove.spec.ts:86:7 › charge lines can be removed from an invoice, and the total follows › removing the last line empties the invoice and the total falls to zero
+[1A[2K[42/98] [chromium] › invoice-lineitems.spec.ts:35:7 › an invoice is a list of things being charged for, with the total worked out › opening an invoice lists each thing — description, how many, price each — with the total worked out
+[1A[2K  2) [chromium] › invoice-lineitems.spec.ts:35:7 › an invoice is a list of things being charged for, with the total worked out › opening an invoice lists each thing — description, how many, price each — with the total worked out 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      [2m- waiting for getByTestId('invoice-row-1').getByTestId('invoice-open-1')[22m
+
+
+      60 |
+      61 |     // Drill into the invoice to see what it is made of — a child route, reached via its open control.
+    > 62 |     await listRow.getByTestId('invoice-open-1').click();
+         |                                                 ^
+      63 |
+      64 |     await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
+      65 |     await expect(page.getByTestId('invoice-lineitems-table')).toBeVisible();
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp30/e2e/specs/invoice-lineitems.spec.ts:62:49
+
+
+[1A[2K[43/98] [chromium] › invoice-lineitems.spec.ts:84:7 › an invoice is a list of things being charged for, with the total worked out › adds a thing through the form; it appears with its worked-out amount and lifts the total
+[1A[2K  3) [chromium] › invoice-lineitems.spec.ts:84:7 › an invoice is a list of things being charged for, with the total worked out › adds a thing through the form; it appears with its worked-out amount and lifts the total 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      [2m- waiting for getByTestId('invoice-row-1').getByTestId('invoice-open-1')[22m
+
+
+       95 |     await expect(page.getByTestId('invoice-row-1').getByTestId('invoice-amount')).toHaveText('$0.00');
+       96 |
+    >  97 |     await page.getByTestId('invoice-row-1').getByTestId('invoice-open-1').click();
+          |                                                                           ^
+       98 |     await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
+       99 |     await expect(page.getByTestId('lineitem-form')).toBeVisible();
+      100 |     // No line items seeded, so no rows yet.
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp30/e2e/specs/invoice-lineitems.spec.ts:97:75
+
+
+[1A[2K[44/98] [chromium] › invoice-lineitems.spec.ts:124:7 › an invoice is a list of things being charged for, with the total worked out › refuses an incomplete line item, surfacing an error and adding nothing
+[1A[2K  4) [chromium] › invoice-lineitems.spec.ts:124:7 › an invoice is a list of things being charged for, with the total worked out › refuses an incomplete line item, surfacing an error and adding nothing 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      [2m- waiting for getByTestId('invoice-row-1').getByTestId('invoice-open-1')[22m
+
+
+      130 |
+      131 |     await page.goto('/invoices');
+    > 132 |     await page.getByTestId('invoice-row-1').getByTestId('invoice-open-1').click();
+          |                                                                           ^
+      133 |
+      134 |     await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
+      135 |     await expect(page.getByTestId('lineitem-form')).toBeVisible();
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp30/e2e/specs/invoice-lineitems.spec.ts:132:75
+
+
+[1A[2K[45/98] [chromium] › invoice-owed-sent-only.spec.ts:37:7 › money owed counts only sent invoices, not drafts › a draft is not counted as money owed; only sent invoices are
+[1A[2K[46/98] [chromium] › invoice-owed-sent-only.spec.ts:62:7 › money owed counts only sent invoices, not drafts › a draft alone is not money owed, but sending it makes it owed
+[1A[2K[47/98] [chromium] › invoice-owed-sent-only.spec.ts:87:7 › money owed counts only sent invoices, not drafts › with every invoice still a draft, nothing is owed
+[1A[2K[48/98] [chromium] › invoice-paid.spec.ts:27:7 › mark invoice paid › marking an unpaid invoice paid flips its status and records it
+[1A[2K[49/98] [chromium] › invoice-paid.spec.ts:60:7 › mark invoice paid › keeps a separate record each time, and marking one leaves the others untouched
+[1A[2K[50/98] [chromium] › invoice-payments.spec.ts:31:7 › record what a client has paid on an invoice › an invoice shows each payment recorded on it, with its amount and date
+[1A[2K[51/98] [chromium] › invoice-payments.spec.ts:76:7 › record what a client has paid on an invoice › records a payment through the form; it appears on the invoice with its amount and date
+[1A[2K[52/98] [chromium] › invoice-payments.spec.ts:107:7 › record what a client has paid on an invoice › refuses an incomplete payment, surfacing an error and recording nothing
+[1A[2K[53/98] [chromium] › invoice-send.spec.ts:27:7 › invoice stages: draft -> sent -> paid › a newly created invoice is a draft: it can be sent but not yet paid
+[1A[2K[54/98] [chromium] › invoice-send.spec.ts:53:7 › invoice stages: draft -> sent -> paid › sending a draft moves it to sent, keeps a record, and only then allows payment
+[1A[2K[55/98] [chromium] › invoice-send.spec.ts:100:7 › invoice stages: draft -> sent -> paid › a draft cannot be paid but an already-sent invoice can
+[1A[2K[56/98] [chromium] › invoice-send.spec.ts:132:7 › invoice stages: draft -> sent -> paid › sending one draft records its own line and leaves its siblings untouched
+[1A[2K[57/98] [chromium] › invoice-sort-due.spec.ts:27:7 › sort invoices by due date › activating the control orders the invoices earliest-due first
+[1A[2K[58/98] [chromium] › invoice-sort-due.spec.ts:64:7 › sort invoices by due date › the control sorts by due date whatever the seeded order
+[1A[2K[59/98] [chromium] › invoice-status-filter.spec.ts:94:7 › narrow all-invoices to one stage › with nothing picked, the filter is present and every invoice is shown
+[1A[2K[60/98] [chromium] › invoice-status-filter.spec.ts:108:7 › narrow all-invoices to one stage › narrowing to SENT keeps only the sent invoices
+[1A[2K[61/98] [chromium] › invoice-status-filter.spec.ts:127:7 › narrow all-invoices to one stage › narrowing to DRAFT, then to PAID, follows the chosen stage
+[1A[2K[62/98] [chromium] › invoice-status-filter.spec.ts:150:7 › narrow all-invoices to one stage › clearing the filter brings every invoice back
+[1A[2K[63/98] [chromium] › money-format.spec.ts:24:7 › money is shown with a dollar sign and cents › an invoice amount is shown like $120.00
+[1A[2K[64/98] [chromium] › money-format.spec.ts:43:7 › money is shown with a dollar sign and cents › the project invoices total is shown like $219.50
+[1A[2K[65/98] [chromium] › money-format.spec.ts:61:7 › money is shown with a dollar sign and cents › the dashboard outstanding total is shown like $475.00
+[1A[2K[66/98] [chromium] › money-format.spec.ts:85:7 › money is shown with a dollar sign and cents › a zero money total is shown like $0.00
+[1A[2K[67/98] [chromium] › project-archive.spec.ts:28:7 › archive a project instead of deleting it › archiving drops a project off the main list, keeps a record, and loses nothing
+[1A[2K[68/98] [chromium] › project-archive.spec.ts:69:7 › archive a project instead of deleting it › an already-archived project is hidden by default and revealed by the toggle
+[1A[2K[69/98] [chromium] › project-archive.spec.ts:99:7 › archive a project instead of deleting it › an archived project drops off the client's page, leaving the client's live projects
+[1A[2K[70/98] [chromium] › project-archive.spec.ts:131:7 › archive a project instead of deleting it › archiving a project via the UI drops it off the client page too, and records it
+[1A[2K[71/98] [chromium] › project-delete.spec.ts:21:7 › delete a project › deletes a project, removing it from the list and keeping a record
+[1A[2K[72/98] [chromium] › project-delete.spec.ts:53:7 › delete a project › deleting the last project leaves the list empty, with a record of the deletion
+[1A[2K[73/98] [chromium] › project-invoices.spec.ts:22:7 › project invoices › opening a project shows its invoices and what they add up to
+[1A[2K[74/98] [chromium] › project-invoices.spec.ts:60:7 › project invoices › adds a new invoice for an amount, which then appears and is added into the total
+[1A[2K[75/98] [chromium] › project-invoices.spec.ts:87:7 › project invoices › a freshly added invoice adds onto the existing total
+[1A[2K  5) [chromium] › project-invoices.spec.ts:87:7 › project invoices › a freshly added invoice adds onto the existing total 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoContainText[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: getByTestId('invoice-row-2').getByTestId('invoice-amount')
+    Expected string: [32m"$300.00"[39m
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toContainText with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('invoice-row-2').getByTestId('invoice-amount')[22m
+
+
+      104 |     // Both invoices now listed, and the total is 120 + 300 = 420.
+      105 |     await expect(page.getByTestId('invoice-row-1').getByTestId('invoice-amount')).toContainText('$120.00');
+    > 106 |     await expect(page.getByTestId('invoice-row-2').getByTestId('invoice-amount')).toContainText('$300.00');
+          |                                                                                   ^
+      107 |     await expect(page.getByTestId('project-invoices-total')).toContainText('$420.00');
+      108 |   });
+      109 | });
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp30/e2e/specs/project-invoices.spec.ts:106:83
+
+
+[1A[2K[76/98] [chromium] › project-notes.spec.ts:28:7 › write notes on a project, newest first › a project shows its own notes newest-first, and other projects' notes do not leak in
+[1A[2K  6) [chromium] › project-notes.spec.ts:28:7 › write notes on a project, newest first › a project shows its own notes newest-first, and other projects' notes do not leak in 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('project-notes-list')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('project-notes-list')[22m
+
+
+      53 |     await expect(notes).toBeVisible();
+      54 |     const list = page.getByTestId('project-notes-list');
+    > 55 |     await expect(list).toBeVisible();
+         |                        ^
+      56 |     // There are notes, so this project is not in the empty state.
+      57 |     await expect(page.getByTestId('project-notes-empty')).toHaveCount(0);
+      58 |
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp30/e2e/specs/project-notes.spec.ts:55:24
+
+
+[1A[2K[77/98] [chromium] › project-notes.spec.ts:77:7 › write notes on a project, newest first › a project with no notes shows an empty state and no note rows
+[1A[2K[78/98] [chromium] › project-notes.spec.ts:94:7 › write notes on a project, newest first › writing a note adds it to the project and shows the newest one first
+[1A[2K  7) [chromium] › project-notes.spec.ts:94:7 › write notes on a project, newest first › writing a note adds it to the project and shows the newest one first 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveText[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: getByTestId('project-notes-list').getByTestId('note-text')
+    [32m- Expected  - 3[39m
+    [31m+ Received  + 1[39m
+
+    [32m- Array [[39m
+    [32m-   "Old existing note",[39m
+    [32m- ][39m
+    [31m+ Array [][39m
+    Call log:
+      [2m- expect.toHaveText with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('project-notes-list').getByTestId('note-text')[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   locator resolved to 0 elements[22m
+
+
+      109 |     const list = page.getByTestId('project-notes-list');
+      110 |     // The existing note is shown to begin with.
+    > 111 |     await expect(list.getByTestId('note-text')).toHaveText(['Old existing note']);
+          |                                                 ^
+      112 |
+      113 |     // Write a new note through the form.
+      114 |     await expect(page.getByTestId('note-form')).toBeVisible();
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp30/e2e/specs/project-notes.spec.ts:111:49
+
+
+[1A[2K[79/98] [chromium] › project-tag-filter.spec.ts:103:7 › filter projects by label › with nothing picked, the filter is present and every project is shown
+[1A[2K[80/98] [chromium] › project-tag-filter.spec.ts:117:7 › filter projects by label › narrowing to a label keeps only the projects carrying it
+[1A[2K[81/98] [chromium] › project-tag-filter.spec.ts:136:7 › filter projects by label › switching labels follows the chosen label to a disjoint set
+[1A[2K[82/98] [chromium] › project-tag-filter.spec.ts:159:7 › filter projects by label › clearing the filter brings every project back, including the unlabelled one
+[1A[2K[83/98] [chromium] › project-tags.spec.ts:37:7 › label projects to group them › a project shows its own labels, and labels of other projects do not leak in
+[1A[2K[84/98] [chromium] › project-tags.spec.ts:88:7 › label projects to group them › adding a label through the form shows it on the project and keeps a record
+[1A[2K  8) [chromium] › project-tags.spec.ts:88:7 › label projects to group them › adding a label through the form shows it on the project and keeps a record 
+
+    Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element
+    Call log:
+      [2m- waiting for getByTestId('project-tag-add')[22m
+    [2m  -   locator resolved to <select data-testid="project-tag-add">…</select>[22m
+    [2m  -   fill("Urgent")[22m
+    [2m  - attempting fill action[22m
+    [2m  -   waiting for element to be visible, enabled and editable[22m
+
+
+      106 |
+      107 |     // Put a label on the project.
+    > 108 |     await page.getByTestId('project-tag-add').fill('Urgent');
+          |                                               ^
+      109 |     await page.getByTestId('project-tag-add-submit').click();
+      110 |
+      111 |     // It appears as a chip in the list, carrying its name.
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp30/e2e/specs/project-tags.spec.ts:108:47
+
+
+[1A[2K[85/98] [chromium] › project-tags.spec.ts:128:7 › label projects to group them › removing a label takes it off this project only, and keeps a record
+[1A[2K[86/98] [chromium] › project-task-filter.spec.ts:112:7 › narrow a project task list to open or finished › with nothing picked, the filter is present and every task is shown
+[1A[2K[87/98] [chromium] › project-task-filter.spec.ts:126:7 › narrow a project task list to open or finished › narrowing to open keeps only the not-done tasks
+[1A[2K[88/98] [chromium] › project-task-filter.spec.ts:144:7 › narrow a project task list to open or finished › narrowing to finished keeps only the done tasks
+[1A[2K[89/98] [chromium] › project-task-filter.spec.ts:162:7 › narrow a project task list to open or finished › switching from open to finished follows the chosen state
+[1A[2K[90/98] [chromium] › project-task-filter.spec.ts:182:7 › narrow a project task list to open or finished › clearing the filter brings every task back
+[1A[2K[91/98] [chromium] › project-tasks.spec.ts:27:7 › project task list › opening a project lists its own tasks with their titles, and a done task reads differently from a not-done one
+[1A[2K[92/98] [chromium] › project-tasks.spec.ts:69:7 › project task list › a project with no tasks shows an empty state and no task rows
+[1A[2K[93/98] [chromium] › project-tasks.spec.ts:85:7 › project task list › ticking a task off flips its status and keeps a record; toggling back flips it and records again
+[1A[2K[94/98] [chromium] › project-tasks.spec.ts:134:7 › project task list › toggling one task leaves its siblings untouched, and each toggle writes its own record
+[1A[2K[95/98] [chromium] › projects.spec.ts:15:7 › projects › lists all seeded projects, each with its name and the client it is for
+[1A[2K[96/98] [chromium] › projects.spec.ts:44:7 › projects › shows an empty state when there are no projects
+[1A[2K[97/98] [chromium] › projects.spec.ts:58:7 › projects › adds a project and picks which client it is for, then shows it with the client name
+[1A[2K[98/98] [chromium] › projects.spec.ts:85:7 › projects › reaches the projects list from the nav
+[1A[2K  8 failed
+    [chromium] › client-contacts.spec.ts:106:7 › client contacts › a freshly added contact joins the client's existing contacts 
+    [chromium] › invoice-lineitems.spec.ts:35:7 › an invoice is a list of things being charged for, with the total worked out › opening an invoice lists each thing — description, how many, price each — with the total worked out 
+    [chromium] › invoice-lineitems.spec.ts:84:7 › an invoice is a list of things being charged for, with the total worked out › adds a thing through the form; it appears with its worked-out amount and lifts the total 
+    [chromium] › invoice-lineitems.spec.ts:124:7 › an invoice is a list of things being charged for, with the total worked out › refuses an incomplete line item, surfacing an error and adding nothing 
+    [chromium] › project-invoices.spec.ts:87:7 › project invoices › a freshly added invoice adds onto the existing total 
+    [chromium] › project-notes.spec.ts:28:7 › write notes on a project, newest first › a project shows its own notes newest-first, and other projects' notes do not leak in 
+    [chromium] › project-notes.spec.ts:94:7 › write notes on a project, newest first › writing a note adds it to the project and shows the newest one first 
+    [chromium] › project-tags.spec.ts:88:7 › label projects to group them › adding a label through the form shows it on the project and keeps a record 
+  90 passed (2.4m)

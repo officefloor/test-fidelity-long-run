@@ -1,0 +1,215 @@
+You are writing ACCEPTANCE TESTS for one change to this application.
+
+You write TESTS ONLY. Do not modify application source, build scripts, or the test support
+helpers (e2e/support/*). A run that changes application code is void.
+
+THE CHANGE REQUEST (as the user wrote it):
+Let me write notes on a project. Show the newest one first.
+
+WHAT TO DO
+Write Playwright acceptance test(s) under e2e/specs/ that verify this change request has been
+implemented. Where the request revises behaviour that your EXISTING tests already assert, update
+those tests too — the suite must describe the application as it is meant to be after this change,
+not as it was before.
+
+Assert only through the two public channels below. Never reach into the database, the REST API, or
+application internals.
+
+CHANNEL 1 — the UI, via data-testid
+  Introduced by THIS change (8):
+    note-form
+    note-form-submit
+    note-form-text
+    note-row-<id>
+    note-text
+    project-notes
+    project-notes-empty
+    project-notes-list
+  Every anchor available to you (118):
+    all-invoices-empty
+    all-invoices-table
+    app-home
+    app-nav
+    app-root
+    client-contacts
+    client-contacts-count
+    client-contacts-table
+    client-counts
+    client-detail-page
+    client-email
+    client-form
+    client-form-email
+    client-form-email-error
+    client-form-name
+    client-form-submit
+    client-name
+    client-open-<id>
+    client-projects-count
+    client-projects-empty
+    client-projects-table
+    client-row-<id>
+    client-search
+    clients-empty
+    clients-page
+    clients-table
+    contact-email
+    contact-form
+    contact-form-email
+    contact-form-email-error
+    contact-form-name
+    contact-form-role
+    contact-form-submit
+    contact-name
+    contact-role
+    contact-row-<id>
+    dashboard
+    dashboard-clients-count
+    dashboard-error
+    dashboard-loading
+    dashboard-outstanding-total
+    dashboard-page
+    dashboard-projects-count
+    home-empty
+    invoice-amount
+    invoice-detail-page
+    invoice-due
+    invoice-form
+    invoice-form-amount
+    invoice-form-amount-error
+    invoice-form-submit
+    invoice-issued
+    invoice-lineitems-table
+    invoice-open-<id>
+    invoice-pay-<id>
+    invoice-project
+    invoice-row-<id>
+    invoice-send-<id>
+    invoice-sort-due
+    invoice-status
+    invoice-status-filter
+    invoices-page
+    lineitem-amount
+    lineitem-description
+    lineitem-form
+    lineitem-form-description
+    lineitem-form-error
+    lineitem-form-qty
+    lineitem-form-submit
+    lineitem-form-unitprice
+    lineitem-qty
+    lineitem-remove-<id>
+    lineitem-row-<id>
+    lineitem-unitprice
+    nav-clients
+    nav-dashboard
+    nav-home
+    nav-invoices
+    nav-projects
+    note-form
+    note-form-submit
+    note-form-text
+    note-row-<id>
+    note-text
+    project-archive-<id>
+    project-client
+    project-delete-<id>
+    project-detail-page
+    project-form
+    project-form-client
+    project-form-name
+    project-form-submit
+    project-invoices-table
+    project-invoices-total
+    project-name
+    project-notes
+    project-notes-empty
+    project-notes-list
+    project-open-<id>
+    project-row-<id>
+    project-tag-<id>
+    project-tag-add
+    project-tag-add-submit
+    project-tag-filter
+    project-tag-remove-<id>
+    project-tags
+    project-tags-list
+    project-tasks-empty
+    project-tasks-table
+    projects-empty
+    projects-page
+    projects-show-archived
+    projects-table
+    task-filter
+    task-row-<id>
+    task-status
+    task-title
+    task-toggle-<id>
+  `<id>` / `<currency>` are placeholders: the concrete value comes from the data
+  your test seeds, e.g. client-row-1. Anchors are a stable contract — use them
+  exactly as written.
+
+CHANNEL 2 — the audit file, via auditLines() from ../support/audit
+  Introduced by THIS change (0):
+    (none)
+  Every record format available to you (7):
+    INVOICE_PAID id=<id> amount=<amount>
+    INVOICE_SENT id=<id> amount=<amount>
+    PROJECT_ARCHIVED id=<id>
+    PROJECT_DELETED id=<id>
+    PROJECT_TAGGED project=<project> tag=<tag>
+    PROJECT_UNTAGGED project=<project> tag=<tag>
+    TASK_TOGGLED id=<id> done=<done>
+
+SEED FIELDS HONOURED by /__test__/seed (anything else is ignored):
+    clients: email, id, name
+    contacts: clientId, email, id, name, role
+    invoices: amount, description, dueDate, id, issuedDate, lineItems, projectId, qty, status, unitPrice
+    notes: at, id, targetId, targetType, text
+    projectTags: projectId, tagId
+    projects: archived, clientId, id, name
+    tags: id, name
+    tasks: done, id, projectId, title
+
+HOW DATA IS ARRANGED
+Call `resetAndSeed({...})` from `../support/seed` to put the application into the state your test
+needs (it clears all data and the audit file first). Only the seed fields listed above are
+honoured — a field that is not listed is accepted and SILENTLY IGNORED, so seeding it will look
+like it worked and your assertion will fail for an unrelated-looking reason.
+
+THE APPLICATION
+The source in this directory is the application as it stands BEFORE this change request has been
+implemented. You can read it and run it. Your new test SHOULD FAIL against it — the behaviour
+being requested is not there yet. That is expected, and is not a reason to weaken the test. Your
+existing tests should still pass.
+
+YOUR EXISTING TESTS
+  e2e/specs/ holds the 27 spec file(s) you have written so far (89 tests).
+  Their git history is available. Update them where this change request revises
+  behaviour they assert; otherwise leave them alone.
+    all-invoices.spec.ts
+    client-contacts.spec.ts
+    client-counts.spec.ts
+    client-email.spec.ts
+    client-projects.spec.ts
+    client-search.spec.ts
+    clients.spec.ts
+    contact-email.spec.ts
+    dashboard.spec.ts
+    invoice-amount.spec.ts
+    invoice-dates.spec.ts
+    invoice-lineitem-remove.spec.ts
+    invoice-lineitems.spec.ts
+    invoice-owed-sent-only.spec.ts
+    invoice-paid.spec.ts
+    invoice-send.spec.ts
+    invoice-sort-due.spec.ts
+    invoice-status-filter.spec.ts
+    money-format.spec.ts
+    project-archive.spec.ts
+    project-delete.spec.ts
+    project-invoices.spec.ts
+    project-tag-filter.spec.ts
+    project-tags.spec.ts
+    project-task-filter.spec.ts
+    project-tasks.spec.ts
+    projects.spec.ts

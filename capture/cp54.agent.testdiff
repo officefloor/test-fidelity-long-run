@@ -1,0 +1,129 @@
+diff --git a/invoice-notes.spec.ts b/invoice-notes.spec.ts
+new file mode 100644
+index 0000000..16d1e32
+--- /dev/null
++++ b/invoice-notes.spec.ts
+@@ -0,0 +1,123 @@
++// Acceptance tests for the change request:
++//   "Let me add notes to invoices too. Not just jobs."
++//
++// Free-text NOTES now attach to invoices as well as projects. On an invoice's own detail page
++// (invoice-detail-page, reached at /invoices/<id> — the same public URL surface the other invoice
++// specs use) a notes region (invoice-notes) holds THAT invoice's notes in a list
++// (invoice-notes-list) — one row per note (note-row-<id>) showing the note's text (note-text).
++// Like project notes, they are ordered NEWEST FIRST: the most recently written note is at the top,
++// regardless of seed order or id order. An invoice with no notes shows an empty state
++// (invoice-notes-empty). The shared note form (note-form) writes a new note: type into note-form-text
++// and submit with note-form-submit — the note then appears in the list, newest and so on top.
++//
++// Asserts ONLY through the UI (data-testid); this change records nothing to the audit file. Data is
++// arranged via resetAndSeed, which honours notes: { id, targetId, targetType, text, at }. Notes are
++// polymorphic (targetType/targetId); a note on an invoice is targetType 'INVOICE' with targetId = the
++// invoice's id, following the codebase's UPPERCASE string-enum convention and mirroring how project
++// notes use 'PROJECT'. `at` is the ISO-8601 instant the note was written and is what "newest first"
++// sorts on. Invoices are seeded the way invoice-payments does: { id, projectId, amount, status }.
++//
++// This SHOULD FAIL before the change: today an invoice's detail page has no notes region and no way
++// to write a note (notes only attach to projects).
++import { test, expect } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++test.describe('add notes to invoices', () => {
++  test("an invoice shows its own notes newest-first, and other targets' notes do not leak in", async ({
++    page,
++  }) => {
++    // Three notes on invoice 1, seeded OUT of newest-first order and with ids that do NOT match the
++    // time order — so the list can only pass if it sorts by `at`, not by id or seed order. Note 4
++    // belongs to a DIFFERENT invoice and note 5 to a PROJECT with the same numeric id (1): neither
++    // must appear on invoice 1's page, proving notes are scoped by both targetType and targetId.
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
++      invoices: [
++        { id: 1, projectId: 1, amount: 500, status: 'SENT' },
++        { id: 2, projectId: 1, amount: 900, status: 'SENT' },
++      ],
++      notes: [
++        { id: 1, targetType: 'INVOICE', targetId: 1, at: '2024-03-10T09:00:00Z', text: 'Chased payment by phone' }, // middle
++        { id: 2, targetType: 'INVOICE', targetId: 1, at: '2024-05-20T09:00:00Z', text: 'Client confirmed receipt' }, // newest
++        { id: 3, targetType: 'INVOICE', targetId: 1, at: '2024-01-05T09:00:00Z', text: 'Invoice emailed over' }, // oldest
++        { id: 4, targetType: 'INVOICE', targetId: 2, at: '2024-06-01T09:00:00Z', text: 'Other invoice note' },
++        { id: 5, targetType: 'PROJECT', targetId: 1, at: '2024-06-02T09:00:00Z', text: 'Project note, not invoice' },
++      ],
++    });
++
++    await page.goto('/invoices/1');
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++
++    const notes = page.getByTestId('invoice-notes');
++    await expect(notes).toBeVisible();
++    const list = page.getByTestId('invoice-notes-list');
++    await expect(list).toBeVisible();
++    // There are notes, so this invoice is not in the empty state.
++    await expect(page.getByTestId('invoice-notes-empty')).toHaveCount(0);
++
++    // Each of invoice 1's notes is a row keyed by the note's id, carrying that note's text.
++    await expect(page.getByTestId('note-row-1').getByTestId('note-text')).toHaveText('Chased payment by phone');
++    await expect(page.getByTestId('note-row-2').getByTestId('note-text')).toHaveText('Client confirmed receipt');
++    await expect(page.getByTestId('note-row-3').getByTestId('note-text')).toHaveText('Invoice emailed over');
++
++    // Neither the other invoice's note nor the same-id project's note leaks into invoice 1's list.
++    await expect(page.getByTestId('note-row-4')).toHaveCount(0);
++    await expect(page.getByTestId('note-row-5')).toHaveCount(0);
++    await expect(list).not.toContainText('Other invoice note');
++    await expect(list).not.toContainText('Project note, not invoice');
++
++    // Newest first: confirmed (2024-05-20) then chased (2024-03-10) then emailed (2024-01-05).
++    // toHaveText with an array pins both the exact set and its DOM order.
++    await expect(list.getByTestId('note-text')).toHaveText([
++      'Client confirmed receipt',
++      'Chased payment by phone',
++      'Invoice emailed over',
++    ]);
++  });
++
++  test('an invoice with no notes shows an empty state and no note rows', async ({ page }) => {
++    // The invoice exists, so the page can only be empty of NOTES, not of everything.
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
++      invoices: [{ id: 1, projectId: 1, amount: 500, status: 'SENT' }],
++      notes: [],
++    });
++
++    await page.goto('/invoices/1');
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++
++    await expect(page.getByTestId('invoice-notes')).toBeVisible();
++    await expect(page.getByTestId('invoice-notes-empty')).toBeVisible();
++    await expect(page.getByTestId('note-text')).toHaveCount(0);
++  });
++
++  test('writing a note adds it to the invoice and shows the newest one first', async ({ page }) => {
++    // One existing note written long ago, so anything written now is unambiguously newer than it
++    // (years apart — no dependence on sub-second ordering) and must sort above it.
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
++      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
++      invoices: [{ id: 1, projectId: 1, amount: 500, status: 'SENT' }],
++      notes: [
++        { id: 1, targetType: 'INVOICE', targetId: 1, at: '2020-01-01T00:00:00Z', text: 'Old existing note' },
++      ],
++    });
++
++    await page.goto('/invoices/1');
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++
++    const list = page.getByTestId('invoice-notes-list');
++    // The existing note is shown to begin with.
++    await expect(list.getByTestId('note-text')).toHaveText(['Old existing note']);
++
++    // Write a new note through the shared note form.
++    await expect(page.getByTestId('note-form')).toBeVisible();
++    await page.getByTestId('note-form-text').fill('Payment arrived today');
++    await page.getByTestId('note-form-submit').click();
++
++    // It appears in the list, and because it is the newest it sits above the old one.
++    await expect(list.getByTestId('note-text')).toHaveText(['Payment arrived today', 'Old existing note']);
++  });
++});

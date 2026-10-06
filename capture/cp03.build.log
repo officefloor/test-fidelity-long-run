@@ -1,0 +1,23 @@
+$ bin/build
+
+$ npm ci --silent (cwd e2e)
+
+$ npx playwright install chromium (cwd e2e)
+
+$ npx playwright test --reporter=json --workers=1 --output=/home/daniel/test-fidelity-long-run/work/202610060034/cp03/.run/pw-artifacts
+
+Running 12 tests using 1 worker
+
+[1A[2K[1/12] [chromium] › client-email.spec.ts:14:7 › client email is required and must be valid › does not show the email error before the user tries to save
+[1A[2K[2/12] [chromium] › client-email.spec.ts:23:7 › client email is required and must be valid › refuses to save a client with no email
+[1A[2K[3/12] [chromium] › client-email.spec.ts:42:7 › client email is required and must be valid › refuses to save a client with a malformed email
+[1A[2K[4/12] [chromium] › client-email.spec.ts:59:7 › client email is required and must be valid › saves the client once a proper email is provided, clearing the error
+[1A[2K[5/12] [chromium] › clients.spec.ts:11:7 › clients › lists all seeded clients in one list, each with name and email
+[1A[2K[6/12] [chromium] › clients.spec.ts:36:7 › clients › shows an empty state when there are no clients
+[1A[2K[7/12] [chromium] › clients.spec.ts:46:7 › clients › adds a client with their name and email through the form
+[1A[2K[8/12] [chromium] › clients.spec.ts:66:7 › clients › reaches the clients list from the nav
+[1A[2K[9/12] [chromium] › projects.spec.ts:15:7 › projects › lists all seeded projects, each with its name and the client it is for
+[1A[2K[10/12] [chromium] › projects.spec.ts:44:7 › projects › shows an empty state when there are no projects
+[1A[2K[11/12] [chromium] › projects.spec.ts:58:7 › projects › adds a project and picks which client it is for, then shows it with the client name
+[1A[2K[12/12] [chromium] › projects.spec.ts:85:7 › projects › reaches the projects list from the nav
+[1A[2K  12 passed (4.0s)
