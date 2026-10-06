@@ -1,0 +1,179 @@
+// Acceptance tests for the change request:
+//   "Give me a clean printable summary of a client's statement. Show the grand total they owe."
+//
+// The client statement (client-statement, reached from the client detail page through
+// client-statement-open — see client-statement.spec.ts / statement-by-job.spec.ts) already gathers
+// every invoice the client has in one place. This change adds a CLEAN PRINTABLE SUMMARY of that
+// statement: a condensed, self-contained view (statement-print-view) that says who the statement is
+// for — the client's NAME (statement-client-name) and EMAIL (statement-client-email) — and states
+// the bottom line: the GRAND TOTAL the client owes (statement-grand-total).
+//
+// "Owe" carries the app's established owed meaning (dashboard-outstanding-total /
+// invoice-owed-sent-only.spec.ts / client-statement.spec.ts's client-outstanding-total): it counts
+// only invoices that have actually been SENT and not yet paid, net of payments — i.e. the sum of
+// each sent-but-unpaid invoice's REMAINING balance across ALL of the client's projects. A DRAFT has
+// not gone out, so it is not yet owed; a PAID invoice is already in, so it adds nothing; and another
+// client's invoices never leak into this client's summary or grand total.
+//
+// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed, which honours
+// clients { id, name, email }, projects { id, clientId, name }, invoices { id, projectId, amount,
+// status } and payments { id, invoiceId, amount, date }. This change introduces NO new audit
+// record, so nothing is asserted through the audit channel here.
+//
+// The grand total is a NEW money anchor, not among the three money-format.spec pins exactly, so it
+// is matched leniently — a leading "$" and a trailing ".00" both optional — exactly as the sibling
+// statement money anchors are (see client-statement.spec.ts). Amounts, payments and the resulting
+// owed total are chosen so no value is a substring of another or of a wrong total a buggy
+// implementation would produce (one that forgot to subtract payments, counted a draft or a paid
+// invoice, or summed another client's invoices), so each assertion pins its own value. This SHOULD
+// FAIL before the change: there is no printable statement summary today.
+import { test, expect } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+// "$300.00", "300.00" or "300" all pass — the "$" and the ".00" cents are both optional. Matches how
+// the other NEW statement money anchors are asserted; exact presentation is pinned by money-format.spec.
+function money(amount: number): RegExp {
+  return new RegExp(`^\\$?${amount}(\\.00)?$`);
+}
+
+// Reach a client's statement the way a user does (same contract as client-statement.spec.ts): open
+// the client from the list, then open the statement from the client's detail page. The printable
+// summary is part of the opened statement.
+async function openStatement(page: import('@playwright/test').Page, clientId: number) {
+  await page.goto('/clients');
+  await page.getByTestId(`client-open-${clientId}`).click();
+  await expect(page.getByTestId('client-detail-page')).toBeVisible();
+  await page.getByTestId('client-statement-open').click();
+  await expect(page.getByTestId('client-statement')).toBeVisible();
+}
+
+test.describe('a clean printable summary of a client statement with the grand total owed', () => {
+  test('the printable summary names the client, shows their email, and states the grand total owed', async ({ page }) => {
+    await resetAndSeed({
+      clients: [
+        { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
+        // A different client, so the summary must pick out client 1's own name/email/total.
+        { id: 2, name: 'Globex', email: 'hello@globex.example' },
+      ],
+      projects: [
+        // Two projects for client 1 — the grand total spans ALL of the client's projects.
+        { id: 1, clientId: 1, name: 'Website redesign' },
+        { id: 2, clientId: 1, name: 'Mobile app' },
+        { id: 3, clientId: 2, name: 'Warehouse automation' },
+      ],
+      invoices: [
+        // Client 1: 500 billed, 200 paid -> 300 still owed, SENT.
+        { id: 1, projectId: 1, amount: 500, status: 'SENT' },
+        // Client 1, a DIFFERENT project: 400 billed, fully paid -> 0 owed, PAID.
+        { id: 2, projectId: 2, amount: 400, status: 'PAID' },
+        // Client 2's invoice — must not leak into client 1's summary or total.
+        { id: 3, projectId: 3, amount: 777, status: 'SENT' },
+      ],
+      payments: [
+        { id: 1, invoiceId: 1, amount: 200, date: '2025-06-15' },
+        { id: 2, invoiceId: 2, amount: 400, date: '2025-07-01' },
+        { id: 3, invoiceId: 3, amount: 0, date: '2025-02-02' },
+      ],
+    });
+
+    await openStatement(page, 1);
+
+    // The printable summary is its own self-contained view.
+    const summary = page.getByTestId('statement-print-view');
+    await expect(summary).toBeVisible();
+
+    // It says who the statement is for: the client's own name and email (not client 2's).
+    await expect(summary.getByTestId('statement-client-name')).toContainText('Acme Corp');
+    await expect(summary.getByTestId('statement-client-email')).toContainText('ops@acme.example');
+    await expect(summary.getByTestId('statement-client-name')).not.toContainText('Globex');
+    await expect(summary.getByTestId('statement-client-email')).not.toContainText('hello@globex.example');
+
+    // The bottom line: the grand total owed is invoice 1's 300 remainder. Invoice 2 is paid (0),
+    // and client 2's 777 is not this client's.
+    const grandTotal = summary.getByTestId('statement-grand-total');
+    await expect(grandTotal).toBeVisible();
+    await expect(grandTotal).toHaveText(money(300));
+    // Not 500 (invoice 1's 200 payment not subtracted), 900 (both full billed amounts, payments
+    // ignored), or 777 (another client's invoice).
+    await expect(grandTotal).not.toContainText('500');
+    await expect(grandTotal).not.toContainText('900');
+    await expect(grandTotal).not.toContainText('777');
+  });
+
+  test('the grand total is the sum of what remains on sent invoices across all the client\'s projects', async ({ page }) => {
+    await resetAndSeed({
+      clients: [
+        { id: 1, name: 'Acme Corp', email: 'ops@acme.example' },
+        { id: 2, name: 'Globex', email: 'hello@globex.example' },
+      ],
+      projects: [
+        { id: 1, clientId: 1, name: 'Website redesign' },
+        { id: 2, clientId: 1, name: 'Mobile app' },
+        { id: 3, clientId: 2, name: 'Warehouse automation' },
+      ],
+      invoices: [
+        // Two SENT invoices on two different projects of client 1, each part paid:
+        //   500 - 200 = 300 owed, and 400 - 150 = 250 owed  ->  grand total 550.
+        { id: 1, projectId: 1, amount: 500, status: 'SENT' },
+        { id: 2, projectId: 2, amount: 400, status: 'SENT' },
+        // A PAID invoice: already in, adds nothing.
+        { id: 3, projectId: 1, amount: 90, status: 'PAID' },
+        // A DRAFT: not yet sent, so not yet owed.
+        { id: 4, projectId: 2, amount: 600, status: 'DRAFT' },
+        // Client 2's SENT invoice — must not count toward client 1's grand total.
+        { id: 5, projectId: 3, amount: 777, status: 'SENT' },
+      ],
+      payments: [
+        { id: 1, invoiceId: 1, amount: 200, date: '2025-06-15' },
+        { id: 2, invoiceId: 2, amount: 150, date: '2025-07-01' },
+        { id: 3, invoiceId: 3, amount: 90, date: '2025-08-01' },
+        { id: 4, invoiceId: 5, amount: 0, date: '2025-02-02' },
+      ],
+    });
+
+    await openStatement(page, 1);
+
+    const summary = page.getByTestId('statement-print-view');
+    await expect(summary).toBeVisible();
+
+    // Grand total owed = 300 + 250 = 550.
+    const grandTotal = summary.getByTestId('statement-grand-total');
+    await expect(grandTotal).toHaveText(money(550));
+    // Not 900 (500 + 400, full sent amounts, payments ignored).
+    await expect(grandTotal).not.toContainText('900');
+    // Not 1150 (550 + the un-sent 600 draft counted as owed).
+    await expect(grandTotal).not.toContainText('1150');
+    // Not 640 (550 + the already-paid 90 invoice).
+    await expect(grandTotal).not.toContainText('640');
+    // Not the other client's 777.
+    await expect(grandTotal).not.toContainText('777');
+  });
+
+  test('a client who owes nothing shows a zero grand total', async ({ page }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'ops@acme.example' }],
+      projects: [{ id: 1, clientId: 1, name: 'Website redesign' }],
+      invoices: [
+        // Fully paid -> owed 0.
+        { id: 1, projectId: 1, amount: 400, status: 'PAID' },
+        // Still a DRAFT -> not yet owed.
+        { id: 2, projectId: 1, amount: 600, status: 'DRAFT' },
+      ],
+      payments: [{ id: 1, invoiceId: 1, amount: 400, date: '2025-06-15' }],
+    });
+
+    await openStatement(page, 1);
+
+    const summary = page.getByTestId('statement-print-view');
+    await expect(summary).toBeVisible();
+    await expect(summary.getByTestId('statement-client-name')).toContainText('Acme Corp');
+    await expect(summary.getByTestId('statement-client-email')).toContainText('ops@acme.example');
+
+    // Nothing is owed: the paid invoice is already in and the draft has not gone out.
+    const grandTotal = summary.getByTestId('statement-grand-total');
+    await expect(grandTotal).toHaveText(money(0));
+    // Not 400 (the paid invoice), 600 (the draft), nor 1000 (both billed).
+    await expect(grandTotal).not.toContainText('400');
+    await expect(grandTotal).not.toContainText('600');
+  });
+});
