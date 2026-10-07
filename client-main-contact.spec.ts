@@ -1,0 +1,228 @@
+// Acceptance test for the change request:
+//   "Let me pick a main contact for each client. Show who it is."
+//
+// Each client can have ONE of its contacts chosen as its main (primary) contact. A client's detail
+// page (/clients/<id>, client-detail-page) surfaces a main-contact region (client-main-contact)
+// which both SHOWS who the current main contact is (client-primary-contact) and offers the CHOICES
+// to pick one (client-main-contact-choices), a choice per one of this client's contacts
+// (contact-primary-<id>, keyed by the contact's id). Picking a contact makes it the main contact:
+// the shown main contact updates to it, the choice persists across a fresh load, and only ONE
+// contact is the main at a time — picking another unseats the first.
+//
+// The main contact is per-client: each client has its own, independent of other clients. Choices
+// only ever offer THIS client's contacts.
+//
+// Setting a client's main contact is audited so the choice can be checked back later: it records
+// exactly one line — `CONTACT_PRIMARY_SET client=<client> contact=<contact>`. The <client> /
+// <contact> fields identify the client and the contact; the test binds to the MEANING by accepting
+// either the seeded id or the seeded name for each, rather than pinning one choice of identifier.
+// Merely seeding or viewing a main contact records nothing.
+//
+// Asserts ONLY through the two public channels: the UI (data-testid) and the audit file
+// (auditLines()). Data is arranged via resetAndSeed (the app's /__test__ endpoint): `clients`
+// honours { id, name, email } and `contacts` honours { id, name, email, role, clientId, primary }
+// (primary marks a seeded contact as its client's main contact).
+import { test, expect, type Page, type Locator } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+import { auditLines } from '../support/audit';
+
+// The per-contact "make this the main contact" choices, each keyed contact-primary-<id>. This prefix
+// is distinct from the contacts table's contact-name / contact-email / contact-role / contact-row-.
+const primaryChoices = (page: Page): Locator => page.locator('[data-testid^="contact-primary-"]');
+
+// Audit matcher. The <client> / <contact> fields may be written as the id or the name, so accept
+// either (a known id is passed where it is known; otherwise any id is allowed alongside the name).
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+type Ref = { id?: number; name: string };
+const primarySetRe = (client: Ref, contact: Ref) =>
+  new RegExp(
+    `^CONTACT_PRIMARY_SET client=(?:${client.id ?? '\\d+'}|${esc(client.name)}) contact=(?:${contact.id ?? '\\d+'}|${esc(contact.name)})$`,
+  );
+
+const linesMatching = (re: RegExp): string[] => auditLines().filter((l) => re.test(l));
+
+async function gotoClient(page: Page, id: number): Promise<void> {
+  await page.goto(`/clients/${id}`);
+  await expect(page.getByTestId('client-detail-page')).toBeVisible();
+  await expect(page.getByTestId('client-main-contact')).toBeVisible();
+}
+
+test.describe("A client's main contact", () => {
+  test('a client with a seeded main contact shows who it is, scoped to that client', async ({
+    page,
+  }) => {
+    await resetAndSeed({
+      clients: [
+        { id: 1, name: 'Acme Corp', email: 'hello@acme.test' },
+        { id: 2, name: 'Globex', email: 'contact@globex.test' },
+      ],
+      contacts: [
+        { id: 1, name: 'Alice Stone', email: 'alice@acme.test', role: 'Owner', clientId: 1, primary: true },
+        { id: 2, name: 'Bob Reed', email: 'bob@acme.test', role: 'Billing', clientId: 1 },
+        // A different client's contact, itself marked primary for ITS client — must not leak here.
+        { id: 3, name: 'Carol Vane', email: 'carol@globex.test', role: 'Manager', clientId: 2, primary: true },
+      ],
+    });
+
+    await gotoClient(page, 1);
+
+    // The shown main contact is Acme's chosen one, Alice — not the other Acme contact, and not the
+    // other client's contact.
+    await expect(page.getByTestId('client-primary-contact')).toContainText('Alice Stone');
+    await expect(page.getByTestId('client-primary-contact').filter({ hasText: 'Bob Reed' })).toHaveCount(0);
+    await expect(page.getByTestId('client-primary-contact').filter({ hasText: 'Carol Vane' })).toHaveCount(0);
+
+    // The choices are scoped to Acme's own contacts: Bob (another Acme contact) can be picked, while
+    // the OTHER client's contact (Carol) is never offered here. (We don't assume whether the
+    // already-chosen contact stays among the choices — only that choosing is scoped to this client.)
+    await expect(page.getByTestId('client-main-contact-choices')).toBeVisible();
+    await expect(page.getByTestId('contact-primary-2')).toBeVisible();
+    await expect(page.getByTestId('contact-primary-3')).toHaveCount(0);
+
+    // Merely seeding/viewing a main contact records nothing — reset cleared the audit file.
+    expect(auditLines()).toEqual([]);
+  });
+
+  test('a client with no main contact picked shows none, yet still offers a choice per contact', async ({
+    page,
+  }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
+      contacts: [
+        { id: 1, name: 'Alice Stone', email: 'alice@acme.test', role: 'Owner', clientId: 1 },
+        { id: 2, name: 'Bob Reed', email: 'bob@acme.test', role: 'Billing', clientId: 1 },
+      ],
+    });
+
+    await gotoClient(page, 1);
+
+    // Nothing is chosen yet: the shown main contact names neither contact.
+    await expect(page.getByTestId('client-primary-contact').filter({ hasText: 'Alice Stone' })).toHaveCount(0);
+    await expect(page.getByTestId('client-primary-contact').filter({ hasText: 'Bob Reed' })).toHaveCount(0);
+
+    // But a choice is offered for each of the client's contacts.
+    await expect(page.getByTestId('client-main-contact-choices')).toBeVisible();
+    await expect(primaryChoices(page)).toHaveCount(2);
+
+    expect(auditLines()).toEqual([]);
+  });
+
+  test('picking a main contact shows it, persists across a reload, and records it exactly once', async ({
+    page,
+  }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
+      contacts: [
+        { id: 1, name: 'Alice Stone', email: 'alice@acme.test', role: 'Owner', clientId: 1 },
+        { id: 2, name: 'Bob Reed', email: 'bob@acme.test', role: 'Billing', clientId: 1 },
+      ],
+    });
+
+    const client = { id: 1, name: 'Acme Corp' };
+    const bob = { id: 2, name: 'Bob Reed' };
+
+    await gotoClient(page, 1);
+    // No main contact to begin with, and nothing recorded — proof the pick below writes it.
+    await expect(page.getByTestId('client-primary-contact').filter({ hasText: 'Bob Reed' })).toHaveCount(0);
+    expect(auditLines()).toEqual([]);
+
+    // Pick Bob as the main contact.
+    await page.getByTestId('contact-primary-2').click();
+
+    // The shown main contact becomes Bob.
+    await expect(page.getByTestId('client-primary-contact')).toContainText('Bob Reed');
+
+    // Exactly one record was kept for this choice, identifying the client and the contact.
+    expect(linesMatching(primarySetRe(client, bob))).toHaveLength(1);
+    expect(auditLines()).toHaveLength(1);
+
+    // The choice is held by the server: it survives a fresh load and does not record itself again.
+    await page.reload();
+    await expect(page.getByTestId('client-main-contact')).toBeVisible();
+    await expect(page.getByTestId('client-primary-contact')).toContainText('Bob Reed');
+    expect(linesMatching(primarySetRe(client, bob))).toHaveLength(1);
+    expect(auditLines()).toHaveLength(1);
+  });
+
+  test('picking a different contact replaces the main contact — only one at a time', async ({
+    page,
+  }) => {
+    await resetAndSeed({
+      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
+      contacts: [
+        { id: 1, name: 'Alice Stone', email: 'alice@acme.test', role: 'Owner', clientId: 1, primary: true },
+        { id: 2, name: 'Bob Reed', email: 'bob@acme.test', role: 'Billing', clientId: 1 },
+      ],
+    });
+
+    const client = { id: 1, name: 'Acme Corp' };
+    const bob = { id: 2, name: 'Bob Reed' };
+
+    await gotoClient(page, 1);
+    // Alice is the seeded main contact; seeding recorded nothing.
+    await expect(page.getByTestId('client-primary-contact')).toContainText('Alice Stone');
+    expect(auditLines()).toEqual([]);
+
+    // Pick Bob instead — he becomes the main contact and Alice is unseated.
+    await page.getByTestId('contact-primary-2').click();
+
+    await expect(page.getByTestId('client-primary-contact')).toContainText('Bob Reed');
+    await expect(page.getByTestId('client-primary-contact').filter({ hasText: 'Alice Stone' })).toHaveCount(0);
+
+    // Only the new choice was recorded (reset cleared the file; seeding the old primary wrote nothing).
+    expect(linesMatching(primarySetRe(client, bob))).toHaveLength(1);
+    expect(auditLines()).toHaveLength(1);
+
+    // The replacement persists across a fresh load.
+    await page.reload();
+    await expect(page.getByTestId('client-primary-contact')).toContainText('Bob Reed');
+    await expect(page.getByTestId('client-primary-contact').filter({ hasText: 'Alice Stone' })).toHaveCount(0);
+  });
+
+  test('each client has its own main contact, independent of other clients', async ({ page }) => {
+    await resetAndSeed({
+      clients: [
+        { id: 1, name: 'Acme Corp', email: 'hello@acme.test' },
+        { id: 2, name: 'Globex', email: 'contact@globex.test' },
+      ],
+      contacts: [
+        { id: 1, name: 'Alice Stone', email: 'alice@acme.test', role: 'Owner', clientId: 1 },
+        { id: 2, name: 'Bob Reed', email: 'bob@acme.test', role: 'Billing', clientId: 1 },
+        { id: 3, name: 'Carol Vane', email: 'carol@globex.test', role: 'Manager', clientId: 2 },
+        { id: 4, name: 'Dana Fox', email: 'dana@globex.test', role: 'Support', clientId: 2 },
+      ],
+    });
+
+    const acme = { id: 1, name: 'Acme Corp' };
+    const globex = { id: 2, name: 'Globex' };
+    const bob = { id: 2, name: 'Bob Reed' };
+    const carol = { id: 3, name: 'Carol Vane' };
+
+    // Pick Bob for Acme.
+    await gotoClient(page, 1);
+    await expect(primaryChoices(page)).toHaveCount(2); // only Acme's two contacts are choices
+    await page.getByTestId('contact-primary-2').click();
+    await expect(page.getByTestId('client-primary-contact')).toContainText('Bob Reed');
+
+    // Globex has its own, still-unpicked main contact; its choices are only Globex's contacts.
+    await gotoClient(page, 2);
+    await expect(primaryChoices(page)).toHaveCount(2);
+    await expect(page.getByTestId('contact-primary-3')).toBeVisible();
+    await expect(page.getByTestId('contact-primary-4')).toBeVisible();
+    await expect(page.getByTestId('client-primary-contact').filter({ hasText: 'Bob Reed' })).toHaveCount(0);
+
+    // Pick Carol for Globex.
+    await page.getByTestId('contact-primary-3').click();
+    await expect(page.getByTestId('client-primary-contact')).toContainText('Carol Vane');
+
+    // Acme's choice is untouched by Globex's.
+    await gotoClient(page, 1);
+    await expect(page.getByTestId('client-primary-contact')).toContainText('Bob Reed');
+    await expect(page.getByTestId('client-primary-contact').filter({ hasText: 'Carol Vane' })).toHaveCount(0);
+
+    // Each client's pick was recorded once, bound to the right client and contact.
+    expect(linesMatching(primarySetRe(acme, bob))).toHaveLength(1);
+    expect(linesMatching(primarySetRe(globex, carol))).toHaveLength(1);
+    expect(auditLines()).toHaveLength(2);
+  });
+});
