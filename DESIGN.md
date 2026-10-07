@@ -194,7 +194,10 @@ Unreachable, and `verify_denied` refuses to start the turn if any of it is:
 That last point is the asymmetry worth protecting. **The agent cannot confirm its new test
 passes** — the behaviour does not exist yet. That is the hard part of test-first work and the
 main source of test inaccuracy, so it is the thing being measured. Showing cpN would remove it
-and turn the exercise into "write a test that passes", which is easy and tells us nothing.
+and turn the exercise into "write a test that passes" — easy, and against the green gate alone it
+tells us nothing. The mutation gate is what that reading misses: a test that passes against cpN
+still has to kill every mutation (§6), so **prototype-first** (showing cpN) is a legitimate
+condition in its own right (§4.4), not only the diagnostic ceiling it looks like here.
 
 Two consequences to keep in mind:
 
@@ -202,9 +205,9 @@ Two consequences to keep in mind:
   iterate to green. Unavoidable, harmless, and consistent with mutation zero inverting (§5).
 - `code_view` is therefore a condition, not a constant: `previous` (the default and the
   pipeline-faithful setting), `none` (contract and prior tests only — strictly harder, and it
-  conflates navigation failures with comprehension failures), and `current` (diagnostic only — a
-  ceiling: if fidelity is poor even with the implementation visible, the problem is not
-  information).
+  conflates navigation failures with comprehension failures), and `current` (**prototype-first**:
+  tests against the validated implementation — a real workflow and a graded condition, not only a
+  ceiling; §4.4).
 
 ### §4.3 Two modes
 
@@ -246,6 +249,131 @@ capture's `total_selected` exactly at every checkpoint sampled (cp01, 05, 08, 25
 least one test at every checkpoint and never shrinks, so a non-decreasing requirement holds on
 known-good tests. The leniency of allowing *equal* is headroom for the agent, not a workaround for
 the fixture.
+
+## §4.4 Information and feedback conditions
+
+The default loop measures one point: a blind author, request and contract, one shot (§4.1). But
+*can the agent write the test* is a family of questions, because teams reach a correct test by more
+than one route, and each route hands the author something blindness withholds. Each route is a
+**condition** — one run, graded by the identical pipeline (§5–§6), differing only in what the
+author is given or what becomes of its draft. Holding the grader fixed is the whole point: the
+conditions are comparable precisely because only the input moves. They are research arms, not
+rigour trade-offs — the default run stays blind (§10.1).
+
+They fall on three axes.
+
+**Information — what the author knows of the intended behaviour before it writes.**
+
+| condition | the author is given | models |
+| --- | --- | --- |
+| **blind** (default) | the request and the contract only | the one-shot pipeline as it stands today |
+| **clarify-oracle** | a prompter-proxy (§4.5) it may ask behavioural questions, within a budget | a developer asking the product owner "what should happen when…" |
+| **prototype-first** | the validated checkpoint application cpN (this *is* `code_view=current`) | tests written against a prototype the prompter already confirmed correct |
+
+**Process — how the author works, the information held fixed.**
+
+| condition | what changes | models |
+| --- | --- | --- |
+| **blind AI-review** | after the draft, a second turn (the same author or a separate blind reviewer) critiques the suite for behavioural gaps and it is revised — no ground truth | a self- or peer-review pass before the tests are handed on |
+| **write-twice** | two independent blind authors; their suites are compared and reconciled | a second opinion, or pairing |
+
+**Feedback — what becomes of the draft once written.**
+
+| condition | what changes | models |
+| --- | --- | --- |
+| **prompter-proxy review** | a reviewer (§4.5) reads the draft and returns English behavioural feedback — what the request wanted that the suite misses — never test structure | the prompter who knows the goal but not how to test it |
+
+**write-twice is conditional on variance.** It is designed now but run only once the base agent
+runs show high spread — the chain-level bootstrap of §8.1 is the signal. Low variance means the
+author's misses are systematic, a second independent author repeats them, and reconciliation buys
+nothing; high variance means they are idiosyncratic and a second draft can cover the first's gaps.
+Running it against low variance would spend a whole second run to learn what the bootstrap already
+said.
+
+### §4.4.1 The ladder is the result, not three scores
+
+The three information rungs matter most for what their *differences* isolate — they split test
+infidelity into its two causes, which the blind score alone cannot tell apart:
+
+- **blind → prototype-first** is the **comprehension** gap: behaviour the author could not infer
+  from English and contract but could pin once the implementation was in front of it.
+- the mutations that **survive even under prototype-first** are the **expression** gap: behaviour
+  the author understood and still failed to capture — with cpN visible, lack of information is
+  excluded, so whatever the suite misses is a test-writing failure, not a reading one.
+- **clarify-oracle** sits between the two and says *which* comprehension gap is present: if asking
+  closes most of blind → prototype-first, the requests are merely under-specified and interaction
+  repairs them; if it barely moves, the gap is irreducible and no amount of "ask the owner" helps.
+
+This is why `current` is not the "diagnostic ceiling" §4.2 first called it. That reading held only
+while green-at-cpN was imagined as the signal — against visible code a passing test is trivial. But
+the signal is the **mutation kill rate** (§6), and a mutation falls only to a test that pins the
+behaviour it breaks, code visible or not. Prototype-first is a real workflow — the tangible-prototype
+path, where the prompter refines an implementation until it is correct (cpN is that refined
+end-state) and tests are then written to lock it against regression — and the grader scores it
+honestly.
+
+### §4.4.2 Prototype-first trades one wrong-test failure for the other
+
+Blindness guards the **false-green** test — the one that passes against a wrong implementation and
+waves a bad change through (§1). Handing the author cpN removes that risk and installs its mirror:
+the **false-red**, the over-specified test that asserts some incidental fact of cpN and then breaks
+on a *legitimate* later change. The grader as specified rewards kills and forbids shrinkage; it
+does not penalise over-specification at all.
+
+The measure for it is already next door. This harness's sibling fixes the tests and grows the
+application precisely to watch legitimate change *not* break good tests, so the check is to
+**replay a prototype-first suite forward**: install the suite authored at cpN against cp(N+1..60)
+and count how many downstream legitimate changes it breaks. That is a direct read on the
+over-specification visible code encourages, and it adds no measurement — only `analyse` (§8.1)
+pointed at a frozen suite carried forward along the chain.
+
+### §4.4.3 Self-implementation, and why it waits
+
+Prototype-first tests against cpN, the prompter-validated prototype. Its unvalidated twin lets the
+author write a throwaway implementation from *its own* reading of the request, confirm the new test
+goes red→green against that, and discard it — only the `*.spec.ts` is graded, and the scratch
+implementation is never copied back (§11.1). It leaks nothing: the author sees only its own
+interpretation, so a misread yields a wrong implementation *and* a wrong test, scored as
+infidelity. What it restores is the red→green discipline blindness removes (§4.2), which kills the
+vacuous or unsatisfiable test. Its one use is the pair **prototype-first − self-implementation =
+what the prompter's validation of the prototype buys**; without that question it collapses into
+prototype-first at the price of writing an application every checkpoint, so it is designed here and
+left out of the first runs.
+
+## §4.5 Grounding and disclosure: what a proxy may say
+
+The clarify-oracle and the prompter-proxy review both set a second agent — a **prompter-proxy** —
+beside the author, one answering its questions before the draft, one feeding back on the draft
+after. Both know what the author must not be handed, so both can quietly turn their condition into
+prototype-first-by-paraphrase. One rule and one audit keep them honest.
+
+**The rule: a proxy is grounded in intent, never in the reference tests.** It may state what the
+change should *do*, in behavioural and domain terms — "archived clients stay out of the default
+list" — and it may never supply a `data-testid`, an assertion, a literal value, or an audit-record
+shape beyond what the contract already publishes (§3). Concretely, the proxy runs in its own
+confined area (§7) with **cpN readable** — it is the knowledgeable owner, so it is allowed the
+answer the author is denied — but with the reference tests `acceptance/specs/` **withheld from it
+too**. That asymmetry is deliberate: grounded in the implementation's behaviour, a proxy describes
+behaviour; grounded in the tests, it would speak in the tests' vocabulary and leak assertions by
+reflex. The author never sees cpN — it sees only English behaviour, which is strictly less than the
+implementation, which is why clarify-oracle stays below prototype-first on the ladder.
+
+**The alternative, and why not.** The proxy could instead be grounded in the reference tests and
+held back only by instruction — "answer, but never quote the test." That was weighed and rejected:
+it makes the discipline the measurement's single point of failure, and the leak it invites is
+exactly the one that would inflate every proxy condition toward prototype-first. Intent-grounding
+makes the rule structural rather than behavioural — the proxy cannot disclose an assertion it was
+never given.
+
+**The audit: every exchange is recorded, and is itself a result.** Each question, each answer, each
+feedback note lands in `cpNN.json` and is readable in the capture. It is the leak check — a
+reviewer can see whether an answer crossed into test structure — and it is diagnostic in its own
+right: the questions the author felt it had to ask are a direct map of where the English request is
+ambiguous, worth reading whatever the score.
+
+**A budget, because patience is finite.** The clarify-oracle answers a bounded number of questions,
+a recorded condition parameter; an unbounded oracle approaches full disclosure and stops modelling
+any real interaction. The budget spent is itself measured.
 
 ## §5 Grading: fidelity testing
 
@@ -373,6 +501,10 @@ The deny list's least obvious entry is `reference/`: the patch chain is every fu
 code. Build the area by materialising cp(N-1) somewhere else and copying it in — never by giving
 the confined area access to the patches.
 
+The conditions of §4.4 add a second leak surface: a prompter-proxy that is handed cpN and must not
+pass it on. That is governed separately (§4.5) — the proxy is grounded in behaviour, denied the
+reference tests, and every exchange is logged for audit.
+
 ## §8 Test-suite erosion
 
 ### §8.1 Analysis is post-hoc, not part of the run
@@ -462,6 +594,11 @@ file + substring so they survive the line moving) and keep refusing everything e
 the same application — so a second chain re-measures nothing but environmental flakiness, which
 `repeats` already measures per checkpoint at a fraction of the cost. `--chains` overrides it.
 
+The information and feedback conditions of §4.4 are a different axis from this table: they do not
+trade rigour for cost, they ask different questions. So the default run does not switch them on — it
+is blind, the top rung of the ladder — and each condition is enabled explicitly for the arm that
+needs it.
+
 ## §11 Status
 
 **Built and verified**
@@ -492,6 +629,11 @@ the same application — so a second chain re-measures nothing but environmental
 replay (which calibrates the catalogue and proves the fixture), the two outstanding fixture
 repairs, and then agent runs. Flake detection, suite runtime and churn, and the degradation slope are
 now in place — the last three in `fidelity/analyse.py` rather than in the run (§8.1).
+
+The §4.4 conditions beyond blind and `code_view` are **designed but unbuilt** (§4.4–§4.5): the
+prompter-proxy behind the clarify-oracle and the prompter-proxy review, the blind AI-review turn,
+write-twice, and the forward-replay over-specification check. Blind and prototype-first already run
+through `code_view`.
 
 ### §11.1 What the agent's area actually contains
 
