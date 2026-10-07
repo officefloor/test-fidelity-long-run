@@ -80,16 +80,25 @@ def _git(repo: str, *args: str) -> str:
 def branch_refs(run_id: str) -> dict[int, str]:
     """chain -> the run's suite branch as seen from THIS repository, local head preferred.
 
-    Named by run.py's init_suite_repo, so discovery is a glob rather than configuration."""
-    pat = f"agent/{run_id}-chain*"
+    Named by run.py's suite_branch, so discovery is a glob rather than configuration. Both
+    shapes are matched: `agent/<id>/<condition>/chain<N>` as runs are named now, and the
+    `agent/<id>-chain<N>` of runs made before the condition was in the name."""
+    pats = [f"agent/{run_id}/*/chain*", f"agent/{run_id}-chain*"]
     out = _git(ROOT, "for-each-ref", "--format=%(refname)",
-               f"refs/heads/{pat}", f"refs/remotes/*/{pat}")
+               *[f"refs/heads/{p}" for p in pats],
+               *[f"refs/remotes/*/{p}" for p in pats])
     refs: dict[int, str] = {}
     for ref in sorted(out.split()):            # refs/heads sorts ahead of refs/remotes
-        m = re.search(r"-chain(\d+)$", ref)
+        m = re.search(r"[-/]chain(\d+)$", ref)
         if m:
             refs.setdefault(int(m.group(1)), ref)
     return refs
+
+
+def condition_of(ref: str) -> str | None:
+    """The §4.4 arm a branch is named for, or None for a pre-condition branch name."""
+    m = re.search(r"^.*?agent/[^/]+/([^/]+)/chain\d+$", ref)
+    return m.group(1) if m else None
 
 
 def sources(run_id: str) -> dict[int, tuple[str, str]]:
@@ -108,6 +117,28 @@ def sources(run_id: str) -> dict[int, tuple[str, str]]:
             out[int(n)] = ("runs", d)
     for chain, ref in branch_refs(run_id).items():
         out[chain] = ("branch", ref)
+    return out
+
+
+def conditions(run_id: str) -> dict[int, str]:
+    """chain -> the §4.4 arm the run was. From the branch name, else the run manifest."""
+    out: dict[int, str] = {}
+    for chain, (kind, locator) in sorted(sources(run_id).items()):
+        c = condition_of(locator) if kind == "branch" else None
+        if c is None:
+            try:
+                if kind == "branch":
+                    man = json.loads(_git(ROOT, "show", f"{locator}:capture/run.json"))
+                else:
+                    man = json.load(open(os.path.join(locator, "run.json")))
+                # a replay run is not an arm at all — it installs a known-good suite to validate
+                # the harness, so it has no condition to be missing
+                c = ("n/a (replay)" if man.get("mode") == "replay"
+                     else man.get("condition")
+                     or ("prototype-first" if man.get("code_view") == "current" else None))
+            except Exception:
+                c = None
+        out[chain] = c or "unlabelled"
     return out
 
 
@@ -262,7 +293,7 @@ def main() -> int:
     rows = load(args.run_id)
     if not rows:
         raise SystemExit(
-            f"no checkpoint records for {args.run_id}: no agent/{args.run_id}-chain* branch "
+            f"no checkpoint records for {args.run_id}: no agent/{args.run_id}/*/chain* branch "
             f"in this repository, no runs/{args.run_id}/chain*/suite/capture/, and nothing "
             f"under results/{args.run_id}/. Fetch the run's branch, or name a run that exists.")
     churn(args.run_id, rows)
@@ -274,6 +305,12 @@ def main() -> int:
          f"- chains: {chains}",
          f"- checkpoints graded: {len(rows)}",
          f"- records from: {describe(args.run_id)}"]
+    cond = conditions(args.run_id)
+    if cond:
+        uniq = sorted(set(cond.values()))
+        L += [f"- condition (DESIGN.md §4.4): {uniq[0]}" if len(uniq) == 1 else
+              f"- condition (DESIGN.md §4.4): **MIXED** {dict(sorted(cond.items()))} — chains "
+              f"of one run must be the same arm; these are not comparable as one run"]
 
     graded = [r for r in rows if r["mutations_authored"]]
     kr = [r["kill_rate"] for r in rows if r["kill_rate"] is not None]

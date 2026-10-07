@@ -124,12 +124,20 @@ git fetch origin 'refs/heads/agent/*:refs/remotes/origin/agent/*'
 $V -m fidelity.analyse --run-id 202610060034
 ```
 
-An agent run is wholly contained in its two suite branches, `agent/<run-id>-chain{1,2}` — one
+An agent run is wholly contained in its two suite branches,
+`agent/<run-id>/<condition>/chain{1,2}` — one
 commit per checkpoint, plus a final commit holding that chain's whole capture (the prompts, the
 agent's streamed turns, the gate output, the mutation verdicts). `analyse` reads them from git
 directly, so `results/` is a scratch copy of a finished run and can be deleted. It stays the
 source for the two cases with no branch: a replay run commits nothing, and an unfinished run has
 no capture commit yet.
+
+The `<condition>` is the DESIGN.md §4.4 arm the run was — `blind` by default. It is in the branch
+name because §4.4 compares arms **run by run**: a bare run id says nothing about which arm it was,
+and `analyse` reports it in its header so two runs are never compared across a difference nobody
+noticed. `agent` mode refuses a condition it cannot actually carry out, so a branch is never named
+for an arm the run did not run — only `blind` and `prototype-first` (which *is* `code_view=current`)
+are implemented today.
 
 Separate from the run on purpose: everything it produces is derived, so it can be re-run and
 corrected for free against a finished run — whereas the run itself produces the irreproducible

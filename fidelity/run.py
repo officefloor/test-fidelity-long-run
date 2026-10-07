@@ -36,6 +36,30 @@ from fidelity import (capture, changes, erosion, mutations as mut, sandbox as sb
 BAR = "=" * 78
 SUB = "-" * 78
 
+# DESIGN.md §4.4: the research arms. Value is why an arm cannot be run yet, or "" when it can —
+# the conditions differ in what the author is given or what becomes of its draft, and four of them
+# need machinery that does not exist. Declared anyway, so the vocabulary is one list rather than
+# scattered strings, and so a run cannot be named for an arm it did not carry out.
+CONDITIONS = {
+    "blind": "",
+    "prototype-first": "",                 # == code_view=current, which already exists
+    "clarify-oracle": "needs the prompter-proxy of §4.5 and a question budget",
+    "blind-ai-review": "needs a second critique-and-revise turn after the draft",
+    "write-twice": "needs two independent authors and a reconciliation step; §4.4 also gates "
+                   "it on the chain-level bootstrap showing high spread",
+    "prompter-proxy-review": "needs the reviewer of §4.5 returning behavioural feedback",
+}
+
+
+def suite_branch(run_id: str, condition: str, chain: int) -> str:
+    """The run's per-chain suite branch.
+
+    Shaped like the erosion harness's `evolve/<run-id>/<variant>/<chain>` so the two harnesses
+    read the same way. The condition is in the name because §4.4 compares arms RUN BY RUN — a
+    bare run id says nothing about which arm it was, and the answer is only recoverable from a
+    config buried in the run manifest."""
+    return f"agent/{run_id}/{condition}/chain{chain}"
+
 
 def now() -> str:
     return dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -584,6 +608,8 @@ def main() -> int:
     ap.add_argument("--config", default=os.path.join(ROOT, "config.yaml"))
     ap.add_argument("--mode", choices=("replay", "agent"), default=None)
     ap.add_argument("--code-view", choices=("previous", "none", "current"), default=None)
+    ap.add_argument("--condition", choices=tuple(CONDITIONS), default=None,
+                    help="which DESIGN.md §4.4 arm this run is; names the suite branch")
     ap.add_argument("--from", dest="first", type=int, default=1)
     ap.add_argument("--to", dest="last", type=int, default=60)
     ap.add_argument("--checkpoint", type=int, help="just this one")
@@ -615,6 +641,24 @@ def main() -> int:
     cfg = load_config(args.config)
     args.mode = args.mode or cfg.get("mode") or "replay"
     args.code_view = args.code_view or cfg.get("code_view") or "previous"
+    args.condition = args.condition or cfg.get("condition") or "blind"
+    if args.mode == "agent":
+        why = CONDITIONS[args.condition]
+        if why:
+            raise SystemExit(
+                f"condition `{args.condition}` is declared but not implemented: {why}\n"
+                f"Running it would commit a branch named for an arm the run did not carry out. "
+                f"Implement it, or pick one of: "
+                f"{', '.join(c for c, w in CONDITIONS.items() if not w)}")
+        # prototype-first IS code_view=current (DESIGN.md §4.4), so the two cannot disagree —
+        # a run mislabelled here would be named for an arm it did not run, which is exactly what
+        # putting the condition in the branch name is meant to prevent.
+        want = {"blind": ("previous", "none"), "prototype-first": ("current",)}[args.condition]
+        if args.code_view not in want:
+            raise SystemExit(
+                f"condition `{args.condition}` requires code_view in {want}, got "
+                f"`{args.code_view}`. prototype-first is code_view=current and blind is not; "
+                f"pick the condition that matches the information the author is actually given.")
     args.run_id = args.run_id or dt.datetime.now().strftime("%Y%m%d%H%M")
     if args.checkpoint:
         args.first = args.last = args.checkpoint
@@ -655,6 +699,8 @@ def main() -> int:
     print(BAR)
     print(f"test-fidelity-long-run   mode={args.mode}  code_view={args.code_view}  "
           f"run_id={args.run_id}")
+    if args.mode == "agent":
+        print(f"  condition : {args.condition}  (DESIGN.md §4.4)")
     print(f"  chains    : {chain_list}" + ("  (replay is deterministic, so the configured 2 "
                                            "collapse to 1 — pass --chains to override)"
                                            if collapsed else ""))
@@ -669,7 +715,7 @@ def main() -> int:
     else:
         print(f"  agent     : {args.model or cfg.get('model')}  code_view={args.code_view}")
         print(f"  suite repo: runs/{args.run_id}/chain<N>/suite  "
-              f"(branch agent/{args.run_id}-chain<N>)")
+              f"(branch {suite_branch(args.run_id, args.condition, '<N>')})")
     print(f"  started   : {now()}")
     print(BAR, flush=True)
 
@@ -681,13 +727,15 @@ def main() -> int:
         out_dir = os.path.join(ROOT, "results", args.run_id, f"chain{chain}")
         os.makedirs(out_dir, exist_ok=True)
         capture.write_json(os.path.join(out_dir, "run.json"), capture.run_manifest(
-            run_id=args.run_id, mode=args.mode, code_view=args.code_view, cfg=cfg,
+            run_id=args.run_id, mode=args.mode, code_view=args.code_view,
+            condition=args.condition, cfg=cfg,
             reference={"repo": ref.get("repo"), "origin": ref.get("origin"),
                        "branch": ref.get("branch")},
             checkpoints=todo, started=now()))
         if args.mode == "agent":
             suite_repo = os.path.join(ROOT, "runs", args.run_id, f"chain{chain}", "suite")
-            sb.init_suite_repo(suite_repo, f"agent/{args.run_id}-chain{chain}")
+            sb.init_suite_repo(suite_repo,
+                               suite_branch(args.run_id, args.condition, chain))
         if len(chain_list) > 1:
             print(f"\n{BAR}\nCHAIN {chain}  ({ci}/{len(chain_list)})\n{BAR}", flush=True)
 

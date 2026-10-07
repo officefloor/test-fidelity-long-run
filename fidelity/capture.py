@@ -126,11 +126,12 @@ def checkpoint_record(*, n: int, cp_id: str, cp_type: str, mutates: list, mode: 
 
 
 def run_manifest(*, run_id: str, mode: str, code_view: str, cfg: dict, reference: dict,
-                 checkpoints: list[int], started: str) -> dict:
+                 checkpoints: list[int], started: str, condition: str = "blind") -> dict:
     return {
         "run_id": run_id,
         "mode": mode,
         "code_view": code_view,
+        "condition": condition,            # which §4.4 arm; also names the suite branch
         "started": started,
         "reference": reference,
         "checkpoints": checkpoints,

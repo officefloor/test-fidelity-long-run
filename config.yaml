@@ -32,6 +32,22 @@ agent_timeout: 3600
 #             visible, the problem is not information.
 code_view: previous
 
+# CONDITION (DESIGN.md §4.4) — which research arm this run is. The grader is identical across all
+# of them; only what the author is given, or what becomes of its draft, moves. Recorded in the run
+# manifest and in the suite branch name, so a run's arm is legible without reading its config:
+#
+#   blind                  the default. Request and contract only, one shot (§4.1).
+#   prototype-first        the author also sees the validated cpN. This IS code_view=current.
+#   clarify-oracle         a prompter-proxy the author may ask behavioural questions (§4.5).
+#   blind-ai-review        a second turn critiques the draft for gaps; no ground truth.
+#   write-twice            two independent blind authors, reconciled. Conditional on variance.
+#   prompter-proxy-review  a reviewer returns English behavioural feedback on the draft.
+#
+# Only `blind` and `prototype-first` are implemented — the latter being code_view, which already
+# existed. The other four are declared here so a run can be LABELLED and named correctly, and the
+# harness refuses one it cannot actually carry out rather than producing a mislabelled branch.
+condition: blind
+
 # The 60 plain-English change requests, with their `type` and `mutates`. Read from the erosion
 # harness rather than copied, so a repair to the checkpoint metadata lands in one place — and it
 # needs repairing (DESIGN.md §10, REFERENCE_CHAIN.md).
