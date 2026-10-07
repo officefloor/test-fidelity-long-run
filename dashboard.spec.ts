@@ -6,10 +6,13 @@
 // (nav-dashboard). It summarises the whole app through three figures:
 //   - dashboard-clients-count     — how many clients there are
 //   - dashboard-projects-count    — how many projects there are
-//   - dashboard-outstanding-total — how much money is STILL OWED, i.e. the amount of the invoices
-//                                   I have actually SENT and not yet been paid for. A DRAFT has not
-//                                   been sent, so it is not money I am owed; a PAID invoice is no
-//                                   longer owed. Only SENT invoices count toward the total.
+//   - dashboard-outstanding-<currency> — how much money is STILL OWED, kept separate per currency
+//                                   (one total per currency), i.e. the amount of the invoices I have
+//                                   actually SENT and not yet been paid for. A DRAFT has not been
+//                                   sent, so it is not money I am owed; a PAID invoice is no longer
+//                                   owed. Only SENT invoices count. The clients seeded here carry no
+//                                   currency, so what is owed is owed in the default, USD, and shows
+//                                   under dashboard-outstanding-USD.
 // While its data is loading it shows dashboard-loading, and if that data cannot be loaded it shows
 // dashboard-error instead of fabricating figures.
 //
@@ -30,7 +33,11 @@ const hides = (cell: Locator, n: number) => expect(cell).not.toContainText(asTok
 
 const clientsCount = (page: Page) => page.getByTestId('dashboard-clients-count');
 const projectsCount = (page: Page) => page.getByTestId('dashboard-projects-count');
-const outstanding = (page: Page) => page.getByTestId('dashboard-outstanding-total');
+const outstanding = (page: Page) => page.getByTestId('dashboard-outstanding-USD');
+// The per-currency outstanding totals as a family, addressed by their shared prefix — used to assert
+// that nothing-owed shows no total at all.
+const outstandingTotals = (page: Page) =>
+  page.locator('[data-testid^="dashboard-outstanding-"]');
 
 // Reach the dashboard the way a user would: follow its nav link from the home screen. This avoids
 // pinning the dashboard's URL — the contract is the nav link and the page it lands on.
@@ -111,7 +118,8 @@ test.describe('Dashboard home screen', () => {
 
     await shows(clientsCount(page), 0);
     await shows(projectsCount(page), 0);
-    await shows(outstanding(page), 0);
+    // Nothing is owed in any currency, so there is no per-currency outstanding total to show.
+    await expect(outstandingTotals(page)).toHaveCount(0);
   });
 
   test('money still owed counts only sent invoices — paid work and unsent drafts owe nothing', async ({
@@ -141,13 +149,10 @@ test.describe('Dashboard home screen', () => {
     await shows(clientsCount(page), 2);
     await shows(projectsCount(page), 2);
 
-    // Nothing is still owed: the paid invoices and the unsent draft are not money owed.
-    await shows(outstanding(page), 0);
-    await hides(outstanding(page), 400);
-    await hides(outstanding(page), 350);
-    await hides(outstanding(page), 500);
-    await hides(outstanding(page), 750); // the paid pair
-    await hides(outstanding(page), 1250); // everything invoiced
+    // Nothing is still owed: the paid invoices and the unsent draft are not money owed. With no owed
+    // money in any currency, no per-currency outstanding total is shown at all — so none of the
+    // invoiced figures (the paid pair, the draft, or their sums) can appear as an owed total.
+    await expect(outstandingTotals(page)).toHaveCount(0);
   });
 
   test('while its data is loading it shows a loading indicator, then the figures', async ({
@@ -214,6 +219,6 @@ test.describe('Dashboard home screen', () => {
     await expect(page.getByTestId('dashboard-error')).toBeVisible();
     await expect(clientsCount(page)).toHaveCount(0);
     await expect(projectsCount(page)).toHaveCount(0);
-    await expect(outstanding(page)).toHaveCount(0);
+    await expect(outstandingTotals(page)).toHaveCount(0);
   });
 });

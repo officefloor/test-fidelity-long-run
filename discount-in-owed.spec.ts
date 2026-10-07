@@ -14,8 +14,9 @@
 //   2. THE STATEMENT — each invoice row's due (statement-invoice-due) and the client's outstanding
 //      total (client-outstanding-total) on the client statement. These net off the discount as well
 //      as payments.
-//   3. THE HOME SCREEN — the dashboard's money owed (dashboard-outstanding-total), which sums the
-//      DISCOUNTED totals of the sent invoices, not their gross amounts.
+//   3. THE HOME SCREEN — the dashboard's money owed (dashboard-outstanding-<currency>, per currency;
+//      USD for the no-currency client seeded here), which sums the DISCOUNTED totals of the sent
+//      invoices, not their gross amounts.
 //
 // WHY THESE VALUES. The discount in money is subtotal × percentage, and the discounted total is the
 // subtotal (the invoice's amount) minus that. "What is owed" is then that discounted total minus any
@@ -184,7 +185,9 @@ test.describe('The discount is taken off the money owed on the home screen', () 
 
     await openDashboard(page);
 
-    const owed = page.getByTestId('dashboard-outstanding-total');
+    // The client carries no currency, so what is owed is owed in the default, USD, under
+    // dashboard-outstanding-USD.
+    const owed = page.getByTestId('dashboard-outstanding-USD');
     await expect(owed).toBeVisible();
     // The discounted totals of the two sent invoices: 180 + 300 = 480.
     await expect(owed).toContainText(asToken(480));

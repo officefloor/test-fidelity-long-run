@@ -1,8 +1,9 @@
 // Acceptance test for the change request:
 //   "The money I am owed should only count invoices I have actually sent. Do not count drafts."
 //
-// The dashboard's "money owed" figure (dashboard-outstanding-total) is the sum of the invoices I
-// have actually SENT and not yet been paid for. An invoice moves through DRAFT -> SENT -> PAID
+// The dashboard's "money owed" figure (dashboard-outstanding-<currency>, kept separate per currency)
+// is the sum of the invoices I have actually SENT and not yet been paid for. An invoice moves through
+// DRAFT -> SENT -> PAID
 // (see invoice-send.spec). A DRAFT has not been sent, so it is NOT money I am owed and must not be
 // counted; a PAID invoice has been settled, so it is not owed either. Only SENT invoices count.
 //
@@ -27,7 +28,12 @@ const hides = (cell: Locator, n: number) => expect(cell).not.toContainText(asTok
 
 const SENT = /\bsent\b/i;
 
-const outstanding = (page: Page) => page.getByTestId('dashboard-outstanding-total');
+// The clients seeded here carry no currency, so what is owed is owed in the default, USD, and shows
+// under dashboard-outstanding-USD. outstandingTotals is the per-currency family, used to assert that
+// nothing-owed shows no total at all.
+const outstanding = (page: Page) => page.getByTestId('dashboard-outstanding-USD');
+const outstandingTotals = (page: Page) =>
+  page.locator('[data-testid^="dashboard-outstanding-"]');
 
 // Reach the dashboard the way a user would — follow its nav link from the home screen — rather than
 // pinning the dashboard's URL.
@@ -90,11 +96,9 @@ test.describe('Money owed counts only invoices I have sent, not drafts', () => {
 
     await openDashboard(page);
 
-    // Nothing has been sent, so nothing is owed.
-    await shows(outstanding(page), 0);
-    await hides(outstanding(page), 300);
-    await hides(outstanding(page), 450);
-    await hides(outstanding(page), 750);
+    // Nothing has been sent, so nothing is owed — in any currency, no per-currency outstanding total
+    // is shown, so none of the invoiced drafts (300, 450 or their sum) can appear as an owed total.
+    await expect(outstandingTotals(page)).toHaveCount(0);
   });
 
   test('sending a draft is what makes its money owed — the owed total grows by that amount', async ({
@@ -107,10 +111,10 @@ test.describe('Money owed counts only invoices I have sent, not drafts', () => {
       invoices: [{ id: 1, amount: 140, projectId: 1, status: 'DRAFT' }],
     });
 
-    // While it is a draft, it is not money owed.
+    // While it is a draft, it is not money owed — nothing is owed in any currency, so no per-currency
+    // outstanding total is shown.
     await openDashboard(page);
-    await shows(outstanding(page), 0);
-    await hides(outstanding(page), 140);
+    await expect(outstandingTotals(page)).toHaveCount(0);
 
     // Send the invoice — the only way a draft becomes money I am owed.
     await page.goto('/projects/1');

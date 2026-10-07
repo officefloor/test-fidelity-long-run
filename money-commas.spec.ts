@@ -137,12 +137,15 @@ test.describe('Bigger amounts are shown with thousands separators (commas)', () 
     await expect(page.getByTestId('project-remaining')).toHaveText(grouped(993749.25)); // $993,749.25
   });
 
-  test('the dashboard outstanding total is grouped', async ({ page }) => {
+  test('the dashboard per-currency outstanding total is grouped', async ({ page }) => {
     await seedBigAmounts();
     await openDashboard(page);
 
+    // The client carries no currency, so what is owed is shown in the default, USD, under
+    // dashboard-outstanding-USD — and that bigger figure is grouped with commas. (A per-currency
+    // total may carry a currency label, so this is a containment check.)
     hasGrouping(2006250.75);
-    await expect(page.getByTestId('dashboard-outstanding-total')).toHaveText(grouped(2006250.75));
+    await expect(page.getByTestId('dashboard-outstanding-USD')).toContainText(grouped(2006250.75));
   });
 
   test('a recorded payment is grouped on the invoice', async ({ page }) => {

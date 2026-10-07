@@ -6,7 +6,7 @@
 // The app surfaces money in three places, each behind a stable anchor:
 //   - invoice-amount              — an invoice's amount, on a project's detail page
 //   - project-invoices-total      — what a project's invoices add up to
-//   - dashboard-outstanding-total — how much money is still owed, on the dashboard
+//   - dashboard-outstanding-<currency> — how much money is still owed, per currency, on the dashboard
 // A bare number (100.00) or one missing its cents (100) is NOT "money shown properly", so each
 // assertion below requires the dollar sign AND the two cents digits.
 //
@@ -94,9 +94,12 @@ test.describe('Money is shown properly — dollar sign and cents', () => {
     await expect(page.getByTestId('project-invoices-total')).toHaveText(money(0));
   });
 
-  test('the dashboard outstanding total is shown as $amount.cc', async ({ page }) => {
+  test('the dashboard per-currency outstanding total is shown as $amount.cc', async ({ page }) => {
     // Two SENT invoices (120 + 230 = 350 still owed) and one paid (400, no longer owed). Money owed
-    // counts only invoices that have actually been sent, so the sent pair is what is owed.
+    // counts only invoices that have actually been sent, so the sent pair is what is owed. The clients
+    // carry no currency, so it is owed in the default, USD, under dashboard-outstanding-USD — and that
+    // figure is shown properly, with its dollar sign and cents. (A per-currency total may carry a
+    // currency label too, so this is a containment check, not an exact match.)
     await resetAndSeed({
       clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
       projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
@@ -108,13 +111,16 @@ test.describe('Money is shown properly — dollar sign and cents', () => {
     });
 
     await openDashboard(page);
-    await expect(page.getByTestId('dashboard-outstanding-total')).toHaveText(money(350));
+    await expect(page.getByTestId('dashboard-outstanding-USD')).toContainText('$350.00');
   });
 
-  test('the dashboard shows nothing-owed as money: $0.00', async ({ page }) => {
+  test('with nothing owed, the dashboard shows no per-currency outstanding total', async ({
+    page,
+  }) => {
     await resetAndSeed({ clients: [], projects: [], invoices: [] });
 
     await openDashboard(page);
-    await expect(page.getByTestId('dashboard-outstanding-total')).toHaveText(money(0));
+    // Nothing is owed in any currency, so there is no per-currency outstanding total to show.
+    await expect(page.locator('[data-testid^="dashboard-outstanding-"]')).toHaveCount(0);
   });
 });

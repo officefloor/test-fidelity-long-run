@@ -8,8 +8,9 @@
 //   - marks the invoice cancelled (its invoice-status cell no longer reads "sent"), which is held by
 //     the server (survives a fresh load) and withdraws the cancel control (you cannot cancel twice);
 //   - STOPS it counting toward what I am owed — the dashboard's money-owed figure
-//     (dashboard-outstanding-total), which is the sum of the invoices I have SENT and not yet been
-//     paid for, drops by exactly that invoice's amount; and
+//     (dashboard-outstanding-<currency>, per currency; USD for the no-currency client seeded here),
+//     which is the sum of the invoices I have SENT and not yet been paid for, drops by exactly that
+//     invoice's amount; and
 //   - KEEPS a record ("Note it"): exactly one audit record `INVOICE_VOIDED id=<id> amount=<amount>`
 //     is appended per cancel.
 // A DRAFT has not been sent, so it is not something I cancel-by-mistake: it offers no cancel control
@@ -51,7 +52,9 @@ const asToken = (n: number) => new RegExp(`(^|\\D)${n}(\\D|$)`);
 const shows = (cell: Locator, n: number) => expect(cell).toContainText(asToken(n));
 const hides = (cell: Locator, n: number) => expect(cell).not.toContainText(asToken(n));
 
-const outstanding = (page: Page) => page.getByTestId('dashboard-outstanding-total');
+// The client carries no currency, so what is owed is owed in the default, USD, under
+// dashboard-outstanding-USD.
+const outstanding = (page: Page) => page.getByTestId('dashboard-outstanding-USD');
 
 async function openProject(page: Page, id: number): Promise<void> {
   await page.goto(`/projects/${id}`);
