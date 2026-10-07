@@ -177,6 +177,38 @@ def place_second_draft(*, sandbox: str, draft_specs: str, rel: str = "second-dra
     return n
 
 
+def bundle_specs(specs_dir: str) -> str:
+    """Every spec in one readable text, delimited by filename.
+
+    A §4.4 condition can produce a suite that is never committed — both of write-twice's drafts
+    are overwritten or discarded by the reconciliation — and a draft that existed, was graded
+    against nothing, and informed the final suite is exactly the irreproducible material a record
+    exists to keep. Text rather than a copied tree, so it travels in the capture like everything
+    else."""
+    out = []
+    for fn in spec_files(specs_dir):
+        with open(os.path.join(specs_dir, fn), errors="replace") as fh:
+            out.append(f"===== {fn} =====\n{fh.read().rstrip()}\n")
+    return "\n".join(out) or "(no spec files)\n"
+
+
+def diff_specs(left: dict[str, bytes], right_dir: str, lname="before",
+               rname="after") -> str:
+    """Unified diff from a snapshot to what is on disk now. Used two ways: what one draft holds
+    that the other does not, and what a turn briefed NOT to write tried to write anyway."""
+    import difflib
+    out: list[str] = []
+    for fn in sorted(set(left) | set(spec_files(right_dir))):
+        a = (left.get(fn) or b"").decode(errors="replace").splitlines(keepends=True)
+        path = os.path.join(right_dir, fn)
+        b = (open(path, errors="replace").read().splitlines(keepends=True)
+             if os.path.exists(path) else [])
+        if a == b:
+            continue
+        out += list(difflib.unified_diff(a, b, f"{lname}/{fn}", f"{rname}/{fn}"))
+    return "".join(out)
+
+
 def snapshot_specs(specs_dir: str) -> dict[str, bytes]:
     """The draft as it stands, so a turn that is only meant to CRITIQUE cannot change it."""
     return {fn: open(os.path.join(specs_dir, fn), "rb").read()

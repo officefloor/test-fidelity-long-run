@@ -390,7 +390,12 @@ def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, agent, lan
         capture.write_text(os.path.join(out_dir, f"cp{n:02d}.agent.testdiff"), diff_text)
         agent_block["app_diff_file"] = f"cp{n:02d}.agent.appdiff" if adiff else None
         agent_block["test_diff_file"] = f"cp{n:02d}.agent.testdiff"
-        agent_block["stream_file"] = stream_file
+        if args.condition in cond.ARMS:
+            agent_block["stream_file"] = None
+            agent_block["stream_files"] = [t.get("stream_file") for t in agent_block["turns"]]
+            agent_block["prompt_files"] = [t.get("prompt_file") for t in agent_block["turns"]]
+        else:
+            agent_block["stream_file"] = stream_file
         agent_block["suite_commit"] = suite_sha
         agent_block["sandbox_leaks"] = leaks
 
@@ -624,7 +629,13 @@ def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, agent, lan
                               "dropped": moves["dropped"], "file_gone": moves["file_gone"]},
                "gate_id_delta": changes.id_delta(prev_ids, gate_ids)},
         source=source, gate=gate, mutations=muts, verdict=verdict,
-        files={"prompt": f"cp{n:02d}.prompt.txt", "build_log": f"cp{n:02d}.build.log"},
+        files={"prompt": f"cp{n:02d}.prompt.txt", "build_log": f"cp{n:02d}.build.log",
+               **({"turn_prompts": (agent_block or {}).get("prompt_files"),
+                   "turn_streams": (agent_block or {}).get("stream_files"),
+                   "note": "cpNN.prompt.txt is the SPECIFICATION as built for this checkpoint; "
+                           "under a multi-turn condition what each turn was actually sent is in "
+                           "turn_prompts, and `agent.turns` holds each turn's own result"}
+                  if (agent_block or {}).get("prompt_files") else {})},
         agent=agent_block)
     capture.write_json(os.path.join(out_dir, f"cp{n:02d}.json"), rec)
 

@@ -136,6 +136,14 @@ class Ctx:
     def tag(self, name: str) -> str:
         return f"cp{self.n:02d}.{name}"
 
+    def keep(self, name: str, text: str) -> str | None:
+        """A side file in the capture, written only when there is something to write."""
+        from fidelity import capture
+        if not (text or "").strip():
+            return None
+        capture.write_text(os.path.join(self.out_dir, f"{self.tag(name)}"), text)
+        return self.tag(name)
+
     def withheld_from(self, area: str) -> list[str]:
         """Everything this turn must not reach: cpN's grading tree, and every OTHER area of this
         checkpoint — a proxy area holds cpN by design, and under write-twice each author's
@@ -224,9 +232,11 @@ def blind_ai_review(ctx: Ctx) -> dict:
                       prompt=spec.build_review_prompt(ctx.request, ctx.contract, ctx.fields,
                                                       len(snap)),
                       area=ctx.sandbox_dir, rebuild=lambda: None)
+    attempted = sb.diff_specs(snap, specs, "draft", "reviewer")
     edited = sb.restore_specs(specs, snap)
     review["said"] = review.get("result_text") or ""
     review["edited_despite_brief"] = edited
+    review["attempted_edit_file"] = ctx.keep("review.attempted.diff", attempted)
     if edited:
         ctx.log(f"      [note] the reviewer edited {len(edited)} spec file(s) despite being told "
                 f"not to; reverted, and recorded in `exchanges`")
@@ -235,8 +245,9 @@ def blind_ai_review(ctx: Ctx) -> dict:
                          prompt=spec.build_revise_prompt(
                              ctx.request, ctx.contract, ctx.fields, ctx.args.code_view,
                              review["said"], "reviewer")))
-    return {"turns": turns, "exchanges": {"critique": review["said"],
-                                          "reviewer_edited": edited}}
+    return {"turns": turns,
+            "exchanges": {"critique": review["said"], "reviewer_edited": edited,
+                          "reviewer_attempted_diff": review["attempted_edit_file"]}}
 
 
 def clarify_oracle(ctx: Ctx) -> dict:
@@ -258,7 +269,9 @@ def clarify_oracle(ctx: Ctx) -> dict:
     # It was told to ask, not to write. Enforced rather than requested: left alone, a question
     # turn that drafted would hand this arm two authoring turns and quietly stop being the thing
     # being measured.
+    attempted = sb.diff_specs(snap, ctx.specs_in_sandbox, "draft", "asker")
     edited = sb.restore_specs(ctx.specs_in_sandbox, snap)
+    ask["attempted_edit_file"] = ctx.keep("questions.attempted.diff", attempted)
     if edited:
         ctx.log(f"      [note] the question turn edited {len(edited)} spec file(s) before "
                 f"asking; reverted, and recorded in `exchanges`")
@@ -286,6 +299,7 @@ def clarify_oracle(ctx: Ctx) -> dict:
             "exchanges": {"questions": questions, "answers": answers,
                           "budget": budget, "budget_spent": len(questions),
                           "asker_edited": edited,
+                          "asker_attempted_diff": ask["attempted_edit_file"],
                           "leak_hits": turns[1].get("leak_hits", []) if questions else []}}
 
 
@@ -343,6 +357,15 @@ def write_twice(ctx: Ctx) -> dict:
     a_specs = os.path.join(a_dir, ctx.specs_rel)
     b_specs = os.path.join(b_dir, ctx.specs_rel)
     draft_a, draft_b = sb.spec_files(a_specs), sb.spec_files(b_specs)
+    # Neither draft survives the reconciliation — it overwrites A in place and B's sandbox is
+    # discarded — so both are kept here, with the diff between them. "What did B pin that the
+    # reconciler dropped?" is the question this arm exists to answer, and it is unanswerable
+    # from the committed suite alone.
+    files = {"draft_a_file": ctx.keep("draft-a.specs.txt", sb.bundle_specs(a_specs)),
+             "draft_b_file": ctx.keep("draft-b.specs.txt", sb.bundle_specs(b_specs)),
+             "drafts_diff_file": ctx.keep(
+                 "drafts.diff", sb.diff_specs(sb.snapshot_specs(a_specs), b_specs,
+                                              "draft-a", "draft-b"))}
     n_b = sb.place_second_draft(sandbox=a_dir, draft_specs=b_specs)
     turns.append(ctx.turn(name="reconcile",
                           prompt=spec.build_reconcile_prompt(
@@ -352,7 +375,7 @@ def write_twice(ctx: Ctx) -> dict:
     # the reconciled suite is what gets graded, so it has to be where run.py will look for it
     ctx.sandbox_dir = a_dir
     return {"turns": turns,
-            "exchanges": {"draft_a": draft_a, "draft_b": draft_b,
+            "exchanges": {"draft_a": draft_a, "draft_b": draft_b, **files,
                           "variance_gate": "§4.4 gates write-twice on high chain-level spread; "
                                            "not checked here — see analyse (§8.1)"},
             "sandbox": a_dir}

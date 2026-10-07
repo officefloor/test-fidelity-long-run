@@ -691,6 +691,20 @@ movement, every mutation run with the tests that caught it, and whether applicat
 touched. Every aggregate in the verdict is re-derivable from that, so a later question never
 requires re-running anything.
 
+A **multi-turn condition** (§4.4) records per turn, not per checkpoint: each turn's own prompt
+(`cpNN.<turn>.prompt.txt`) and full agent stream (`cpNN.<turn>.jsonl`), and its own cost, tokens,
+stop reason and retries in `agent.turns[]`. What passed BETWEEN the agents is kept twice over, on
+both sides of the channel — the questions, answers, critique and feedback verbatim in
+`agent.exchanges`, and again inside the prompt of whichever turn was handed them, because a record
+of what one agent said is not a record of what the next was actually told.
+
+Two kinds of thing exist only before the suite is committed, and are kept for that reason.
+**Both write-twice drafts**, with the diff between them: the reconciliation overwrites A in place
+and B's sandbox is discarded, so "what did B pin that the reconciler dropped?" — the question the
+arm exists to answer — is unanswerable from the committed suite. And **what a turn briefed not to
+write tried to write anyway**, as a diff, because reverting it and recording only the filenames
+would destroy the evidence of how the brief was broken.
+
 Two of those deserve naming. **Application code touched** answers a question the pass/fail numbers
 cannot: the agent was told to write tests only, and a run that changed the subject has to be void
 rather than silently credited. And test movement is classified as **revised** versus **dropped** —
