@@ -1,0 +1,191 @@
+// Acceptance test for the change request:
+//   "Give each job a short reference code, set when creating the job. Keep it unique so no two jobs
+//    share one."
+//
+// A job (the feature the UI calls "jobs", stored as a project) carries a short REFERENCE CODE. Every
+// job is SHOWN with its code (project-code, on the job's row). The add-a-job form gains a control to
+// SET the code for a new job (project-form-code); the code it is given is held by the server, so it
+// survives a fresh load, and the control genuinely drives the value — two jobs added with different
+// codes each show their own. The code is kept UNIQUE: an attempt to add a job with a code that
+// another job already uses is rejected — the form surfaces project-form-code-error and nothing is
+// saved. Correcting the clash to an unused code then saves.
+//
+// Adding a job WITHOUT touching the code control is unaffected (existing projects/project-status/
+// jobs-terminology specs still add jobs with no code) — this change is about SETTING a code and
+// keeping set codes unique, not about making the code mandatory.
+//
+// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed (the app's /__test__
+// endpoint): `clients` honours { id, name, email } and `projects` honours { id, name, clientId,
+// code }.
+import { test, expect, type Page, type Locator } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+const projectRows = (page: Page): Locator => page.locator('[data-testid^="project-row-"]');
+
+// Locate the one job row carrying the given name, regardless of its server-assigned id.
+const projectRowNamed = (page: Page, name: string): Locator =>
+  projectRows(page).filter({
+    has: page.getByTestId('project-name').getByText(name, { exact: true }),
+  });
+
+const codeOf = (page: Page, id: number): Locator =>
+  page.getByTestId(`project-row-${id}`).getByTestId('project-code');
+
+const CLIENTS = [
+  { id: 1, name: 'Acme Corp', email: 'hello@acme.test' },
+  { id: 2, name: 'Globex', email: 'contact@globex.test' },
+];
+
+test.describe('Each job carries a unique reference code', () => {
+  test('every seeded job is shown with its own reference code', async ({ page }) => {
+    await resetAndSeed({
+      clients: CLIENTS,
+      projects: [
+        { id: 1, name: 'Website Redesign', clientId: 1, code: 'WEB-01' },
+        { id: 2, name: 'Mobile App', clientId: 2, code: 'MOB-02' },
+        { id: 3, name: 'Billing System', clientId: 1, code: 'BIL-03' },
+      ],
+    });
+
+    await page.goto('/projects');
+    await expect(page.getByTestId('projects-page')).toBeVisible();
+    await expect(page.getByTestId('projects-table')).toBeVisible();
+    await expect(projectRows(page)).toHaveCount(3);
+
+    // Each job shows ITS OWN code — three rows, three distinct codes, so the code is genuinely
+    // per-job and not a fixed label.
+    await expect(codeOf(page, 1)).toHaveText('WEB-01');
+    await expect(codeOf(page, 2)).toHaveText('MOB-02');
+    await expect(codeOf(page, 3)).toHaveText('BIL-03');
+
+    // ...and no row shows another's code.
+    await expect(codeOf(page, 1)).not.toHaveText('MOB-02');
+    await expect(codeOf(page, 2)).not.toHaveText('BIL-03');
+  });
+
+  test('adding a job lets me set its reference code, which is shown and held by the server', async ({
+    page,
+  }) => {
+    await resetAndSeed({ clients: CLIENTS, projects: [] });
+
+    await page.goto('/projects');
+    await expect(page.getByTestId('projects-empty')).toBeVisible();
+
+    // Fill the add-job form: give it a name, pick a client, and SET its reference code.
+    await expect(page.getByTestId('project-form')).toBeVisible();
+    await page.getByTestId('project-form-name').fill('Website Redesign');
+    await page.getByTestId('project-form-client').selectOption({ label: 'Globex' });
+    await page.getByTestId('project-form-code').fill('WEB-01');
+    await page.getByTestId('project-form-submit').click();
+
+    // The new job appears carrying the code that was set for it. Its id is server-assigned, so locate
+    // the row by its content.
+    const row = projectRowNamed(page, 'Website Redesign');
+    await expect(row).toHaveCount(1);
+    await expect(row.getByTestId('project-code')).toHaveText('WEB-01');
+
+    // The code is held by the server, not just the page: it survives a fresh load.
+    await page.reload();
+    const reloaded = projectRowNamed(page, 'Website Redesign');
+    await expect(reloaded).toHaveCount(1);
+    await expect(reloaded.getByTestId('project-code')).toHaveText('WEB-01');
+  });
+
+  test('the code control drives the value — two jobs added with different codes each show their own', async ({
+    page,
+  }) => {
+    await resetAndSeed({ clients: CLIENTS, projects: [] });
+
+    await page.goto('/projects');
+
+    // First job: code WEB-01.
+    await page.getByTestId('project-form-name').fill('Website Redesign');
+    await page.getByTestId('project-form-client').selectOption({ label: 'Acme Corp' });
+    await page.getByTestId('project-form-code').fill('WEB-01');
+    await page.getByTestId('project-form-submit').click();
+    await expect(projectRowNamed(page, 'Website Redesign')).toHaveCount(1);
+
+    // Second job: code MOB-02. Had the code been hardwired, this would read the same as the first.
+    await page.getByTestId('project-form-name').fill('Mobile App');
+    await page.getByTestId('project-form-client').selectOption({ label: 'Globex' });
+    await page.getByTestId('project-form-code').fill('MOB-02');
+    await page.getByTestId('project-form-submit').click();
+    await expect(projectRowNamed(page, 'Mobile App')).toHaveCount(1);
+
+    // Each carries the code it was given.
+    await expect(projectRowNamed(page, 'Website Redesign').getByTestId('project-code')).toHaveText(
+      'WEB-01',
+    );
+    await expect(projectRowNamed(page, 'Mobile App').getByTestId('project-code')).toHaveText(
+      'MOB-02',
+    );
+  });
+
+  test('a job cannot reuse a code another job already uses — the attempt is rejected and saves nothing', async ({
+    page,
+  }) => {
+    await resetAndSeed({
+      clients: CLIENTS,
+      projects: [{ id: 1, name: 'Website Redesign', clientId: 1, code: 'WEB-01' }],
+    });
+
+    await page.goto('/projects');
+    await expect(projectRows(page)).toHaveCount(1);
+
+    // A different job, but reusing the code that already belongs to Website Redesign.
+    await page.getByTestId('project-form-name').fill('Mobile App');
+    await page.getByTestId('project-form-client').selectOption({ label: 'Globex' });
+    await page.getByTestId('project-form-code').fill('WEB-01');
+    await page.getByTestId('project-form-submit').click();
+
+    // The code error is surfaced...
+    await expect(page.getByTestId('project-form-code-error')).toBeVisible();
+
+    // ...and nothing was saved: still just the one job, and no row for the rejected one.
+    await expect(projectRows(page)).toHaveCount(1);
+    await expect(projectRowNamed(page, 'Mobile App')).toHaveCount(0);
+    await expect(page.getByTestId('projects-table')).not.toContainText('Mobile App');
+
+    // Survives a fresh load from the server — the duplicate never reached the list, and the original
+    // job keeps its code untouched.
+    await page.reload();
+    await expect(projectRows(page)).toHaveCount(1);
+    await expect(projectRowNamed(page, 'Mobile App')).toHaveCount(0);
+    await expect(codeOf(page, 1)).toHaveText('WEB-01');
+  });
+
+  test('correcting a clashing code to an unused one then saves the job', async ({ page }) => {
+    await resetAndSeed({
+      clients: CLIENTS,
+      projects: [{ id: 1, name: 'Website Redesign', clientId: 1, code: 'WEB-01' }],
+    });
+
+    await page.goto('/projects');
+    await expect(projectRows(page)).toHaveCount(1);
+
+    // First a rejected attempt reusing the existing code.
+    await page.getByTestId('project-form-name').fill('Mobile App');
+    await page.getByTestId('project-form-client').selectOption({ label: 'Globex' });
+    await page.getByTestId('project-form-code').fill('WEB-01');
+    await page.getByTestId('project-form-submit').click();
+    await expect(page.getByTestId('project-form-code-error')).toBeVisible();
+    await expect(projectRows(page)).toHaveCount(1);
+
+    // Correct the code to one no job uses and submit again.
+    await page.getByTestId('project-form-code').fill('MOB-02');
+    await page.getByTestId('project-form-submit').click();
+
+    // Now it saves: the job appears carrying its own code and the error is gone.
+    const mobile = projectRowNamed(page, 'Mobile App');
+    await expect(mobile).toHaveCount(1);
+    await expect(mobile.getByTestId('project-code')).toHaveText('MOB-02');
+    await expect(page.getByTestId('project-form-code-error')).toHaveCount(0);
+    await expect(projectRows(page)).toHaveCount(2);
+
+    // And it survives a fresh load from the server.
+    await page.reload();
+    const reloaded = projectRowNamed(page, 'Mobile App');
+    await expect(reloaded).toHaveCount(1);
+    await expect(reloaded.getByTestId('project-code')).toHaveText('MOB-02');
+  });
+});
