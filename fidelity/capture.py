@@ -95,6 +95,7 @@ def mutation_block(mid: str, kind: str, description: str, outcome, baseline_fail
 
 def checkpoint_record(*, n: int, cp_id: str, cp_type: str, mutates: list, mode: str,
                       code_view: str, no_code_change: bool, request: str, prompt: str,
+                      condition: str = "blind",
                       contract: dict, reference: dict, suite: dict, source: dict,
                       gate: dict, mutations: list[dict], verdict: dict,
                       files: dict, agent: dict | None) -> dict:
@@ -105,6 +106,9 @@ def checkpoint_record(*, n: int, cp_id: str, cp_type: str, mutates: list, mode: 
         "mutates": mutates or [],
         "mode": mode,
         "code_view": code_view,
+        # which §4.4 arm produced this suite. At the top level rather than only inside `agent`,
+        # because it is what a cross-run comparison keys on and replay has no `agent` block.
+        "condition": condition,
         "no_code_change": no_code_change,
         # self-describing: the record does not depend on this repo being at the same commit
         "request": request,

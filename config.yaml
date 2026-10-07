@@ -181,3 +181,14 @@ blind:
     - reference/                             # EVERY future checkpoint's code. The area is built
                                              #   by materialising cp(N-1) elsewhere and copying
                                              #   it in; the patch chain never enters it.
+
+# §4.4 CONDITION PARAMETERS. Only the arms that take one appear here; an arm's parameters are
+# recorded in the run manifest with everything else, so a run's arm and its settings travel
+# together.
+conditions:
+  clarify_oracle:
+    # How many behavioural questions the prompter-proxy will answer (§4.5). An unbounded oracle
+    # approaches full disclosure and stops modelling any real interaction, so the budget is part
+    # of the condition rather than a convenience — and the number actually spent is measured,
+    # since an author that asks nothing is itself a result.
+    question_budget: 5

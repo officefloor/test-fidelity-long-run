@@ -630,10 +630,27 @@ replay (which calibrates the catalogue and proves the fixture), the two outstand
 repairs, and then agent runs. Flake detection, suite runtime and churn, and the degradation slope are
 now in place — the last three in `fidelity/analyse.py` rather than in the run (§8.1).
 
-The §4.4 conditions beyond blind and `code_view` are **designed but unbuilt** (§4.4–§4.5): the
-prompter-proxy behind the clarify-oracle and the prompter-proxy review, the blind AI-review turn,
-write-twice, and the forward-replay over-specification check. Blind and prototype-first already run
-through `code_view`.
+The §4.4 conditions are **built** (`fidelity/conditions.py`), all six selectable with
+`--condition` and each naming its own suite branch: blind and prototype-first as the single author
+turn they always were, plus the blind AI-review critique-and-revise, the clarify-oracle's
+ask-then-write with a budget, the prompter-proxy review, and write-twice's two independent authors
+and reconciliation. The §4.5 rules are enforced where they can be and audited where they cannot:
+a proxy is grounded in intent **structurally** — its area is built with cpN and never the
+reference tests — and `conditions.proxy_leak_scan` reads what it actually said, flagging an
+assertion, a fragment of test code, a spec filename or an unpublished anchor. That scan is a
+heuristic over recorded text and is not the guarantee; the guarantee is that the proxy was never
+given the tests. A turn briefed to critique rather than write has that enforced too, by snapshot
+and restore, and an attempt is recorded rather than silently reverted.
+
+What remains unbuilt is the **forward-replay over-specification check** of §4.4.2 — installing a
+prototype-first suite against cp(N+1..60) to count the legitimate changes it breaks — and the
+self-implementation arm of §4.4.3, which is deliberately deferred.
+
+Two things the arms do not decide. §4.4 gates **write-twice on variance**, and the signal is the
+chain-level bootstrap of §8.1 — a property of finished runs, so the arm reports the gate and
+leaves the judgement to the operator rather than testing it against numbers the run does not yet
+have. And the ladder of §4.4.1 is read **across** runs, so nothing in a single run's analysis
+computes a comprehension or expression gap; that is a comparison between two runs' kill rates.
 
 ### §11.1 What the agent's area actually contains
 

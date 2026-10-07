@@ -39,6 +39,12 @@ APP_EXCLUDE = (".git", "node_modules", "target", ".run", "dist", "evolve-results
 # reference to the harness or the sequence (checked, not assumed).
 DOC_EXCLUDE = ("README.md", "BASE_CHECKLIST.md", "stack.yaml")
 
+# Put into an area by the harness for a §4.4 condition, never by the agent: the second author's
+# draft under write-twice, and the draft handed to a prompter-proxy to read. Neither is
+# application code nor the graded suite, so app_diff must not read them as the agent having
+# touched the application, and leak_scan must not flag spec filenames it already knows about.
+AUX_EXCLUDE = ("second-draft", "draft-suite")
+
 # What a leak looks like in any file that did make it in, split by how much it actually gives
 # away. HARD names a specific checkpoint or the harness itself — that is a position in the
 # sequence, or a path to the answers. SOFT only reveals that a checkpointed run exists, which a
@@ -127,6 +133,76 @@ def commit_suite(suite_repo: str, message: str) -> tuple[str, str]:
     return sha, diff
 
 
+def build_proxy_area(*, area: str, app_tree: str, draft_specs: str | None,
+                     draft_rel: str = "draft-suite") -> int:
+    """The prompter-proxy's own confined area (DESIGN.md §4.5).
+
+    It holds cpN — the proxy is the knowledgeable owner, so it is allowed the answer the author is
+    denied — and, when it is reviewing, the author's draft to read. What it must NOT hold is the
+    reference tests: grounded in the implementation a proxy describes behaviour, grounded in the
+    tests it would speak in the tests' vocabulary and leak assertions by reflex. They are withheld
+    structurally, by never being put here and by the same sentinel the author's turn uses, not by
+    asking the proxy not to look.
+
+    `.git` goes for the reason it goes from the author's area (§11.1): the reference tree's
+    commits are messaged `cp30 reference code`, and nothing needs to read the checkpoint number
+    off a log. Returns the number of draft spec files placed."""
+    if os.path.isdir(area):
+        shutil.rmtree(area)
+    os.makedirs(os.path.dirname(os.path.abspath(area)) or ".", exist_ok=True)
+    shutil.copytree(app_tree, area,
+                    ignore=shutil.ignore_patterns(*(APP_EXCLUDE + DOC_EXCLUDE)))
+    n = 0
+    if draft_specs:
+        dest = os.path.join(area, draft_rel)
+        os.makedirs(dest, exist_ok=True)
+        for fn in spec_files(draft_specs):
+            shutil.copy2(os.path.join(draft_specs, fn), os.path.join(dest, fn))
+            n += 1
+    return n
+
+
+def place_second_draft(*, sandbox: str, draft_specs: str, rel: str = "second-draft") -> int:
+    """The other author's draft, for the write-twice reconciliation turn. Outside the specs
+    directory on purpose: `copy_back` takes only `specs_rel/*.spec.ts`, so a file left here
+    cannot reach the graded suite by being forgotten about."""
+    dest = os.path.join(sandbox, rel)
+    if os.path.isdir(dest):
+        shutil.rmtree(dest)
+    os.makedirs(dest, exist_ok=True)
+    n = 0
+    for fn in spec_files(draft_specs):
+        shutil.copy2(os.path.join(draft_specs, fn), os.path.join(dest, fn))
+        n += 1
+    return n
+
+
+def snapshot_specs(specs_dir: str) -> dict[str, bytes]:
+    """The draft as it stands, so a turn that is only meant to CRITIQUE cannot change it."""
+    return {fn: open(os.path.join(specs_dir, fn), "rb").read()
+            for fn in spec_files(specs_dir)}
+
+
+def restore_specs(specs_dir: str, snap: dict[str, bytes]) -> list[str]:
+    """Put the draft back, and report what the turn had altered. A reviewer that edits is not a
+    disaster — it is a reviewer that did not follow its brief — but it must not be able to do so
+    silently, or a critique turn would quietly become a second authoring turn."""
+    changed = []
+    for fn in sorted(set(snap) | set(spec_files(specs_dir))):
+        path = os.path.join(specs_dir, fn)
+        want = snap.get(fn)
+        have = open(path, "rb").read() if os.path.exists(path) else None
+        if want == have:
+            continue
+        changed.append(fn)
+        if want is None:
+            os.remove(path)
+        else:
+            with open(path, "wb") as fh:
+                fh.write(want)
+    return changed
+
+
 def app_diff(pristine: str, sandbox: str, specs_rel: str) -> str:
     """What the agent changed in the application. It was told to write tests only, so this must
     be empty; a run where it is not is void (DESIGN.md §4.1), and the diff is the evidence.
@@ -137,7 +213,7 @@ def app_diff(pristine: str, sandbox: str, specs_rel: str) -> str:
     # absent from the sandbox, so without this every checkpoint reports "Only in pristine:
     # README.md" and is flagged as having touched the application.
     excl = []
-    for pat in APP_EXCLUDE + DOC_EXCLUDE + (os.path.basename(specs_rel),):
+    for pat in APP_EXCLUDE + DOC_EXCLUDE + AUX_EXCLUDE + (os.path.basename(specs_rel),):
         excl += ["--exclude", pat]
     r = subprocess.run(["diff", "-ru"] + excl + [pristine, sandbox],
                        capture_output=True, text=True)
@@ -157,7 +233,7 @@ def leak_scan(sandbox: str, specs_rel: str, max_hits: int = 60) -> dict[str, lis
     hits: dict[str, list[str]] = {"hard": [], "soft": []}
     specs_abs = os.path.join(sandbox, specs_rel)
     for root, dirs, files in os.walk(sandbox):
-        dirs[:] = [d for d in dirs if d not in APP_EXCLUDE]
+        dirs[:] = [d for d in dirs if d not in APP_EXCLUDE + AUX_EXCLUDE]
         if os.path.abspath(root).startswith(os.path.abspath(specs_abs)):
             continue
         for fn in files:

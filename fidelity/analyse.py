@@ -162,6 +162,19 @@ def _records(kind: str, locator: str) -> list[dict]:
     return [json.load(open(n)) for n in names]
 
 
+def _exchange_cols(ex: dict) -> dict:
+    """The condition's exchanges, as columns. §4.5 makes two of these results in their own right:
+    the questions an author felt it had to ask map where the English request is ambiguous, and
+    the leak hits are the audit on whether a proxy stayed in behavioural terms."""
+    return {
+        "questions_asked": ex.get("budget_spent"),
+        "question_budget": ex.get("budget"),
+        "proxy_leak_hits": len(ex.get("leak_hits") or []) if "leak_hits" in ex else None,
+        "brief_breaches": len((ex.get("reviewer_edited") or [])
+                              + (ex.get("asker_edited") or [])) or None,
+    }
+
+
 def load(run_id: str) -> list[dict]:
     """Every checkpoint record of every chain, flattened."""
     rows: list[dict] = []
@@ -188,6 +201,11 @@ def load(run_id: str) -> list[dict]:
                 "test_seconds": g.get("test_seconds"), "wall_seconds": g.get("wall_seconds"),
                 "failed": g.get("failed") or [],
                 "suite_commit": ((d.get("agent") or {}) or {}).get("suite_commit"),
+                # §4.4/§4.5: the arm, and the exchange record that is itself a result
+                "condition": d.get("condition"),
+                "turns": len(((d.get("agent") or {}).get("turns")) or []) or None,
+                "cost_usd": ((d.get("agent") or {}) or {}).get("cost_usd"),
+                **_exchange_cols((d.get("agent") or {}).get("exchanges") or {}),
             })
     return rows
 
@@ -352,6 +370,32 @@ def main() -> int:
               if lo is not None else "n/a (one chain)")
         L += [f"| {label} | {pt:+.4f} | {ci} |"]
     L.append("")
+
+    # §4.4/§4.5 — what the arm's extra turns cost and whether the proxies stayed honest
+    asked = [r for r in rows if r.get("questions_asked") is not None]
+    leaky = [r for r in rows if (r.get("proxy_leak_hits") or 0) > 0]
+    breaches = [r for r in rows if r.get("brief_breaches")]
+    extra_turns = [r["turns"] for r in rows if r.get("turns")]
+    if asked or leaky or extra_turns or breaches:
+        L += ["## The condition's own record (DESIGN.md §4.4, §4.5)", ""]
+        if extra_turns:
+            L += [f"- turns per checkpoint: {min(extra_turns)}–{max(extra_turns)} "
+                  f"(blind is 1)"]
+        if asked:
+            spent = sum(r["questions_asked"] for r in asked)
+            bud = sum(r.get("question_budget") or 0 for r in asked)
+            none_asked = [r["checkpoint"] for r in asked if r["questions_asked"] == 0]
+            L += [f"- questions asked: {spent}/{bud} of budget across {len(asked)} checkpoint(s)",
+                  f"- asked nothing at: {none_asked or 'nowhere'} — a request that read as clear"]
+        L += [f"- proxy answers that crossed into test structure: "
+              f"{len(leaky)} checkpoint(s)"
+              + (f" — {[(r['chain'], r['checkpoint'], r['proxy_leak_hits']) for r in leaky]}"
+                 if leaky else " (none; the audit is a heuristic over the recorded text, and "
+                 "the structural guarantee is that no proxy is given the reference tests)")]
+        if breaches:
+            L += [f"- turns that edited the suite against their brief (reverted): "
+                  f"{[(r['chain'], r['checkpoint']) for r in breaches]}"]
+        L += [""]
 
     surv = [(r["chain"], r["checkpoint"], m) for r in rows for m in r["survived"]]
     if surv:

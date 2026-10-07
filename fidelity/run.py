@@ -30,8 +30,8 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 import reference as refmod                       # noqa: E402  tools/reference.py
 import suite as suitemod                         # noqa: E402  tools/suite.py
-from fidelity import (capture, changes, erosion, mutations as mut, sandbox as sb,
-                      spec, turn)  # noqa: E402
+from fidelity import (capture, changes, conditions as cond, erosion, mutations as mut,
+                      sandbox as sb, spec, turn)  # noqa: E402
 
 BAR = "=" * 78
 SUB = "-" * 78
@@ -42,12 +42,11 @@ SUB = "-" * 78
 # scattered strings, and so a run cannot be named for an arm it did not carry out.
 CONDITIONS = {
     "blind": "",
-    "prototype-first": "",                 # == code_view=current, which already exists
-    "clarify-oracle": "needs the prompter-proxy of §4.5 and a question budget",
-    "blind-ai-review": "needs a second critique-and-revise turn after the draft",
-    "write-twice": "needs two independent authors and a reconciliation step; §4.4 also gates "
-                   "it on the chain-level bootstrap showing high spread",
-    "prompter-proxy-review": "needs the reviewer of §4.5 returning behavioural feedback",
+    "prototype-first": "",                 # == code_view=current, which already existed
+    "clarify-oracle": "",
+    "blind-ai-review": "",
+    "write-twice": "",
+    "prompter-proxy-review": "",
 }
 
 
@@ -295,7 +294,9 @@ def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, agent, lan
             # Show the confined area and what is withheld, and run NO turn. A dry run must not
             # cost an agent call — that is the whole reason to have one.
             rebuild()
-            cc = turn.confine_config(cfg, sandbox_dir, landlock, out_dir)
+            cc = turn.confine_config(
+                cfg, sandbox_dir, landlock, out_dir,
+                extra_sentinels=[] if args.code_view == "current" else [gate_tree])
             report_leaks(sb.leak_scan(sandbox_dir, specs_rel), cfg, seen_leaks)
             top = sorted(os.listdir(sandbox_dir))
             print(f"    sandbox: {sandbox_dir}")
@@ -332,16 +333,49 @@ def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, agent, lan
         report_leaks(leaks, cfg, seen_leaks)
 
         t_agent = time.time()
-        ar, attempts = turn.run_turn(
-            agent=agent, landlock=landlock, cfg=cfg, sandbox=sandbox_dir, prompt=prompt,
-            model=args.model or cfg.get("model"),
-            stream_path=os.path.join(out_dir, stream_file), run_dir=out_dir, rebuild=rebuild)
-        agent_block = turn.result_block(ar, attempts)
-        print(f"    turn   : ok={ar.ok} turns={ar.num_turns} cost=${ar.cost_usd:.4f} "
-              f"{hms(time.time() - t_agent)} attempts={len(attempts)}"
-              + (f"  stop={ar.stop_reason}" if ar.stop_reason else ""))
-        if ar.error:
-            print(f"    error  : {ar.error[:300]}")
+        exchanges: dict = {}
+        if args.condition in cond.ARMS:
+            # A multi-turn arm (§4.4). It owns the turns; grading below is untouched, which is
+            # the property that makes the arms comparable at all.
+            ctx = cond.Ctx(
+                n=n, cp_id=cp_id, request=cp["request"], contract=contract, fields=fields,
+                args=args, cfg=cfg, agent=agent, landlock=landlock, out_dir=out_dir, work=work,
+                suite_repo=suite_repo, specs_rel=specs_rel, app_pristine=app_pristine,
+                sandbox_dir=sandbox_dir, rebuild=rebuild, materialise=refmod.materialise,
+                spec_files_now=prior_files, total_tests=prior_count, gate_tree=gate_tree,
+                log=lambda m: print(m, flush=True))
+            print(f"    arm    : {args.condition} — "
+                  f"{len(cond.ARMS)} arm(s) available, this one is multi-turn", flush=True)
+            res = cond.ARMS[args.condition](ctx)
+            turns = res["turns"]
+            exchanges = res.get("exchanges") or {}
+            sandbox_dir = res.get("sandbox", ctx.sandbox_dir)
+            # the LAST turn that could change the suite is the one the grade belongs to; the
+            # others are kept whole in `turns` so a cost or a failure is never collapsed away
+            agent_block = dict(turns[-1])
+            agent_block["turns"] = turns
+            agent_block["condition"] = args.condition
+            ok = all(t.get("ok") for t in turns)
+            cost = sum(t.get("cost_usd") or 0 for t in turns)
+            agent_block["ok"] = ok
+            agent_block["cost_usd"] = cost
+            print(f"    turns  : {len(turns)} ok={ok} cost=${cost:.4f} "
+                  f"{hms(time.time() - t_agent)}")
+        else:
+            ar, attempts = turn.run_turn(
+                agent=agent, landlock=landlock, cfg=cfg, sandbox=sandbox_dir, prompt=prompt,
+                model=args.model or cfg.get("model"),
+                stream_path=os.path.join(out_dir, stream_file), run_dir=out_dir,
+                rebuild=rebuild,
+                extra_sentinels=[] if args.code_view == "current" else [gate_tree])
+            agent_block = turn.result_block(ar, attempts)
+            agent_block["condition"] = args.condition
+            print(f"    turn   : ok={ar.ok} turns={ar.num_turns} cost=${ar.cost_usd:.4f} "
+                  f"{hms(time.time() - t_agent)} attempts={len(attempts)}"
+                  + (f"  stop={ar.stop_reason}" if ar.stop_reason else ""))
+            if ar.error:
+                print(f"    error  : {ar.error[:300]}")
+        agent_block["exchanges"] = exchanges
 
         # Did it touch the application? It was told not to; a run that did is void, and the
         # diff is the evidence (DESIGN.md §4.1).
@@ -578,7 +612,7 @@ def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, agent, lan
 
     rec = capture.checkpoint_record(
         n=n, cp_id=cp_id, cp_type=cp_type, mutates=mutates, mode=args.mode,
-        code_view=args.code_view, no_code_change=no_code,
+        code_view=args.code_view, condition=args.condition, no_code_change=no_code,
         request=cp["request"], prompt=prompt, contract=contract,
         reference={"repo": (cfg.get("reference") or {}).get("repo"),
                    "origin": (cfg.get("reference") or {}).get("origin"),
@@ -650,15 +684,27 @@ def main() -> int:
                 f"Running it would commit a branch named for an arm the run did not carry out. "
                 f"Implement it, or pick one of: "
                 f"{', '.join(c for c, w in CONDITIONS.items() if not w)}")
-        # prototype-first IS code_view=current (DESIGN.md §4.4), so the two cannot disagree —
-        # a run mislabelled here would be named for an arm it did not run, which is exactly what
-        # putting the condition in the branch name is meant to prevent.
-        want = {"blind": ("previous", "none"), "prototype-first": ("current",)}[args.condition]
-        if args.code_view not in want:
+        # prototype-first IS code_view=current (DESIGN.md §4.4), and it is the ONLY arm in which
+        # the author sees cpN: clarify-oracle sits between blind and prototype-first on the
+        # ladder (§4.4.1), and AI-review and write-twice are blind by definition. So the two
+        # settings cannot disagree — a run mislabelled here would be named for an arm it did not
+        # run, which is exactly what putting the condition in the branch name prevents.
+        #
+        # The proxy arms are the subtle case: their PROXY reads cpN, in its own area (§4.5). That
+        # is not the author's code_view and must not be confused with it — which is why the
+        # author's view is checked here and the proxy's grounding is a property of the area that
+        # `conditions._proxy_area` builds.
+        sees_cpn = args.condition == "prototype-first"
+        if sees_cpn and args.code_view != "current":
             raise SystemExit(
-                f"condition `{args.condition}` requires code_view in {want}, got "
-                f"`{args.code_view}`. prototype-first is code_view=current and blind is not; "
-                f"pick the condition that matches the information the author is actually given.")
+                f"condition `prototype-first` IS code_view=current (§4.4) — got "
+                f"`{args.code_view}`. Pass --code-view current, or pick the condition that "
+                f"matches the information the author is actually given.")
+        if not sees_cpn and args.code_view == "current":
+            raise SystemExit(
+                f"condition `{args.condition}` is a blind-author arm (§4.4) but code_view is "
+                f"`current`, which hands the author cpN — that is prototype-first. Pass "
+                f"--code-view previous (or none), or run --condition prototype-first.")
     args.run_id = args.run_id or dt.datetime.now().strftime("%Y%m%d%H%M")
     if args.checkpoint:
         args.first = args.last = args.checkpoint

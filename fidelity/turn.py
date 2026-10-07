@@ -20,7 +20,8 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def confine_config(cfg: dict, sandbox: str, landlock, run_dir: str) -> dict | None:
+def confine_config(cfg: dict, sandbox: str, landlock, run_dir: str,
+                   extra_sentinels=()) -> dict | None:
     """The Landlock config for the turn, or None to run unconfined.
 
     Unlike the erosion harness, there is no mirror-based fallback here: hiding the answer IS the
@@ -49,6 +50,14 @@ def confine_config(cfg: dict, sandbox: str, landlock, run_dir: str) -> dict | No
                  os.path.join(ROOT, "reference"),
                  os.path.join(ROOT, "contracts"),
                  run_dir]
+    # Whatever this particular turn must not reach: cpN's materialised tree (the answer, present
+    # in `work/` for grading before the turn ever runs), a prompter-proxy's area (which holds cpN
+    # on purpose, §4.5), and under write-twice the other author's sandbox. The allowlist already
+    # denies all of `work/` — it grants only the sandbox and the toolchain — so these are the
+    # fail-closed CHECK on that, in the spirit of §11.1: reasoning about what should be absent is
+    # not the same as verifying what is.
+    sentinels += [s for s in extra_sentinels
+                  if os.path.abspath(s) != os.path.abspath(sandbox)]
     iso = (cfg.get("isolation") or {}).get("agent_confinement") or {}
     return {"enabled": True,
             "ro": ro + list(iso.get("extra_ro_binds", [])),
@@ -57,7 +66,8 @@ def confine_config(cfg: dict, sandbox: str, landlock, run_dir: str) -> dict | No
 
 
 def run_turn(*, agent, landlock, cfg: dict, sandbox: str, prompt: str, model: str,
-             stream_path: str, run_dir: str, rebuild) -> tuple[object, list[dict]]:
+             stream_path: str, run_dir: str, rebuild,
+             extra_sentinels=()) -> tuple[object, list[dict]]:
     """Run the turn, retrying a usage-limit or transient failure. The sandbox is REBUILT before
     every attempt (`rebuild()`), so a retry starts from the same clean area rather than on top of
     a half-finished one — a partially-edited suite carried into the next attempt would score as
@@ -74,7 +84,8 @@ def run_turn(*, agent, landlock, cfg: dict, sandbox: str, prompt: str, model: st
         ar = agent.run_agent(prompt, cwd=sandbox, model=model,
                              timeout=cfg.get("agent_timeout", 3600),
                              capture_path=stream_path,
-                             confine=confine_config(cfg, sandbox, landlock, run_dir))
+                             confine=confine_config(cfg, sandbox, landlock, run_dir,
+                                                    extra_sentinels))
         log.append({"ok": ar.ok, "limit_reached": ar.limit_reached,
                     "retryable": ar.retryable, "cost_usd": ar.cost_usd,
                     "num_turns": ar.num_turns, "duration_ms": ar.duration_ms,

@@ -65,6 +65,30 @@ inaccuracy. Showing cpN would remove it and reduce the exercise to "write a test
 `code_view` is a condition rather than a constant — `previous` (default), `none` (harder, but
 conflates navigation with comprehension) and `current` (diagnostic ceiling only).
 
+## The six conditions
+
+One run per arm, graded by the identical pipeline — they are comparable precisely because only
+the input moves (DESIGN.md §4.4). `--condition <arm>`, which also names the suite branch.
+
+| arm | what changes | turns |
+| --- | --- | --- |
+| `blind` (default) | request and contract only, one shot | 1 |
+| `prototype-first` | the author also sees the validated cpN — this IS `code_view=current` | 1 |
+| `clarify-oracle` | the author asks behavioural questions first; a prompter-proxy grounded in cpN answers, within a budget | 3 |
+| `blind-ai-review` | a reviewer with the author's exact information critiques the draft; the author revises. No ground truth enters | 3 |
+| `prompter-proxy-review` | a prompter-proxy grounded in cpN reads the draft and returns English behavioural feedback; the author revises | 3 |
+| `write-twice` | two independent authors from the same suite, then a reconciliation turn that sees both drafts | 3 |
+
+A proxy knows the answer, so the rule that keeps the proxy arms from collapsing into
+prototype-first-by-paraphrase is **structural**: its area holds cpN and never the reference tests,
+so it cannot quote an assertion it was never given (§4.5). Every question, answer and note is
+recorded in `cpNN.json`, scanned for test structure, and reported by `analyse` — the questions an
+author felt it had to ask are a map of where the English request is ambiguous, worth reading
+whatever the score.
+
+Agent mode refuses an arm whose code_view contradicts it: only `prototype-first` may see cpN, and
+it must.
+
 See **[DESIGN.md](./DESIGN.md)** for the method, **[REFERENCE_CHAIN.md](./REFERENCE_CHAIN.md)** for
 which chain is the fixture and what must be repaired first.
 
