@@ -1,0 +1,171 @@
+// Acceptance test for the change request:
+//   "Let me set a budget on a project. Show how much I have invoiced against it. Show what is left."
+//
+// A project gains a BUDGET. On the project's detail page a budget panel (project-budget-panel)
+// surfaces three things:
+//   - project-budget    — the budget itself, an editable control the owner SETS (the request's
+//                          "let me set a budget"); there is no separate submit, so the value is
+//                          committed by leaving the field.
+//   - project-invoiced  — how much has been invoiced against the project: the sum of THIS project's
+//                          invoices (the same amounts the invoices table adds up to).
+//   - project-remaining — what is left: the budget minus what has been invoiced.
+// Setting the budget is held by the server (it survives a fresh load), invoiced tracks the project's
+// invoices (so raising a new invoice moves it), and remaining is always budget − invoiced — it goes
+// negative once a project is invoiced past its budget.
+//
+// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed (the app's /__test__
+// endpoint): `clients` honours { id, name, email }, `projects` honours { id, name, clientId, budget }
+// and `invoices` honours { id, amount, projectId }.
+import { test, expect, type Page, type Locator } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+// Money as the app shows it everywhere: a dollar sign and two cents digits, e.g. $650.00, with a
+// leading minus for a value below zero (-$150.00). Grouping ($1,000.00) is allowed but not required.
+// Anchored (^…$) so the cell carries the money value and nothing else. These are the amounts the
+// change "shows" — invoiced and remaining — so each must read as proper money.
+const money = (dollars: number): RegExp => {
+  const neg = dollars < 0;
+  const whole = Math.trunc(Math.abs(dollars)).toLocaleString('en-US').replace(/,/g, ',?');
+  return new RegExp(`^${neg ? '-' : ''}\\$${whole}\\.00$`);
+};
+
+// The budget control holds the raw number that was set (what you type to set a budget), tolerant of
+// a trailing ".0"/".00" an input might keep.
+const budgetValue = (dollars: number): RegExp => new RegExp(`^${dollars}(\\.0{1,2})?$`);
+
+const CLIENTS = [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }];
+
+// Set the budget by typing into the budget control and committing it the way a user would — there is
+// no submit button, so the value is committed by pressing Enter and moving focus off the field; the
+// change saves on whichever of those the implementation listens for.
+async function setBudget(page: Page, control: Locator, dollars: number): Promise<void> {
+  await control.fill(String(dollars));
+  await control.press('Enter');
+  await control.press('Tab');
+}
+
+test.describe('Project budget — invoiced against it and what is left', () => {
+  test('the budget panel shows the budget, what has been invoiced, and what is left', async ({
+    page,
+  }) => {
+    await resetAndSeed({
+      clients: CLIENTS,
+      projects: [
+        { id: 1, name: 'Website Redesign', clientId: 1, budget: 1000 },
+        { id: 2, name: 'Mobile App', clientId: 1, budget: 5000 },
+      ],
+      invoices: [
+        { id: 1, amount: 100, projectId: 1 },
+        { id: 2, amount: 250, projectId: 1 },
+        { id: 3, amount: 50, projectId: 1 },
+        // An invoice on a DIFFERENT project must not count toward THIS project's invoiced amount.
+        { id: 4, amount: 999, projectId: 2 },
+      ],
+    });
+
+    await page.goto('/projects/1');
+    await expect(page.getByTestId('project-detail-page')).toBeVisible();
+
+    const panel = page.getByTestId('project-budget-panel');
+    await expect(panel).toBeVisible();
+
+    // The budget that was set on the project.
+    await expect(page.getByTestId('project-budget')).toHaveValue(budgetValue(1000));
+
+    // Invoiced against it = this project's three invoices: 100 + 250 + 50 = 400 (the other project's
+    // 999 is excluded).
+    await expect(page.getByTestId('project-invoiced')).toHaveText(money(400));
+    await expect(panel).not.toContainText('999');
+
+    // What is left = budget − invoiced = 1000 − 400 = 600.
+    await expect(page.getByTestId('project-remaining')).toHaveText(money(600));
+  });
+
+  test('setting a budget is held by the server and determines what is left', async ({ page }) => {
+    // Start with no budget set (0) and some already invoiced, so what is left depends entirely on the
+    // budget the owner now sets.
+    await resetAndSeed({
+      clients: CLIENTS,
+      projects: [{ id: 1, name: 'Website Redesign', clientId: 1, budget: 0 }],
+      invoices: [
+        { id: 1, amount: 200, projectId: 1 },
+        { id: 2, amount: 100, projectId: 1 },
+      ],
+    });
+
+    await page.goto('/projects/1');
+    await expect(page.getByTestId('project-budget-panel')).toBeVisible();
+
+    // Invoiced is 200 + 100 = 300 regardless of the budget.
+    await expect(page.getByTestId('project-invoiced')).toHaveText(money(300));
+
+    // Set a budget of 1000.
+    await setBudget(page, page.getByTestId('project-budget'), 1000);
+
+    // What is left recomputes from the budget just set: 1000 − 300 = 700.
+    await expect(page.getByTestId('project-remaining')).toHaveText(money(700));
+    await expect(page.getByTestId('project-invoiced')).toHaveText(money(300));
+
+    // The budget is held by the server, not just the page: it survives a fresh load, and so does the
+    // remaining it drives.
+    await page.reload();
+    await expect(page.getByTestId('project-budget')).toHaveValue(budgetValue(1000));
+    await expect(page.getByTestId('project-remaining')).toHaveText(money(700));
+    await expect(page.getByTestId('project-invoiced')).toHaveText(money(300));
+  });
+
+  test('invoiced tracks the project invoices — raising a new one reduces what is left', async ({
+    page,
+  }) => {
+    await resetAndSeed({
+      clients: CLIENTS,
+      projects: [
+        { id: 1, name: 'Website Redesign', clientId: 1, budget: 1000 },
+        { id: 2, name: 'Mobile App', clientId: 1, budget: 5000 },
+      ],
+      invoices: [
+        { id: 1, amount: 200, projectId: 1 },
+        // On another project — never counted here, before or after the new invoice.
+        { id: 2, amount: 999, projectId: 2 },
+      ],
+    });
+
+    await page.goto('/projects/1');
+    await expect(page.getByTestId('project-budget-panel')).toBeVisible();
+
+    // One invoice of 200 against a 1000 budget: invoiced 200, remaining 800.
+    await expect(page.getByTestId('project-invoiced')).toHaveText(money(200));
+    await expect(page.getByTestId('project-remaining')).toHaveText(money(800));
+
+    // Raise a new invoice for 300 on this project.
+    await expect(page.getByTestId('invoice-form')).toBeVisible();
+    await page.getByTestId('invoice-form-amount').fill('300');
+    await page.getByTestId('invoice-form-submit').click();
+
+    // Invoiced grows to 200 + 300 = 500 and what is left falls to 1000 − 500 = 500.
+    await expect(page.getByTestId('project-invoiced')).toHaveText(money(500));
+    await expect(page.getByTestId('project-remaining')).toHaveText(money(500));
+
+    // The other project's 999 never entered the figures.
+    await expect(page.getByTestId('project-budget-panel')).not.toContainText('999');
+  });
+
+  test('what is left goes negative once invoiced past the budget', async ({ page }) => {
+    await resetAndSeed({
+      clients: CLIENTS,
+      projects: [{ id: 1, name: 'Website Redesign', clientId: 1, budget: 200 }],
+      invoices: [
+        { id: 1, amount: 300, projectId: 1 },
+        { id: 2, amount: 50, projectId: 1 },
+      ],
+    });
+
+    await page.goto('/projects/1');
+    await expect(page.getByTestId('project-budget-panel')).toBeVisible();
+
+    // Invoiced 300 + 50 = 350 against a budget of 200: what is left = 200 − 350 = −150, shown as a
+    // negative amount (the project is over budget).
+    await expect(page.getByTestId('project-invoiced')).toHaveText(money(350));
+    await expect(page.getByTestId('project-remaining')).toHaveText(money(-150));
+  });
+});
