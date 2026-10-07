@@ -1,0 +1,203 @@
+// Acceptance test for the change request:
+//   "The invoice list is huge now. Show it a page at a time with next and previous."
+//
+// The all-invoices page (invoices-page), which lists every invoice from every project in one place,
+// gains a PAGER (data-testid="invoice-pager") so the huge list is shown ONE PAGE AT A TIME rather
+// than all at once. The pager carries a page label (invoice-page-label) saying which page you are on
+// and two controls to move through the pages: next (invoice-page-next) and previous
+// (invoice-page-prev). Advancing with next shows the next slice of invoices; going back with prev
+// shows the previous slice. The pages together cover every invoice exactly once (nothing is dropped
+// or duplicated), and you cannot page before the first page or past the last. Because the current
+// page outlives a click (CLAUDE.md rule 4) it lives in the URL and survives a fresh load.
+//
+// The request names no page size, so the test does not pin one: it DERIVES the page size from how
+// many rows the first page actually shows, then asserts the pager's behaviour relative to that size.
+// What it pins is the MEANING of "a page at a time": the first page shows only SOME of the invoices
+// (not all), and next/prev walk the full list in fixed-size slices that partition it. The seed is a
+// deliberately "huge" list (31 invoices — a prime, so the last page is always a partial page for any
+// realistic page size) so that more than one page must exist whatever modest page size is chosen.
+//
+// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed (the app's /__test__
+// endpoint): `clients` honours { id, name, email }, `projects` honours { id, name, clientId } and
+// `invoices` honours { id, amount, projectId, status }.
+import { test, expect, type Page, type Locator } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+
+// A "huge" list. 31 is prime, so pageSize never divides it evenly for any pageSize in [2, 30] — the
+// last page is always a genuine partial page, which exercises the remainder. One client, one project
+// keeps the fixture about the pager and nothing else; every invoice carries a distinct id 1..31.
+const TOTAL = 31;
+const SEED = {
+  clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
+  projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
+  invoices: Array.from({ length: TOTAL }, (_, i) => ({
+    id: i + 1,
+    amount: (i + 1) * 10,
+    projectId: 1,
+    status: 'SENT',
+  })),
+};
+
+const ALL_IDS = Array.from({ length: TOTAL }, (_, i) => i + 1);
+
+const invoiceRows = (page: Page) => page.locator('[data-testid^="invoice-row-"]');
+const pageLabel = (page: Page) => page.getByTestId('invoice-page-label');
+
+// The ids of the invoice rows currently rendered, top to bottom.
+async function pageIds(page: Page): Promise<number[]> {
+  return invoiceRows(page).evaluateAll((els) =>
+    els.map((el) => Number(el.getAttribute('data-testid')!.replace('invoice-row-', ''))),
+  );
+}
+
+// Reach the invoices page the way a user would — via its nav link — so the page's own URL is not pinned.
+async function openAllInvoices(page: Page): Promise<void> {
+  await page.goto('/');
+  const nav = page.getByTestId('nav-invoices');
+  await expect(nav).toBeVisible();
+  await nav.click();
+  await expect(page.getByTestId('invoices-page')).toBeVisible();
+}
+
+// At a boundary (first page's prev, last page's next) you cannot page further. An implementation may
+// express that by not rendering the control, hiding it, disabling it, or leaving it enabled but
+// making the click a no-op. All four are accepted; what is NOT accepted is the page actually moving.
+async function assertAtBoundary(page: Page, control: Locator): Promise<void> {
+  const before = await pageIds(page);
+  const beforeLabel = await pageLabel(page).innerText();
+  if ((await control.count()) === 0) return; // not rendered at the boundary
+  if (!(await control.isVisible())) return; // hidden at the boundary
+  if (await control.isDisabled()) return; // disabled at the boundary
+  // Enabled and visible: activating it must be a clamped no-op — the page does not change.
+  await control.click();
+  expect(await pageIds(page)).toEqual(before);
+  expect(await pageLabel(page).innerText()).toBe(beforeLabel);
+}
+
+test.describe('Show the invoice list a page at a time', () => {
+  test('the invoices page shows a pager and only one page of invoices at a time', async ({ page }) => {
+    await resetAndSeed(SEED);
+    await openAllInvoices(page);
+
+    // The one list is still there, but it is now fronted by a pager with a page label and a next
+    // control (there are more pages, so next is live on the first page).
+    await expect(page.getByTestId('all-invoices-table')).toBeVisible();
+    await expect(page.getByTestId('invoice-pager')).toBeVisible();
+    await expect(pageLabel(page)).toBeVisible();
+    await expect(pageLabel(page)).not.toHaveText('');
+    await expect(page.getByTestId('invoice-page-next')).toBeVisible();
+    await expect(page.getByTestId('invoice-page-next')).toBeEnabled();
+
+    // The heart of "a page at a time": the first page shows SOME invoices, not the whole huge list.
+    const first = await pageIds(page);
+    expect(first.length).toBeGreaterThan(0);
+    expect(first.length).toBeLessThan(TOTAL);
+    await expect(invoiceRows(page)).toHaveCount(first.length);
+  });
+
+  test('next and previous walk fixed-size pages that together cover every invoice exactly once', async ({
+    page,
+  }) => {
+    await resetAndSeed(SEED);
+    await openAllInvoices(page);
+
+    const label = pageLabel(page);
+    const pages: number[][] = [];
+
+    // Page 1 fixes the page size (it is full, because more pages follow).
+    pages.push(await pageIds(page));
+    const pageSize = pages[0].length;
+    expect(pageSize).toBeGreaterThan(0);
+    expect(pageSize).toBeLessThan(TOTAL);
+    const expectedPages = Math.ceil(TOTAL / pageSize);
+    expect(expectedPages).toBeGreaterThanOrEqual(2);
+
+    // Walk forward with NEXT, one page per step. Each step must change the page label (the label
+    // names the page you are on), which also serves as the signal the new page has rendered.
+    let lastLabel = await label.innerText();
+    for (let p = 2; p <= expectedPages; p++) {
+      const next = page.getByTestId('invoice-page-next');
+      await expect(next).toBeVisible();
+      await expect(next).toBeEnabled();
+      await next.click();
+      await expect(label).not.toHaveText(lastLabel);
+      lastLabel = await label.innerText();
+      pages.push(await pageIds(page));
+    }
+
+    // Every page before the last is a full page; the last is the remainder.
+    for (let i = 0; i < expectedPages - 1; i++) {
+      expect(pages[i].length).toBe(pageSize);
+    }
+    expect(pages[expectedPages - 1].length).toBe(TOTAL - pageSize * (expectedPages - 1));
+
+    // The pages partition the whole list: every invoice appears exactly once across the pages, with
+    // none dropped and none duplicated.
+    const seen = pages.flat();
+    expect(seen.length).toBe(TOTAL);
+    expect(new Set(seen).size).toBe(TOTAL);
+    expect([...seen].sort((a, b) => a - b)).toEqual(ALL_IDS);
+
+    // Walk back with PREVIOUS: it is the true inverse of next, landing on the earlier pages again
+    // with exactly the same rows and labels.
+    for (let p = expectedPages - 1; p >= 1; p--) {
+      const prev = page.getByTestId('invoice-page-prev');
+      await expect(prev).toBeVisible();
+      await expect(prev).toBeEnabled();
+      await prev.click();
+      await expect(label).not.toHaveText(lastLabel);
+      lastLabel = await label.innerText();
+      expect(await pageIds(page)).toEqual(pages[p - 1]);
+    }
+  });
+
+  test('you cannot page before the first page or past the last page', async ({ page }) => {
+    await resetAndSeed(SEED);
+    await openAllInvoices(page);
+
+    const firstIds = await pageIds(page);
+    const pageSize = firstIds.length;
+    const expectedPages = Math.ceil(TOTAL / pageSize);
+
+    // On the first page there is nothing earlier: previous cannot move you off page 1.
+    await assertAtBoundary(page, page.getByTestId('invoice-page-prev'));
+    expect(await pageIds(page)).toEqual(firstIds);
+
+    // Advance to the last page.
+    const label = pageLabel(page);
+    let lastLabel = await label.innerText();
+    for (let p = 2; p <= expectedPages; p++) {
+      const next = page.getByTestId('invoice-page-next');
+      await next.click();
+      await expect(label).not.toHaveText(lastLabel);
+      lastLabel = await label.innerText();
+    }
+    const lastIds = await pageIds(page);
+    expect(lastIds.length).toBe(TOTAL - pageSize * (expectedPages - 1));
+
+    // On the last page there is nothing further: next cannot move you past it.
+    await assertAtBoundary(page, page.getByTestId('invoice-page-next'));
+    expect(await pageIds(page)).toEqual(lastIds);
+  });
+
+  test('the current page lives in the URL and survives a fresh load', async ({ page }) => {
+    await resetAndSeed(SEED);
+    await openAllInvoices(page);
+
+    const label = pageLabel(page);
+    const firstLabel = await label.innerText();
+
+    // Move to the second page.
+    await page.getByTestId('invoice-page-next').click();
+    await expect(label).not.toHaveText(firstLabel);
+    const secondIds = await pageIds(page);
+    const secondLabel = await label.innerText();
+
+    // Reloading re-reads the page from the URL; the same (second) page comes back — the current page
+    // is held in the URL, not in throwaway component state.
+    await page.reload();
+    await expect(page.getByTestId('invoices-page')).toBeVisible();
+    await expect(pageLabel(page)).toHaveText(secondLabel);
+    expect(await pageIds(page)).toEqual(secondIds);
+  });
+});
