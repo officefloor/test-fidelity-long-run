@@ -162,6 +162,19 @@ def _records(kind: str, locator: str) -> list[dict]:
     return [json.load(open(n)) for n in names]
 
 
+def manifest(run_id: str) -> dict:
+    """The run manifest of the first chain that has one. Read from the same resolved source as
+    the records, so a run analysed from a fetched branch gets its provenance from the branch."""
+    for chain, (kind, locator) in sorted(sources(run_id).items()):
+        try:
+            if kind == "branch":
+                return json.loads(_git(ROOT, "show", f"{locator}:capture/run.json"))
+            return json.load(open(os.path.join(locator, "run.json")))
+        except Exception:
+            continue
+    return {}
+
+
 def _exchange_cols(ex: dict) -> dict:
     """The condition's exchanges, as columns. §4.5 makes two of these results in their own right:
     the questions an author felt it had to ask map where the English request is ambiguous, and
@@ -348,6 +361,33 @@ def main() -> int:
           and r["mutation_zero_correct"] is not False]
     L += [f"**Fidelity rate: {len(ok)}/{len(rows)} "
           f"({100*len(ok)/len(rows):.0f}%)** — green, not shrinking, mutation zero correct.", ""]
+
+    # What produced the run. An analysis that cannot say this is not checkable by anyone who
+    # did not watch it happen — and `dirty` is the caveat that matters most, because a run from
+    # an edited tree cannot be reproduced from its commit alone.
+    man = manifest(args.run_id)
+    prov = man.get("provenance") or {}
+    if prov:
+        h, tc = prov.get("harness") or {}, prov.get("toolchain") or {}
+        rm = prov.get("reference_manifest") or {}
+        L += ["## What produced this run", "",
+              f"- harness commit: `{(h.get('commit') or '?')[:12]}`"
+              + ("  **working tree was DIRTY** — not reproducible from that commit alone: "
+                 f"{', '.join((h.get('dirty_files') or [])[:6])}" if h.get("dirty")
+                 else " (clean tree)"),
+              f"- fixture: `{rm.get('source_branch') or man.get('reference', {}).get('branch')}`"
+              f" of {rm.get('source_repo') or '?'}",
+              f"- erosion harness: `{((prov.get('erosion_harness') or {}).get('commit') or '?')[:12]}`",
+              f"- toolchain: playwright {tc.get('playwright')}, node {tc.get('node')}, "
+              f"python {tc.get('python')}",
+              f"- model: {(man.get('config') or {}).get('model')}"]
+        if man.get("completed"):
+            L += [f"- run completed {man['completed']} "
+                  f"({(man.get('elapsed_seconds') or 0) / 3600:.1f}h)"]
+        elif man:
+            L += ["- **no completion recorded** — this run's manifest says it started and never "
+                  "finished, so treat the totals as a prefix, not a run"]
+        L += [""]
 
     L += ["## Does it degrade as the suite grows?", ""]
     if len(chains) < 2:

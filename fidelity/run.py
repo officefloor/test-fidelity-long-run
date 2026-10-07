@@ -188,7 +188,7 @@ def revert_tree(tree: str) -> None:
 
 def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, agent, landlock,
                    gate_cfg: dict, out_dir: str, prev_ids: set[str], prev_suite: dict,
-                   suite_repo: str | None, seen_leaks: set[str]) -> dict:
+                   suite_repo: str | None, seen_leaks: set[str], prov: dict) -> dict:
     cp_id = cp["id"]
     cp_type = cp.get("type", "additive")
     mutates = [int(m) for m in (cp.get("mutates") or [])]
@@ -554,13 +554,15 @@ def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, agent, lan
             if not ok_apply:
                 print(f"    {m['id']:<42} DID NOT APPLY  {err[:120]}")
                 muts.append({"id": m["id"], "kind": "authored", "applied": False,
-                             "error": err, "killed": None, "correct": None})
+                             "error": err, "killed": None, "correct": None,
+                             "spec": {"file": m.get("file"), "find": m.get("find"),
+                                      "replace": m.get("replace")}})
                 revert_tree(gate_tree)
                 continue
             mo = correctness.run_tests(gate_tree, n, gate_cfg)
             block = capture.mutation_block(m["id"], "authored",
                                            (m.get("breaks") or "").strip(), mo,
-                                           baseline_failed, expect_kill=True)
+                                           baseline_failed, expect_kill=True, spec=m)
             block["file"] = m.get("file")
             block["applied"] = True
             block["clause"] = m.get("clause")
@@ -617,12 +619,15 @@ def run_checkpoint(*, n: int, cp: dict, cfg: dict, args, correctness, agent, lan
 
     rec = capture.checkpoint_record(
         n=n, cp_id=cp_id, cp_type=cp_type, mutates=mutates, mode=args.mode,
-        code_view=args.code_view, condition=args.condition, no_code_change=no_code,
+        code_view=args.code_view, condition=(args.condition if args.mode == 'agent' else None), no_code_change=no_code,
         request=cp["request"], prompt=prompt, contract=contract,
         reference={"repo": (cfg.get("reference") or {}).get("repo"),
                    "origin": (cfg.get("reference") or {}).get("origin"),
                    "branch": (cfg.get("reference") or {}).get("branch"),
-                   "repairs_applied": repairs},
+                   "repairs_applied": repairs,
+                   # the exact fixture commit and patch digest for THIS checkpoint, so the
+                   # application a verdict refers to is identified by the record itself
+                   **(prov.get("reference_manifest", {}).get("checkpoints", {}).get(n) or {})},
         suite={"files": {k: v for k, v in suite_now.items()}, "total_tests": total_tests,
                "file_delta": fdelta, "test_delta": tdelta,
                "test_moves": {"added": moves["added"], "revised": moves["revised"],
@@ -776,6 +781,18 @@ def main() -> int:
     print(f"  started   : {now()}")
     print(BAR, flush=True)
 
+    started_at = now()
+    prov = capture.provenance(cfg, ROOT)
+    h = prov.get("harness") or {}
+    print(f"  harness   : {(h.get('commit') or '?')[:12]}"
+          + ("  *** WORKING TREE DIRTY — this run is not reproducible from that commit alone; "
+             f"{len(h.get('dirty_files') or [])} changed file(s) recorded ***"
+             if h.get("dirty") else " (clean)"))
+    tc = prov.get("toolchain") or {}
+    print(f"  toolchain : playwright {tc.get('playwright')}  node {tc.get('node')}  "
+          f"python {tc.get('python')}")
+    print(BAR, flush=True)
+
     t_run = time.time()
     rows: list[dict] = []
     for ci, chain in enumerate(chain_list, 1):
@@ -785,10 +802,10 @@ def main() -> int:
         os.makedirs(out_dir, exist_ok=True)
         capture.write_json(os.path.join(out_dir, "run.json"), capture.run_manifest(
             run_id=args.run_id, mode=args.mode, code_view=args.code_view,
-            condition=args.condition, cfg=cfg,
+            condition=(args.condition if args.mode == 'agent' else None), cfg=cfg, provenance=prov,
             reference={"repo": ref.get("repo"), "origin": ref.get("origin"),
                        "branch": ref.get("branch")},
-            checkpoints=todo, started=now()))
+            checkpoints=todo, started=started_at))
         if args.mode == "agent":
             suite_repo = os.path.join(ROOT, "runs", args.run_id, f"chain{chain}", "suite")
             sb.init_suite_repo(suite_repo,
@@ -804,6 +821,7 @@ def main() -> int:
                 res = run_checkpoint(n=n, cp=cps[n], cfg=cfg, args=args,
                                      correctness=correctness, agent=agent, landlock=landlock,
                                      gate_cfg=gate_cfg, out_dir=out_dir, prev_ids=prev_ids,
+                                     prov=prov,
                                      prev_suite=prev_suite, suite_repo=suite_repo,
                                      seen_leaks=seen_leaks)
             except Exception as e:                   # one bad checkpoint must not end the run
@@ -822,6 +840,17 @@ def main() -> int:
             print(f"  [chain {chain} {i}/{len(todo)} | {unit}/{total_units}] "
                   f"elapsed {hms(done)}  eta {hms(done / unit * (total_units - unit))}",
                   flush=True)
+        # Rewritten now the chain is done: `started` alone cannot distinguish a finished run
+        # from one that died at cp47, and every aggregate downstream assumes it knows which.
+        capture.write_json(os.path.join(out_dir, "run.json"), capture.run_manifest(
+            run_id=args.run_id, mode=args.mode, code_view=args.code_view,
+            condition=(args.condition if args.mode == 'agent' else None), cfg=cfg, provenance=prov,
+            reference={"repo": ref.get("repo"), "origin": ref.get("origin"),
+                       "branch": ref.get("branch")},
+            checkpoints=todo, started=started_at) | {
+                "completed": now(), "elapsed_seconds": round(time.time() - t_run, 1),
+                "checkpoints_graded": len([r for r in rows if r.get("chain") == chain]),
+                "chain": chain})
         if args.mode == "agent" and suite_repo:
             commit_capture(suite_repo, out_dir, f"{args.run_id} chain{chain}")
 
@@ -831,7 +860,34 @@ def main() -> int:
         return 0
     write_summary(os.path.join(ROOT, "results", args.run_id), args, rows,
                   time.time() - t_run)
+    # The summary is the only per-RUN file — everything else is per chain — so it is written
+    # above the chain directories and, until now, reached no branch at all: the one artefact of
+    # a finished run that existed solely in ignored `results/`. Each chain's branch gets it, so
+    # any single branch is the whole run.
+    if args.mode == "agent":
+        for chain in chain_list:
+            repo = os.path.join(ROOT, "runs", args.run_id, f"chain{chain}", "suite")
+            if os.path.isdir(os.path.join(repo, ".git")):
+                commit_summary(repo, os.path.join(ROOT, "results", args.run_id, "summary.md"),
+                               args.run_id)
     return 0
+
+
+def commit_summary(suite_repo: str, summary_path: str, run_id: str) -> None:
+    """The run-level summary, onto each chain's branch.
+
+    A second commit rather than part of `commit_capture`, because it can only be written once
+    EVERY chain has finished and the capture commit happens per chain as that chain ends."""
+    if not os.path.exists(summary_path):
+        return
+    dest = os.path.join(suite_repo, "capture")
+    os.makedirs(dest, exist_ok=True)
+    shutil.copy2(summary_path, os.path.join(dest, "summary.md"))
+    sb.git(suite_repo, "add", "-A")
+    subprocess.run(["git", "-C", suite_repo] + sb.GIT_ID
+                   + ["commit", "-q", "-m", f"run {run_id}: summary (all chains)"],
+                   check=False, capture_output=True, text=True)
+    print(f"  summary committed: {suite_repo}")
 
 
 def commit_capture(suite_repo: str, out_dir: str, run_id: str) -> None:

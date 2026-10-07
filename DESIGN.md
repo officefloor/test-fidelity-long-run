@@ -691,6 +691,20 @@ movement, every mutation run with the tests that caught it, and whether applicat
 touched. Every aggregate in the verdict is re-derivable from that, so a later question never
 requires re-running anything.
 
+**What produced the run** is recorded too, in the manifest: this harness's commit and whether
+its working tree was dirty, the erosion harness's commit, the fixture's branch and base commit
+with the per-checkpoint commit and patch digest beside each verdict, and the toolchain —
+Playwright above all, because flakiness is a measured quantity here and a runner upgrade moves
+it. `dirty` is the caveat that matters: a run from an edited tree is not reproducible from its
+commit alone, and that has to be visible rather than inferred. The manifest is rewritten when a
+chain finishes, with `completed` and the elapsed time, because `started` alone cannot tell a
+finished run from one that died at cp47 — and every aggregate downstream assumes it knows which.
+
+Each mutation now carries **the substitution it made** — file, clause, find, replace, and whether
+it was calibrated — not merely its name. Without that the record states a verdict whose subject
+lives only in `mutations/` at whichever commit the run used, and "why did this one survive?"
+cannot be asked of the record at all.
+
 A **multi-turn condition** (§4.4) records per turn, not per checkpoint: each turn's own prompt
 (`cpNN.<turn>.prompt.txt`) and full agent stream (`cpNN.<turn>.jsonl`), and its own cost, tokens,
 stop reason and retries in `agent.turns[]`. What passed BETWEEN the agents is kept twice over, on
