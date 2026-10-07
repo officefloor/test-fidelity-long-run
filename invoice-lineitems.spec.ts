@@ -10,8 +10,9 @@
 // own AMOUNT (lineitem-amount), which is "how many" × "price each". The invoice's total is WORKED OUT
 // for the user (invoice-amount) as the sum of its line amounts — never typed.
 //
-// A new line item is added with the line-item form (lineitem-form): a description, a quantity and a
-// unit price (lineitem-form-description / -qty / -unitprice, submitted with lineitem-form-submit).
+// A new line item is added with the line-item form (lineitem-form): a description, a quantity, the
+// unit that quantity is in and a unit price (lineitem-form-description / -qty / -unit / -unitprice,
+// submitted with lineitem-form-submit). Each line also shows that unit on its own row (lineitem-unit).
 // A line item must describe a real charge — a missing description, or a quantity or price that is not
 // more than zero, is rejected with a visible error (lineitem-form-error) and nothing is added. A
 // valid line item joins the list, its amount is worked out, the total grows to match, and it all
@@ -20,7 +21,8 @@
 // Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed (the app's /__test__
 // endpoint): `clients` honours { id, name, email }, `projects` honours { id, name, clientId } and an
 // invoice honours { id, projectId, status, lineItems } where each line item is
-// { description, qty, unitPrice }. This change surfaces no audit records, so there is nothing to
+// { id, description, qty, unit, unitPrice } (seeded by its explicit id). This change surfaces no
+// audit records, so there is nothing to
 // assert on the audit channel.
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { resetAndSeed } from '../support/seed';
@@ -63,7 +65,7 @@ test.describe('An invoice is a list of things charged for, with the total worked
           id: 1,
           projectId: 1,
           status: 'DRAFT',
-          lineItems: [{ description: 'Initial consulting', qty: 2, unitPrice: 100 }],
+          lineItems: [{ id: 1, description: 'Initial consulting', qty: 2, unitPrice: 100 }],
         },
       ],
     });
@@ -82,7 +84,7 @@ test.describe('An invoice is a list of things charged for, with the total worked
     await expect(page.getByTestId('invoice-lineitems-table')).toBeVisible();
   });
 
-  test('the detail page lists each line item with its description, quantity, price and amount', async ({
+  test('the detail page lists each line item with its description, quantity, unit, price and amount', async ({
     page,
   }) => {
     await resetAndSeed({
@@ -94,8 +96,8 @@ test.describe('An invoice is a list of things charged for, with the total worked
           projectId: 1,
           status: 'DRAFT',
           lineItems: [
-            { description: 'Design work', qty: 2, unitPrice: 150 },
-            { description: 'Hosting setup', qty: 3, unitPrice: 80 },
+            { id: 1, description: 'Design work', qty: 2, unit: 'hours', unitPrice: 150 },
+            { id: 2, description: 'Hosting setup', qty: 3, unit: 'months', unitPrice: 80 },
           ],
         },
       ],
@@ -105,16 +107,18 @@ test.describe('An invoice is a list of things charged for, with the total worked
     await expect(page.getByTestId('invoice-lineitems-table')).toBeVisible();
     await expect(lineItemRows(page)).toHaveCount(2);
 
-    // Each line gives a description, how many, the price each, and its own amount (how many × price).
+    // Each line gives a description, how many, in what unit, the price each, and its own amount.
     const design = rowByDescription(page, 'Design work');
     await expect(design).toHaveCount(1);
     await expectValue(design.getByTestId('lineitem-qty'), 2);
+    await expect(design.getByTestId('lineitem-unit')).toContainText('hours');
     await expectValue(design.getByTestId('lineitem-unitprice'), 150);
     await expectValue(design.getByTestId('lineitem-amount'), 300); // 2 × 150
 
     const hosting = rowByDescription(page, 'Hosting setup');
     await expect(hosting).toHaveCount(1);
     await expectValue(hosting.getByTestId('lineitem-qty'), 3);
+    await expect(hosting.getByTestId('lineitem-unit')).toContainText('months');
     await expectValue(hosting.getByTestId('lineitem-unitprice'), 80);
     await expectValue(hosting.getByTestId('lineitem-amount'), 240); // 3 × 80
 
@@ -145,7 +149,7 @@ test.describe('An invoice is a list of things charged for, with the total worked
           id: 1,
           projectId: 1,
           status: 'DRAFT',
-          lineItems: [{ description: 'Initial consulting', qty: 2, unitPrice: 100 }],
+          lineItems: [{ id: 1, description: 'Initial consulting', qty: 2, unitPrice: 100 }],
         },
       ],
     });
@@ -154,17 +158,19 @@ test.describe('An invoice is a list of things charged for, with the total worked
     await expect(lineItemRows(page)).toHaveCount(1);
     await expectValue(invoiceTotal(page), 200); // 2 × 100
 
-    // List another thing being charged for: a description, how many, and the price each.
+    // List another thing being charged for: a description, how many, in what unit, and the price each.
     await expect(page.getByTestId('lineitem-form')).toBeVisible();
     await page.getByTestId('lineitem-form-description').fill('Extra pages');
     await page.getByTestId('lineitem-form-qty').fill('4');
+    await page.getByTestId('lineitem-form-unit').fill('pages');
     await page.getByTestId('lineitem-form-unitprice').fill('90');
     await page.getByTestId('lineitem-form-submit').click();
 
-    // It joins the list with its amount worked out: 4 × 90 = 360.
+    // It joins the list with its unit and its amount worked out: 4 × 90 = 360.
     const added = rowByDescription(page, 'Extra pages');
     await expect(added).toHaveCount(1);
     await expectValue(added.getByTestId('lineitem-qty'), 4);
+    await expect(added.getByTestId('lineitem-unit')).toContainText('pages');
     await expectValue(added.getByTestId('lineitem-unitprice'), 90);
     await expectValue(added.getByTestId('lineitem-amount'), 360);
 
@@ -192,7 +198,7 @@ test.describe('A line item must describe a real charge', () => {
           id: 1,
           projectId: 1,
           status: 'DRAFT',
-          lineItems: [{ description: 'Base item', qty: 1, unitPrice: 100 }],
+          lineItems: [{ id: 1, description: 'Base item', qty: 1, unitPrice: 100 }],
         },
       ],
     });
@@ -281,6 +287,7 @@ test.describe('A line item must describe a real charge', () => {
     // Correct it to real figures and submit again.
     await page.getByTestId('lineitem-form-description').fill('Consulting');
     await page.getByTestId('lineitem-form-qty').fill('3');
+    await page.getByTestId('lineitem-form-unit').fill('days');
     await page.getByTestId('lineitem-form-unitprice').fill('40');
     await page.getByTestId('lineitem-form-submit').click();
 
