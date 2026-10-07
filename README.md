@@ -118,7 +118,18 @@ $V -m fidelity.run --mode replay --keep-work          # keep each materialised t
 ```sh
 $V -m fidelity.analyse --run-id <id>          # fidelity rate, churn, degradation slope
 $V -m fidelity.analyse --run-id <id> --csv    # also records.csv
+
+# a run performed on another machine: fetch its branches and analyse, no restore step
+git fetch origin 'refs/heads/agent/*:refs/remotes/origin/agent/*'
+$V -m fidelity.analyse --run-id 202610060034
 ```
+
+An agent run is wholly contained in its two suite branches, `agent/<run-id>-chain{1,2}` — one
+commit per checkpoint, plus a final commit holding that chain's whole capture (the prompts, the
+agent's streamed turns, the gate output, the mutation verdicts). `analyse` reads them from git
+directly, so `results/` is a scratch copy of a finished run and can be deleted. It stays the
+source for the two cases with no branch: a replay run commits nothing, and an unfinished run has
+no capture commit yet.
 
 Separate from the run on purpose: everything it produces is derived, so it can be re-run and
 corrected for free against a finished run — whereas the run itself produces the irreproducible

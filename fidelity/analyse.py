@@ -9,6 +9,12 @@ want from the part most likely to need changing.
     .venv/bin/python -m fidelity.analyse --run-id 202610041539
     .venv/bin/python -m fidelity.analyse --run-id <id> --csv     # also write records.csv
 
+Reads an agent run from its suite branch, straight out of git and with no checkout, so analysing
+a run needs only `git fetch` and works on a machine that never performed it. `results/` is a
+scratch copy of a finished run and may be deleted; it is still the source for the two cases that
+have no branch — a replay run, which commits nothing, and a run that has not finished, whose
+capture commit has not happened yet. The header says which source each chain came from.
+
 Answers two questions the run itself does not:
 
   SUITE COST AND CHURN (DESIGN.md §8) — does the generated suite rot? A suite at perfect
@@ -29,6 +35,8 @@ import argparse
 import glob
 import json
 import os
+import re
+import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -49,41 +57,107 @@ FIELDS = [
 ]
 
 
+# --- where a run's records come from -----------------------------------------
+#
+# A finished agent run is wholly contained in its own suite branch: run.py's commit_capture puts
+# the whole capture — prompts, agent streams, gate output, mutation verdicts — alongside the suite
+# it grades, so fetching that branch IS the run and `results/` is a scratch copy that may be
+# deleted. Hence the branch is preferred and read straight out of git, with no checkout: analysing
+# a run on a machine that never performed it is `git fetch` and nothing else.
+#
+# `results/` stays as the last resort because two cases have no branch to read: a replay run
+# commits nothing at all (run.py guards both the repo and the capture commit on `mode == agent`),
+# and an unfinished run has no capture commit yet — that is the last thing a chain does, so an
+# in-flight or crashed run exists only as the incremental writes under `results/`.
+
+RECORD = re.compile(r"^cp\d+\.json$")       # the graded records; .dryrun/.error are not records
+
+
+def _git(repo: str, *args: str) -> str:
+    return subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True).stdout
+
+
+def branch_refs(run_id: str) -> dict[int, str]:
+    """chain -> the run's suite branch as seen from THIS repository, local head preferred.
+
+    Named by run.py's init_suite_repo, so discovery is a glob rather than configuration."""
+    pat = f"agent/{run_id}-chain*"
+    out = _git(ROOT, "for-each-ref", "--format=%(refname)",
+               f"refs/heads/{pat}", f"refs/remotes/*/{pat}")
+    refs: dict[int, str] = {}
+    for ref in sorted(out.split()):            # refs/heads sorts ahead of refs/remotes
+        m = re.search(r"-chain(\d+)$", ref)
+        if m:
+            refs.setdefault(int(m.group(1)), ref)
+    return refs
+
+
+def sources(run_id: str) -> dict[int, tuple[str, str]]:
+    """chain -> (kind, locator). Assigned worst-first, so the best available source wins."""
+    out: dict[int, tuple[str, str]] = {}
+    base = os.path.join(ROOT, "results", run_id)
+    if glob.glob(os.path.join(base, "cp*.json")):     # a run from before the per-chain layout
+        out[1] = ("results", base)
+    for d in sorted(glob.glob(os.path.join(base, "chain*"))):
+        n = os.path.basename(d)[5:]
+        if n.isdigit():
+            out[int(n)] = ("results", d)
+    for d in sorted(glob.glob(os.path.join(ROOT, "runs", run_id, "chain*", "suite", "capture"))):
+        n = os.path.basename(os.path.dirname(os.path.dirname(d)))[5:]
+        if n.isdigit():
+            out[int(n)] = ("runs", d)
+    for chain, ref in branch_refs(run_id).items():
+        out[chain] = ("branch", ref)
+    return out
+
+
+def describe(run_id: str) -> str:
+    srcs = sources(run_id)
+    if not srcs:
+        return "nothing found"
+    return ", ".join(f"chain {c}: {k} `{os.path.relpath(loc, ROOT) if k != 'branch' else loc}`"
+                     for c, (k, loc) in sorted(srcs.items()))
+
+
+def _records(kind: str, locator: str) -> list[dict]:
+    """The chain's checkpoint records, in checkpoint order."""
+    if kind == "branch":
+        names = sorted(p for p in _git(ROOT, "ls-tree", "-r", "--name-only",
+                                       locator, "--", "capture").splitlines()
+                       if RECORD.match(os.path.basename(p)))
+        return [json.loads(_git(ROOT, "show", f"{locator}:{n}")) for n in names]
+    names = sorted(p for p in glob.glob(os.path.join(locator, "cp*.json"))
+                   if RECORD.match(os.path.basename(p)))
+    return [json.load(open(n)) for n in names]
+
+
 def load(run_id: str) -> list[dict]:
     """Every checkpoint record of every chain, flattened."""
-    base = os.path.join(ROOT, "results", run_id)
     rows: list[dict] = []
-    paths = sorted(glob.glob(os.path.join(base, "chain*", "cp*.json")))
-    if not paths:                      # a run from before the per-chain layout
-        paths = sorted(glob.glob(os.path.join(base, "cp*.json")))
-    for p in paths:
-        if ".dryrun" in p or ".error" in p:
-            continue
-        d = json.load(open(p))
-        chain = d.get("chain")
-        if chain is None:
-            m = os.path.basename(os.path.dirname(p))
-            chain = int(m[5:]) if m.startswith("chain") else 1
-        v, g = d["verdict"], d["gate"]
-        rows.append({
-            "chain": chain, "checkpoint": d["checkpoint"], "checkpoint_id": d["checkpoint_id"],
-            "type": d.get("type"), "no_code_change": d.get("no_code_change"),
-            "green": 1.0 if v["green"] else 0.0,
-            "kill_rate": v.get("kill_rate"),
-            "mutations_authored": v.get("mutations_authored"),
-            "mutations_killed": v.get("mutations_killed"),
-            "survived": v.get("survived") or [],
-            "mutation_zero_correct": v.get("mutation_zero_correct"),
-            "flaky_count": len(v.get("flaky_tests") or []),
-            "flaky_tests": v.get("flaky_tests") or [],
-            "tests_total": v.get("tests_total"), "tests_delta": v.get("tests_delta"),
-            "tests_added": v.get("tests_added"), "tests_revised": v.get("tests_revised"),
-            "tests_dropped": v.get("tests_dropped"),
-            "app_code_touched": len(v.get("app_code_touched") or []),
-            "test_seconds": g.get("test_seconds"), "wall_seconds": g.get("wall_seconds"),
-            "failed": g.get("failed") or [],
-            "suite_commit": ((d.get("agent") or {}) or {}).get("suite_commit"),
-        })
+    for chain, (kind, locator) in sorted(sources(run_id).items()):
+        for d in _records(kind, locator):
+            if d.get("chain") is not None:
+                chain = d["chain"]
+            v, g = d["verdict"], d["gate"]
+            rows.append({
+                "chain": chain, "checkpoint": d["checkpoint"], "checkpoint_id": d["checkpoint_id"],
+                "type": d.get("type"), "no_code_change": d.get("no_code_change"),
+                "green": 1.0 if v["green"] else 0.0,
+                "kill_rate": v.get("kill_rate"),
+                "mutations_authored": v.get("mutations_authored"),
+                "mutations_killed": v.get("mutations_killed"),
+                "survived": v.get("survived") or [],
+                "mutation_zero_correct": v.get("mutation_zero_correct"),
+                "flaky_count": len(v.get("flaky_tests") or []),
+                "flaky_tests": v.get("flaky_tests") or [],
+                "tests_total": v.get("tests_total"), "tests_delta": v.get("tests_delta"),
+                "tests_added": v.get("tests_added"), "tests_revised": v.get("tests_revised"),
+                "tests_dropped": v.get("tests_dropped"),
+                "app_code_touched": len(v.get("app_code_touched") or []),
+                "test_seconds": g.get("test_seconds"), "wall_seconds": g.get("wall_seconds"),
+                "failed": g.get("failed") or [],
+                "suite_commit": ((d.get("agent") or {}) or {}).get("suite_commit"),
+            })
     return rows
 
 
@@ -101,13 +175,17 @@ def churn(run_id: str, rows: list[dict]) -> None:
         from harness import metrics
     except Exception:
         return
-    for chain in sorted({r["chain"] for r in rows}):
-        repo = os.path.join(ROOT, "runs", run_id, f"chain{chain}", "suite")
-        if not os.path.isdir(os.path.join(repo, ".git")):
+    present = {r["chain"] for r in rows}
+    for chain, (kind, locator) in sorted(sources(run_id).items()):
+        if chain not in present:
             continue
-        import subprocess
-        log = subprocess.run(["git", "-C", repo, "log", "--format=%H %s", "--reverse"],
-                             capture_output=True, text=True).stdout.splitlines()
+        if kind == "branch":
+            repo, head = ROOT, locator          # the branch is in this repo's object store
+        else:
+            repo, head = os.path.join(ROOT, "runs", run_id, f"chain{chain}", "suite"), "HEAD"
+            if not os.path.isdir(os.path.join(repo, ".git")):
+                continue                        # a replay run: no suite history to measure
+        log = _git(repo, "log", "--format=%H %s", "--reverse", head).splitlines()
         shas = {}
         base = None
         for line in log:
@@ -126,7 +204,9 @@ def churn(run_id: str, rows: list[dict]) -> None:
             try:
                 st = metrics.reedit_line_stats(repo, prev, cur, base,
                                                lambda f: f.endswith(".spec.ts"))
-                r["churn_lines"] = st.get("reedit_lines")
+                r["churn_lines"] = st.get("reedit_lines_settled")
+                r["churn_removed"] = st.get("reedit_lines_removed")
+                r["churn_touched"] = st.get("reedit_lines_touched")
                 r["churn_age_mean"] = st.get("reedit_age_mean")
                 r["churn_rate"] = st.get("reedit_lines_rate")
             except Exception as e:
@@ -181,7 +261,10 @@ def main() -> int:
 
     rows = load(args.run_id)
     if not rows:
-        raise SystemExit(f"no checkpoint records under results/{args.run_id}/")
+        raise SystemExit(
+            f"no checkpoint records for {args.run_id}: no agent/{args.run_id}-chain* branch "
+            f"in this repository, no runs/{args.run_id}/chain*/suite/capture/, and nothing "
+            f"under results/{args.run_id}/. Fetch the run's branch, or name a run that exists.")
     churn(args.run_id, rows)
     chains = sorted({r["chain"] for r in rows})
     out = os.path.join(ROOT, "results", args.run_id, "analysis")
@@ -189,7 +272,8 @@ def main() -> int:
 
     L = [f"# test-fidelity-long-run — analysis of `{args.run_id}`", "",
          f"- chains: {chains}",
-         f"- checkpoints graded: {len(rows)}"]
+         f"- checkpoints graded: {len(rows)}",
+         f"- records from: {describe(args.run_id)}"]
 
     graded = [r for r in rows if r["mutations_authored"]]
     kr = [r["kill_rate"] for r in rows if r["kill_rate"] is not None]
