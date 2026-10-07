@@ -1,0 +1,7 @@
+$ bin/build
+
+$ npm ci --silent (cwd e2e)
+
+$ npx playwright install chromium (cwd e2e)
+
+[serve] app did not become ready at http://localhost:36165/actuator/health

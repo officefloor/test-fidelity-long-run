@@ -1,0 +1,544 @@
+{
+  "checkpoint": 5,
+  "checkpoint_id": "cp05_invoice_pay_audit",
+  "type": "additive",
+  "mutates": [],
+  "mode": "agent",
+  "code_view": "previous",
+  "no_code_change": false,
+  "request": "Let me mark an invoice as paid. Keep a record every time I do so I can check back later.\n",
+  "prompt": "You are writing ACCEPTANCE TESTS for one change to this application.\n\nYou write TESTS ONLY. Do not modify application source, build scripts, or the test support\nhelpers (e2e/support/*). A run that changes application code is void.\n\nTHE CHANGE REQUEST (as the user wrote it):\nLet me mark an invoice as paid. Keep a record every time I do so I can check back later.\n\nWHAT TO DO\nWrite Playwright acceptance test(s) under e2e/specs/ that verify this change request has been\nimplemented. Where the request revises behaviour that your EXISTING tests already assert, update\nthose tests too \u2014 the suite must describe the application as it is meant to be after this change,\nnot as it was before.\n\nAssert only through the two public channels below. Never reach into the database, the REST API, or\napplication internals.\n\nCHANNEL 1 \u2014 the UI, via data-testid\n  Introduced by THIS change (2):\n    invoice-pay-<id>\n    invoice-status\n  Every anchor available to you (39):\n    app-home\n    app-nav\n    app-root\n    client-email\n    client-form\n    client-form-email\n    client-form-email-error\n    client-form-name\n    client-form-submit\n    client-name\n    client-row-<id>\n    clients-empty\n    clients-page\n    clients-table\n    home-empty\n    invoice-amount\n    invoice-form\n    invoice-form-amount\n    invoice-form-submit\n    invoice-pay-<id>\n    invoice-row-<id>\n    invoice-status\n    nav-clients\n    nav-home\n    nav-projects\n    project-client\n    project-detail-page\n    project-form\n    project-form-client\n    project-form-name\n    project-form-submit\n    project-invoices-table\n    project-invoices-total\n    project-name\n    project-open-<id>\n    project-row-<id>\n    projects-empty\n    projects-page\n    projects-table\n  `<id>` / `<currency>` are placeholders: the concrete value comes from the data\n  your test seeds, e.g. client-row-1. Anchors are a stable contract \u2014 use them\n  exactly as written.\n\nCHANNEL 2 \u2014 the audit file, via auditLines() from ../support/audit\n  Introduced by THIS change (1):\n    INVOICE_PAID id=<id> amount=<amount>\n  Every record format available to you (1):\n    INVOICE_PAID id=<id> amount=<amount>\n\nSEED FIELDS HONOURED by /__test__/seed (anything else is ignored):\n    clients: email, id, name\n    invoices: amount, id, projectId, status\n    projects: clientId, id, name\n\nHOW DATA IS ARRANGED\nCall `resetAndSeed({...})` from `../support/seed` to put the application into the state your test\nneeds (it clears all data and the audit file first). Only the seed fields listed above are\nhonoured \u2014 a field that is not listed is accepted and SILENTLY IGNORED, so seeding it will look\nlike it worked and your assertion will fail for an unrelated-looking reason.\n\nTHE APPLICATION\nThe source in this directory is the application as it stands BEFORE this change request has been\nimplemented. You can read it and run it. Your new test SHOULD FAIL against it \u2014 the behaviour\nbeing requested is not there yet. That is expected, and is not a reason to weaken the test. Your\nexisting tests should still pass.\n\nYOUR EXISTING TESTS\n  e2e/specs/ holds the 4 spec file(s) you have written so far (19 tests).\n  Their git history is available. Update them where this change request revises\n  behaviour they assert; otherwise leave them alone.\n    client-email-required.spec.ts\n    clients.spec.ts\n    project-invoices.spec.ts\n    projects.spec.ts\n",
+  "contract": {
+    "checkpoint": 5,
+    "no_code_change": false,
+    "new_testids": [
+      "invoice-pay-<id>",
+      "invoice-status"
+    ],
+    "new_audit_records": [
+      "INVOICE_PAID id=<id> amount=<amount>"
+    ],
+    "available_testids": [
+      "app-home",
+      "app-nav",
+      "app-root",
+      "client-email",
+      "client-form",
+      "client-form-email",
+      "client-form-email-error",
+      "client-form-name",
+      "client-form-submit",
+      "client-name",
+      "client-row-<id>",
+      "clients-empty",
+      "clients-page",
+      "clients-table",
+      "home-empty",
+      "invoice-amount",
+      "invoice-form",
+      "invoice-form-amount",
+      "invoice-form-submit",
+      "invoice-pay-<id>",
+      "invoice-row-<id>",
+      "invoice-status",
+      "nav-clients",
+      "nav-home",
+      "nav-projects",
+      "project-client",
+      "project-detail-page",
+      "project-form",
+      "project-form-client",
+      "project-form-name",
+      "project-form-submit",
+      "project-invoices-table",
+      "project-invoices-total",
+      "project-name",
+      "project-open-<id>",
+      "project-row-<id>",
+      "projects-empty",
+      "projects-page",
+      "projects-table"
+    ],
+    "available_audit_records": [
+      "INVOICE_PAID id=<id> amount=<amount>"
+    ],
+    "seed_accepts": {
+      "clients": [
+        "email",
+        "id",
+        "name"
+      ],
+      "invoices": [
+        "amount",
+        "id",
+        "projectId",
+        "status"
+      ],
+      "projects": [
+        "clientId",
+        "id",
+        "name"
+      ]
+    }
+  },
+  "reference": {
+    "repo": "officehq-tanstack-officefloor",
+    "origin": "git@github.com:officefloor/officehq-tanstack-officefloor.git",
+    "branch": "evolve/202610020135/just-solve/chain2",
+    "repairs_applied": [
+      "005-seed-advances-the-clients-identity"
+    ]
+  },
+  "suite": {
+    "files": {
+      "client-email-required.spec.ts": [
+        "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing",
+        "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing",
+        "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list",
+        "client-email-required.spec.ts::correcting the email to a proper address then saves the client"
+      ],
+      "clients.spec.ts": [
+        "clients.spec.ts::a link in the nav opens the clients list",
+        "clients.spec.ts::with no clients the list shows an empty state",
+        "clients.spec.ts::all seeded clients are shown in one list, each with name and email",
+        "clients.spec.ts::adding a client with a name and email shows it in the list",
+        "clients.spec.ts::a client added on top of seeded clients joins the same single list"
+      ],
+      "invoice-paid.spec.ts": [
+        "invoice-paid.spec.ts::marking an unpaid invoice flips its status to paid, persists, and records it once",
+        "invoice-paid.spec.ts::marking one invoice leaves the others untouched, and each marking keeps its own record",
+        "invoice-paid.spec.ts::an invoice seeded as paid is shown as paid from the start"
+      ],
+      "project-invoices.spec.ts": [
+        "project-invoices.spec.ts::opening a project from the list lands on its detail page",
+        "project-invoices.spec.ts::the detail page lists the project invoices with their amounts and what they add up to",
+        "project-invoices.spec.ts::a project with no invoices shows an empty list that adds up to zero",
+        "project-invoices.spec.ts::adding a new invoice for an amount shows it and grows the total",
+        "project-invoices.spec.ts::a new invoice added to an empty project appears and the total reflects it"
+      ],
+      "projects.spec.ts": [
+        "projects.spec.ts::a link in the nav opens the projects page",
+        "projects.spec.ts::with no projects the list shows an empty state",
+        "projects.spec.ts::every seeded project is shown with its name and the name of the client it is for",
+        "projects.spec.ts::adding a project and picking its client shows it with that client name",
+        "projects.spec.ts::a project added on top of seeded projects joins the same single list"
+      ]
+    },
+    "total_tests": 22,
+    "file_delta": {
+      "added": [
+        "invoice-paid.spec.ts"
+      ],
+      "removed": [],
+      "modified": []
+    },
+    "test_delta": {
+      "added": [
+        "invoice-paid.spec.ts::an invoice seeded as paid is shown as paid from the start",
+        "invoice-paid.spec.ts::marking an unpaid invoice flips its status to paid, persists, and records it once",
+        "invoice-paid.spec.ts::marking one invoice leaves the others untouched, and each marking keeps its own record"
+      ],
+      "removed": []
+    },
+    "test_moves": {
+      "added": [
+        "invoice-paid.spec.ts::marking an unpaid invoice flips its status to paid, persists, and records it once",
+        "invoice-paid.spec.ts::marking one invoice leaves the others untouched, and each marking keeps its own record",
+        "invoice-paid.spec.ts::an invoice seeded as paid is shown as paid from the start"
+      ],
+      "revised": [],
+      "dropped": [],
+      "file_gone": []
+    },
+    "gate_id_delta": {
+      "added": [
+        "invoice-paid.spec.ts::an invoice seeded as paid is shown as paid from the start",
+        "invoice-paid.spec.ts::marking an unpaid invoice flips its status to paid, persists, and records it once",
+        "invoice-paid.spec.ts::marking one invoice leaves the others untouched, and each marking keeps its own record"
+      ],
+      "removed": []
+    }
+  },
+  "source": {
+    "kind": "agent",
+    "suite_repo": "/home/daniel/test-fidelity-long-run/runs/202610060034/chain2/suite",
+    "suite_commit": "f5797899d343f964e907164068b9d733b5b0def9",
+    "code_view": "previous",
+    "view_checkpoint": 4,
+    "files_added": [
+      "invoice-paid.spec.ts"
+    ],
+    "files_removed": []
+  },
+  "gate": {
+    "build_ok": true,
+    "total_selected": 22,
+    "passed": 20,
+    "failed_count": 2,
+    "failed": [
+      "project-invoices.spec.ts::adding a new invoice for an amount shows it and grows the total",
+      "projects.spec.ts::a project added on top of seeded projects joins the same single list"
+    ],
+    "repeats": 2,
+    "flaky": [],
+    "flaky_count": 0,
+    "results": {
+      "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing": true,
+      "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing": true,
+      "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list": true,
+      "client-email-required.spec.ts::correcting the email to a proper address then saves the client": true,
+      "clients.spec.ts::a link in the nav opens the clients list": true,
+      "clients.spec.ts::with no clients the list shows an empty state": true,
+      "clients.spec.ts::all seeded clients are shown in one list, each with name and email": true,
+      "clients.spec.ts::adding a client with a name and email shows it in the list": true,
+      "clients.spec.ts::a client added on top of seeded clients joins the same single list": true,
+      "invoice-paid.spec.ts::marking an unpaid invoice flips its status to paid, persists, and records it once": true,
+      "invoice-paid.spec.ts::marking one invoice leaves the others untouched, and each marking keeps its own record": true,
+      "invoice-paid.spec.ts::an invoice seeded as paid is shown as paid from the start": true,
+      "project-invoices.spec.ts::opening a project from the list lands on its detail page": true,
+      "project-invoices.spec.ts::the detail page lists the project invoices with their amounts and what they add up to": true,
+      "project-invoices.spec.ts::a project with no invoices shows an empty list that adds up to zero": true,
+      "project-invoices.spec.ts::adding a new invoice for an amount shows it and grows the total": false,
+      "project-invoices.spec.ts::a new invoice added to an empty project appears and the total reflects it": true,
+      "projects.spec.ts::a link in the nav opens the projects page": true,
+      "projects.spec.ts::with no projects the list shows an empty state": true,
+      "projects.spec.ts::every seeded project is shown with its name and the name of the client it is for": true,
+      "projects.spec.ts::adding a project and picking its client shows it with that client name": true,
+      "projects.spec.ts::a project added on top of seeded projects joins the same single list": false
+    },
+    "results_repeats": [
+      {
+        "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing": true,
+        "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing": true,
+        "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list": true,
+        "client-email-required.spec.ts::correcting the email to a proper address then saves the client": true,
+        "clients.spec.ts::a link in the nav opens the clients list": true,
+        "clients.spec.ts::with no clients the list shows an empty state": true,
+        "clients.spec.ts::all seeded clients are shown in one list, each with name and email": true,
+        "clients.spec.ts::adding a client with a name and email shows it in the list": true,
+        "clients.spec.ts::a client added on top of seeded clients joins the same single list": true,
+        "invoice-paid.spec.ts::marking an unpaid invoice flips its status to paid, persists, and records it once": true,
+        "invoice-paid.spec.ts::marking one invoice leaves the others untouched, and each marking keeps its own record": true,
+        "invoice-paid.spec.ts::an invoice seeded as paid is shown as paid from the start": true,
+        "project-invoices.spec.ts::opening a project from the list lands on its detail page": true,
+        "project-invoices.spec.ts::the detail page lists the project invoices with their amounts and what they add up to": true,
+        "project-invoices.spec.ts::a project with no invoices shows an empty list that adds up to zero": true,
+        "project-invoices.spec.ts::adding a new invoice for an amount shows it and grows the total": false,
+        "project-invoices.spec.ts::a new invoice added to an empty project appears and the total reflects it": true,
+        "projects.spec.ts::a link in the nav opens the projects page": true,
+        "projects.spec.ts::with no projects the list shows an empty state": true,
+        "projects.spec.ts::every seeded project is shown with its name and the name of the client it is for": true,
+        "projects.spec.ts::adding a project and picking its client shows it with that client name": true,
+        "projects.spec.ts::a project added on top of seeded projects joins the same single list": false
+      }
+    ],
+    "detail": [
+      {
+        "test_id": "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 692,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 358,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 345,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email-required.spec.ts::correcting the email to a proper address then saves the client",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 391,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::a link in the nav opens the clients list",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 155,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::with no clients the list shows an empty state",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 105,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::all seeded clients are shown in one list, each with name and email",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 129,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::adding a client with a name and email shows it in the list",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 450,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::a client added on top of seeded clients joins the same single list",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 424,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-paid.spec.ts::marking an unpaid invoice flips its status to paid, persists, and records it once",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 685,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-paid.spec.ts::marking one invoice leaves the others untouched, and each marking keeps its own record",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 540,
+        "failure": ""
+      },
+      {
+        "test_id": "invoice-paid.spec.ts::an invoice seeded as paid is shown as paid from the start",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 220,
+        "failure": ""
+      },
+      {
+        "test_id": "project-invoices.spec.ts::opening a project from the list lands on its detail page",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 252,
+        "failure": ""
+      },
+      {
+        "test_id": "project-invoices.spec.ts::the detail page lists the project invoices with their amounts and what they add up to",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 119,
+        "failure": ""
+      },
+      {
+        "test_id": "project-invoices.spec.ts::a project with no invoices shows an empty list that adds up to zero",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 108,
+        "failure": ""
+      },
+      {
+        "test_id": "project-invoices.spec.ts::adding a new invoice for an amount shows it and grows the total",
+        "category": "functionality",
+        "passed": false,
+        "duration_ms": 5166,
+        "failure": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('[data-testid^=\"invoice-row-\"]').filter({ has: getByTestId('invoice-amount').getByText('300') })\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m\nCall log:\n  \u001b[2m- expect.toHaveCount with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-testid^=\"invoice-row-\"]').filter({ has: getByTestId('invoice-amount').getByText('300') })\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   unexpected value \"0\"\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   unexpected value \"0\"\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   unexpected value \"0\"\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   unexpected value \"0\"\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   unexpected value \"0\"\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   unexpected value \"0\"\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   unexpected value \"0\"\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   unexpected value \"0\"\u001b[22m\n\u001b[2m  -   locator resolved to 0 elements\u001b[22m\n\u001b[2m  -   unexpected value \"0\"\u001b[22m\n\n\n  120 |       has: page.getByTestId('invoice-amount').getByText('300', { exact: false }),\n  121 |     });\n> 122 |     await expect(addedRow).toHaveCount(1);\n      |                            ^\n  123 |\n  124 |     // Both invoices are now listed, and the total has grown to 100 + 300 = 400.\n  125 |     await expect(invoiceRows(page)).toHaveCount(2);\n\n    at /home/daniel/test-fidelity-long-run/work/202610060034/cp05/e2e/specs/project-invoices.spec.ts:122:28 | Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('[data-testid^=\"invoice-row-\"]').filter({ has: getByTestId('invoice-amount').getByText('300') })\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m\nCall log"
+      },
+      {
+        "test_id": "project-invoices.spec.ts::a new invoice added to an empty project appears and the total reflects it",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 366,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::a link in the nav opens the projects page",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 155,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::with no projects the list shows an empty state",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 114,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::every seeded project is shown with its name and the name of the client it is for",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 135,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::adding a project and picking its client shows it with that client name",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 452,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::a project added on top of seeded projects joins the same single list",
+        "category": "functionality",
+        "passed": false,
+        "duration_ms": 5308,
+        "failure": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('[data-testid^=\"project-row-\"]')\nExpected: \u001b[32m2\u001b[39m\nReceived: \u001b[31m1\u001b[39m\nCall log:\n  \u001b[2m- expect.toHaveCount with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-testid^=\"project-row-\"]')\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\n\n  148 |     // Both the pre-existing and the newly added project are shown together in the one list, each\n  149 |     // with its own client's name.\n> 150 |     await expect(projectRows(page)).toHaveCount(2);\n      |                                     ^\n  151 |     await expect(page.getByTestId('project-row-1').getByTestId('project-name')).toHaveText(\n  152 |       'Website Redesign',\n  153 |     );\n\n    at /home/daniel/test-fidelity-long-run/work/202610060034/cp05/e2e/specs/projects.spec.ts:150:37 | Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('[data-testid^=\"project-row-\"]')\nExpected: \u001b[32m2\u001b[39m\nReceived: \u001b[31m1\u001b[39m\nCall log:\n  \u001b[2m- expect.toHaveCount with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-testid^=\"project-row-\"]')\u001b[22m\n\u001b[2m  -   locator resolved to 1 elem"
+      }
+    ],
+    "error": "",
+    "gate_invalid": false,
+    "gate_attempts": 1,
+    "test_seconds": 16.42,
+    "wall_seconds": 68.9
+  },
+  "mutations": [
+    {
+      "id": "zero",
+      "kind": "zero",
+      "description": "application at cp04 \u2014 this change's feature absent",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "invoice-paid.spec.ts::an invoice seeded as paid is shown as paid from the start",
+        "invoice-paid.spec.ts::marking an unpaid invoice flips its status to paid, persists, and records it once",
+        "invoice-paid.spec.ts::marking one invoice leaves the others untouched, and each marking keeps its own record"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 22,
+      "failed_count": 5,
+      "error": ""
+    },
+    {
+      "id": "001-paying-does-not-change-the-status",
+      "kind": "authored",
+      "description": "The pay endpoint still succeeds and still writes its audit record, but the invoice's status\nis never flipped. The button works, nothing errors, and the row keeps saying UNPAID.",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "invoice-paid.spec.ts::marking an unpaid invoice flips its status to paid, persists, and records it once",
+        "invoice-paid.spec.ts::marking one invoice leaves the others untouched, and each marking keeps its own record"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 22,
+      "failed_count": 4,
+      "error": "",
+      "file": "src/main/java/net/officefloor/hq/app/InvoicesPayLogic.java",
+      "applied": true,
+      "clause": "mark an invoice as paid",
+      "uncalibrated": false
+    },
+    {
+      "id": "002-payment-is-not-recorded",
+      "kind": "authored",
+      "description": "The invoice is marked paid and NOTHING is written to the audit file. Completely invisible\nthrough the UI \u2014 the status flips, the screen looks right. Only a test that reads the audit\nchannel can kill this, which is exactly what makes it worth having in the set.",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "invoice-paid.spec.ts::marking an unpaid invoice flips its status to paid, persists, and records it once",
+        "invoice-paid.spec.ts::marking one invoice leaves the others untouched, and each marking keeps its own record"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 22,
+      "failed_count": 4,
+      "error": "",
+      "file": "src/main/java/net/officefloor/hq/app/InvoicesPayLogic.java",
+      "applied": true,
+      "clause": "Keep a record every time I do",
+      "uncalibrated": false
+    },
+    {
+      "id": "003-audit-record-omits-the-amount",
+      "kind": "authored",
+      "description": "A record is written, but without the amount \u2014 so the kept history cannot answer what was\npaid. Survives any assertion that merely checks a record exists for the invoice.",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "invoice-paid.spec.ts::marking an unpaid invoice flips its status to paid, persists, and records it once",
+        "invoice-paid.spec.ts::marking one invoice leaves the others untouched, and each marking keeps its own record"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 22,
+      "failed_count": 4,
+      "error": "",
+      "file": "src/main/java/net/officefloor/hq/app/InvoicesPayLogic.java",
+      "applied": true,
+      "clause": "so I can check back later",
+      "uncalibrated": false
+    }
+  ],
+  "verdict": {
+    "green": false,
+    "flaky_tests": [],
+    "test_seconds": 16.42,
+    "wall_seconds": 68.9,
+    "suite_non_decreasing": true,
+    "tests_total": 22,
+    "tests_delta": 3,
+    "tests_added": 3,
+    "tests_revised": 0,
+    "tests_dropped": 0,
+    "app_code_touched": [],
+    "mutation_zero_correct": true,
+    "kill_rate": 1.0,
+    "mutations_authored": 3,
+    "mutations_killed": 3,
+    "survived": []
+  },
+  "files": {
+    "prompt": "cp05.prompt.txt",
+    "build_log": "cp05.build.log"
+  },
+  "agent": {
+    "ok": true,
+    "cost_usd": 1.1046065,
+    "input_tokens": 28,
+    "output_tokens": 17091,
+    "cache_read_tokens": 481319,
+    "cache_creation_tokens": 43465,
+    "num_turns": 20,
+    "duration_ms": 519008,
+    "duration_api_ms": 384907,
+    "model": "claude-opus-4-8",
+    "session_id": "7a39464a-b17a-4375-ac4b-eb2a099c8546",
+    "stop_reason": "success",
+    "result_text": "Done. Here's the outcome.\n\n## What I added\n\n**`e2e/specs/invoice-paid.spec.ts`** \u2014 3 acceptance tests for *\"Let me mark an invoice as paid. Keep a record every time I do.\"* Asserting only through the two public channels (UI `data-testid` + `auditLines()`):\n\n1. **Marking flips status, persists, records once** \u2014 an `UNPAID` invoice shows a not-paid `invoice-status` and an `invoice-pay-<id>` control; clicking it flips the status to paid, writes exactly one `INVOICE_PAID id=1 amount=100` audit record, and both survive a reload (reload doesn't re-record).\n2. **Per-invoice + a record every time** \u2014 marking invoice 1 leaves invoice 2 untouched and writes one record; then marking invoice 2 adds a second record (the \"every time I do\" clause).\n3. **Seeded-paid shows paid** \u2014 an invoice seeded `status: 'PAID'` renders as paid from load, and merely viewing it records nothing.\n\nDesign choices for robustness: the paid state is matched with `/\\bpaid\\b/i` so it binds to meaning not casing, and the word boundary cleanly excludes `UNPAID`; the audit amount regex tolerates `100` or `100.00`; `invoice-status` is scoped inside its `invoice-row-<id>` (same convention the existing `invoice-amount` tests use).\n\n## Verification\n\n- My 3 new tests **fail against the current (pre-change) app for the right reason** \u2014 `invoice-status` / `invoice-pay-<id>` don't exist yet. The `status` seed field is silently ignored by today's seed (as documented), so the seed contract doesn't break \u2014 the tests fail on the missing UI anchors, exactly as intended.\n- I did **not** touch application source, build scripts, or `e2e/support/*`.\n- No existing test needed revising \u2014 this change doesn't alter the behaviour the current specs assert.\n\n## One thing to flag\n\nThe suite shows **2 failures that are pre-existing and unrelated to my change**: `project-invoices.spec.ts:101` (adding an invoice) and `projects.spec.ts:132` (adding a project on top of a seeded one). I verified they fail **identically with my new spec removed**, so I didn't introduce them. Both are \"create a row after seeding explicit ids\" flows failing because the new row never appears \u2014 consistent with an IDENTITY-sequence collision in the app (seeded `id=1` then a server-generated id also lands on 1). That's an application bug in these create endpoints, not test-side, and it's outside this change request (marking paid) \u2014 so per the \"tests only, no app edits\" rule I left it alone rather than mask it by weakening those tests.",
+    "error": "",
+    "attempts": [
+      {
+        "ok": true,
+        "limit_reached": false,
+        "retryable": false,
+        "cost_usd": 1.1046065,
+        "num_turns": 20,
+        "duration_ms": 519008,
+        "duration_api_ms": 384907,
+        "error": ""
+      }
+    ],
+    "app_diff_file": "cp05.agent.appdiff",
+    "test_diff_file": "cp05.agent.testdiff",
+    "stream_file": "cp05.agent.jsonl",
+    "suite_commit": "f5797899d343f964e907164068b9d733b5b0def9",
+    "sandbox_leaks": {
+      "hard": [
+        "pom.xml:82: managed by the parent BOM. Found via the cp01 dry run. flyway-core 12.x has H2 support"
+      ],
+      "soft": [
+        "src/main/java/net/officefloor/hq/app/Audit.java:31: /** Append one audit record. Checkpoints assert the exact line(s) in the file. */",
+        "src/main/java/net/officefloor/hq/app/Application.java:12: * At the base this is a bare shell; checkpoints add migrations, officefloor/rest routes + logic,",
+        "src/main/frontend/vite.config.ts:11: // file is gitignored \u2014 it is a build artifact and must never appear in a checkpoint's diff."
+      ]
+    }
+  }
+}

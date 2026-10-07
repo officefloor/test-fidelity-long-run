@@ -1,0 +1,473 @@
+{
+  "checkpoint": 3,
+  "checkpoint_id": "cp03_projects",
+  "type": "additive",
+  "mutates": [],
+  "mode": "agent",
+  "code_view": "previous",
+  "no_code_change": false,
+  "request": "I want to track the projects I do for clients. Let me add a project and pick which client it\nis for. Show each project with the client's name.\n",
+  "prompt": "You are writing ACCEPTANCE TESTS for one change to this application.\n\nYou write TESTS ONLY. Do not modify application source, build scripts, or the test support\nhelpers (e2e/support/*). A run that changes application code is void.\n\nTHE CHANGE REQUEST (as the user wrote it):\nI want to track the projects I do for clients. Let me add a project and pick which client it\nis for. Show each project with the client's name.\n\nWHAT TO DO\nWrite Playwright acceptance test(s) under e2e/specs/ that verify this change request has been\nimplemented. Where the request revises behaviour that your EXISTING tests already assert, update\nthose tests too \u2014 the suite must describe the application as it is meant to be after this change,\nnot as it was before.\n\nAssert only through the two public channels below. Never reach into the database, the REST API, or\napplication internals.\n\nCHANNEL 1 \u2014 the UI, via data-testid\n  Introduced by THIS change (11):\n    nav-projects\n    project-client\n    project-form\n    project-form-client\n    project-form-name\n    project-form-submit\n    project-name\n    project-row-<id>\n    projects-empty\n    projects-page\n    projects-table\n  Every anchor available to you (28):\n    app-home\n    app-nav\n    app-root\n    client-email\n    client-form\n    client-form-email\n    client-form-email-error\n    client-form-name\n    client-form-submit\n    client-name\n    client-row-<id>\n    clients-empty\n    clients-page\n    clients-table\n    home-empty\n    nav-clients\n    nav-home\n    nav-projects\n    project-client\n    project-form\n    project-form-client\n    project-form-name\n    project-form-submit\n    project-name\n    project-row-<id>\n    projects-empty\n    projects-page\n    projects-table\n  `<id>` / `<currency>` are placeholders: the concrete value comes from the data\n  your test seeds, e.g. client-row-1. Anchors are a stable contract \u2014 use them\n  exactly as written.\n\nCHANNEL 2 \u2014 the audit file, via auditLines() from ../support/audit\n  Introduced by THIS change (0):\n    (none)\n  Every record format available to you (0):\n    (none yet)\n\nSEED FIELDS HONOURED by /__test__/seed (anything else is ignored):\n    clients: email, id, name\n    projects: clientId, id, name\n\nHOW DATA IS ARRANGED\nCall `resetAndSeed({...})` from `../support/seed` to put the application into the state your test\nneeds (it clears all data and the audit file first). Only the seed fields listed above are\nhonoured \u2014 a field that is not listed is accepted and SILENTLY IGNORED, so seeding it will look\nlike it worked and your assertion will fail for an unrelated-looking reason.\n\nTHE APPLICATION\nThe source in this directory is the application as it stands BEFORE this change request has been\nimplemented. You can read it and run it. Your new test SHOULD FAIL against it \u2014 the behaviour\nbeing requested is not there yet. That is expected, and is not a reason to weaken the test. Your\nexisting tests should still pass.\n\nYOUR EXISTING TESTS\n  e2e/specs/ holds the 2 spec file(s) you have written so far (9 tests).\n  Their git history is available. Update them where this change request revises\n  behaviour they assert; otherwise leave them alone.\n    client-email-required.spec.ts\n    clients.spec.ts\n",
+  "contract": {
+    "checkpoint": 3,
+    "no_code_change": false,
+    "new_testids": [
+      "nav-projects",
+      "project-client",
+      "project-form",
+      "project-form-client",
+      "project-form-name",
+      "project-form-submit",
+      "project-name",
+      "project-row-<id>",
+      "projects-empty",
+      "projects-page",
+      "projects-table"
+    ],
+    "new_audit_records": null,
+    "available_testids": [
+      "app-home",
+      "app-nav",
+      "app-root",
+      "client-email",
+      "client-form",
+      "client-form-email",
+      "client-form-email-error",
+      "client-form-name",
+      "client-form-submit",
+      "client-name",
+      "client-row-<id>",
+      "clients-empty",
+      "clients-page",
+      "clients-table",
+      "home-empty",
+      "nav-clients",
+      "nav-home",
+      "nav-projects",
+      "project-client",
+      "project-form",
+      "project-form-client",
+      "project-form-name",
+      "project-form-submit",
+      "project-name",
+      "project-row-<id>",
+      "projects-empty",
+      "projects-page",
+      "projects-table"
+    ],
+    "available_audit_records": null,
+    "seed_accepts": {
+      "clients": [
+        "email",
+        "id",
+        "name"
+      ],
+      "projects": [
+        "clientId",
+        "id",
+        "name"
+      ]
+    }
+  },
+  "reference": {
+    "repo": "officehq-tanstack-officefloor",
+    "origin": "git@github.com:officefloor/officehq-tanstack-officefloor.git",
+    "branch": "evolve/202610020135/just-solve/chain2",
+    "repairs_applied": [
+      "005-seed-advances-the-clients-identity"
+    ]
+  },
+  "suite": {
+    "files": {
+      "client-email-required.spec.ts": [
+        "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing",
+        "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing",
+        "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list",
+        "client-email-required.spec.ts::correcting the email to a proper address then saves the client"
+      ],
+      "clients.spec.ts": [
+        "clients.spec.ts::a link in the nav opens the clients list",
+        "clients.spec.ts::with no clients the list shows an empty state",
+        "clients.spec.ts::all seeded clients are shown in one list, each with name and email",
+        "clients.spec.ts::adding a client with a name and email shows it in the list",
+        "clients.spec.ts::a client added on top of seeded clients joins the same single list"
+      ],
+      "projects.spec.ts": [
+        "projects.spec.ts::a link in the nav opens the projects page",
+        "projects.spec.ts::with no projects the list shows an empty state",
+        "projects.spec.ts::every seeded project is shown with its name and the name of the client it is for",
+        "projects.spec.ts::adding a project and picking its client shows it with that client name",
+        "projects.spec.ts::a project added on top of seeded projects joins the same single list"
+      ]
+    },
+    "total_tests": 14,
+    "file_delta": {
+      "added": [
+        "projects.spec.ts"
+      ],
+      "removed": [],
+      "modified": []
+    },
+    "test_delta": {
+      "added": [
+        "projects.spec.ts::a link in the nav opens the projects page",
+        "projects.spec.ts::a project added on top of seeded projects joins the same single list",
+        "projects.spec.ts::adding a project and picking its client shows it with that client name",
+        "projects.spec.ts::every seeded project is shown with its name and the name of the client it is for",
+        "projects.spec.ts::with no projects the list shows an empty state"
+      ],
+      "removed": []
+    },
+    "test_moves": {
+      "added": [
+        "projects.spec.ts::a link in the nav opens the projects page",
+        "projects.spec.ts::with no projects the list shows an empty state",
+        "projects.spec.ts::every seeded project is shown with its name and the name of the client it is for",
+        "projects.spec.ts::adding a project and picking its client shows it with that client name",
+        "projects.spec.ts::a project added on top of seeded projects joins the same single list"
+      ],
+      "revised": [],
+      "dropped": [],
+      "file_gone": []
+    },
+    "gate_id_delta": {
+      "added": [
+        "projects.spec.ts::a link in the nav opens the projects page",
+        "projects.spec.ts::a project added on top of seeded projects joins the same single list",
+        "projects.spec.ts::adding a project and picking its client shows it with that client name",
+        "projects.spec.ts::every seeded project is shown with its name and the name of the client it is for",
+        "projects.spec.ts::with no projects the list shows an empty state"
+      ],
+      "removed": []
+    }
+  },
+  "source": {
+    "kind": "agent",
+    "suite_repo": "/home/daniel/test-fidelity-long-run/runs/202610060034/chain2/suite",
+    "suite_commit": "66c4d8ef4a5720452c6db6571fbe4158b243c49e",
+    "code_view": "previous",
+    "view_checkpoint": 2,
+    "files_added": [
+      "projects.spec.ts"
+    ],
+    "files_removed": []
+  },
+  "gate": {
+    "build_ok": true,
+    "total_selected": 14,
+    "passed": 13,
+    "failed_count": 1,
+    "failed": [
+      "projects.spec.ts::a project added on top of seeded projects joins the same single list"
+    ],
+    "repeats": 2,
+    "flaky": [],
+    "flaky_count": 0,
+    "results": {
+      "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing": true,
+      "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing": true,
+      "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list": true,
+      "client-email-required.spec.ts::correcting the email to a proper address then saves the client": true,
+      "clients.spec.ts::a link in the nav opens the clients list": true,
+      "clients.spec.ts::with no clients the list shows an empty state": true,
+      "clients.spec.ts::all seeded clients are shown in one list, each with name and email": true,
+      "clients.spec.ts::adding a client with a name and email shows it in the list": true,
+      "clients.spec.ts::a client added on top of seeded clients joins the same single list": true,
+      "projects.spec.ts::a link in the nav opens the projects page": true,
+      "projects.spec.ts::with no projects the list shows an empty state": true,
+      "projects.spec.ts::every seeded project is shown with its name and the name of the client it is for": true,
+      "projects.spec.ts::adding a project and picking its client shows it with that client name": true,
+      "projects.spec.ts::a project added on top of seeded projects joins the same single list": false
+    },
+    "results_repeats": [
+      {
+        "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing": true,
+        "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing": true,
+        "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list": true,
+        "client-email-required.spec.ts::correcting the email to a proper address then saves the client": true,
+        "clients.spec.ts::a link in the nav opens the clients list": true,
+        "clients.spec.ts::with no clients the list shows an empty state": true,
+        "clients.spec.ts::all seeded clients are shown in one list, each with name and email": true,
+        "clients.spec.ts::adding a client with a name and email shows it in the list": true,
+        "clients.spec.ts::a client added on top of seeded clients joins the same single list": true,
+        "projects.spec.ts::a link in the nav opens the projects page": true,
+        "projects.spec.ts::with no projects the list shows an empty state": true,
+        "projects.spec.ts::every seeded project is shown with its name and the name of the client it is for": true,
+        "projects.spec.ts::adding a project and picking its client shows it with that client name": true,
+        "projects.spec.ts::a project added on top of seeded projects joins the same single list": false
+      }
+    ],
+    "detail": [
+      {
+        "test_id": "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 681,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 239,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 333,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email-required.spec.ts::correcting the email to a proper address then saves the client",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 393,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::a link in the nav opens the clients list",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 167,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::with no clients the list shows an empty state",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 104,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::all seeded clients are shown in one list, each with name and email",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 124,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::adding a client with a name and email shows it in the list",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 316,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::a client added on top of seeded clients joins the same single list",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 297,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::a link in the nav opens the projects page",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 156,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::with no projects the list shows an empty state",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 105,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::every seeded project is shown with its name and the name of the client it is for",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 135,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::adding a project and picking its client shows it with that client name",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 732,
+        "failure": ""
+      },
+      {
+        "test_id": "projects.spec.ts::a project added on top of seeded projects joins the same single list",
+        "category": "functionality",
+        "passed": false,
+        "duration_ms": 5291,
+        "failure": "Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('[data-testid^=\"project-row-\"]')\nExpected: \u001b[32m2\u001b[39m\nReceived: \u001b[31m1\u001b[39m\nCall log:\n  \u001b[2m- expect.toHaveCount with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-testid^=\"project-row-\"]')\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\u001b[2m  -   locator resolved to 1 element\u001b[22m\n\u001b[2m  -   unexpected value \"1\"\u001b[22m\n\n\n  148 |     // Both the pre-existing and the newly added project are shown together in the one list, each\n  149 |     // with its own client's name.\n> 150 |     await expect(projectRows(page)).toHaveCount(2);\n      |                                     ^\n  151 |     await expect(page.getByTestId('project-row-1').getByTestId('project-name')).toHaveText(\n  152 |       'Website Redesign',\n  153 |     );\n\n    at /home/daniel/test-fidelity-long-run/work/202610060034/cp03/e2e/specs/projects.spec.ts:150:37 | Error: \u001b[31mTimed out 5000ms waiting for \u001b[39m\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nLocator: locator('[data-testid^=\"project-row-\"]')\nExpected: \u001b[32m2\u001b[39m\nReceived: \u001b[31m1\u001b[39m\nCall log:\n  \u001b[2m- expect.toHaveCount with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-testid^=\"project-row-\"]')\u001b[22m\n\u001b[2m  -   locator resolved to 1 elem"
+      }
+    ],
+    "error": "",
+    "gate_invalid": false,
+    "gate_attempts": 1,
+    "test_seconds": 9.14,
+    "wall_seconds": 53.9
+  },
+  "mutations": [
+    {
+      "id": "zero",
+      "kind": "zero",
+      "description": "application at cp02 \u2014 this change's feature absent",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "projects.spec.ts::a link in the nav opens the projects page",
+        "projects.spec.ts::adding a project and picking its client shows it with that client name",
+        "projects.spec.ts::every seeded project is shown with its name and the name of the client it is for",
+        "projects.spec.ts::with no projects the list shows an empty state"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 14,
+      "failed_count": 5,
+      "error": ""
+    },
+    {
+      "id": "001-project-shows-the-wrong-client",
+      "kind": "authored",
+      "description": "The client column renders the project's own name. The join is the point of the clause, and\na test that only checks the cell is present cannot see this.",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "projects.spec.ts::adding a project and picking its client shows it with that client name",
+        "projects.spec.ts::every seeded project is shown with its name and the name of the client it is for"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 14,
+      "failed_count": 3,
+      "error": "",
+      "file": "src/main/frontend/features/projects/ProjectList.tsx",
+      "applied": true,
+      "clause": "Show each project with the client's name",
+      "uncalibrated": false
+    },
+    {
+      "id": "002-project-name-column-shows-the-client",
+      "kind": "authored",
+      "description": "The mirror of 001: the name column renders the client. Each column has to read back as\nitself, and a suite can easily pin one and not the other.",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "projects.spec.ts::adding a project and picking its client shows it with that client name",
+        "projects.spec.ts::every seeded project is shown with its name and the name of the client it is for"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 14,
+      "failed_count": 3,
+      "error": "",
+      "file": "src/main/frontend/features/projects/ProjectList.tsx",
+      "applied": true,
+      "clause": "Show each project",
+      "uncalibrated": false
+    },
+    {
+      "id": "003-client-picker-is-empty",
+      "kind": "authored",
+      "description": "The client select renders no options, so there is nothing to pick. Killed by any test that\nactually creates a project through the form; survived by one that only seeds data.",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "projects.spec.ts::adding a project and picking its client shows it with that client name"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 14,
+      "failed_count": 2,
+      "error": "",
+      "file": "src/main/frontend/features/projects/ProjectForm.tsx",
+      "applied": true,
+      "clause": "pick which client it is for",
+      "uncalibrated": false
+    },
+    {
+      "id": "004-list-shows-only-the-first-project",
+      "kind": "authored",
+      "description": "Only the first project renders. Unlocked by cp03 now asserting a row count \u2014 without it a\ntruncating list is indistinguishable from a correct one on a single-row fixture.",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "projects.spec.ts::every seeded project is shown with its name and the name of the client it is for"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 14,
+      "failed_count": 2,
+      "error": "",
+      "file": "src/main/frontend/features/projects/ProjectList.tsx",
+      "applied": true,
+      "clause": "Show each project",
+      "uncalibrated": false
+    }
+  ],
+  "verdict": {
+    "green": false,
+    "flaky_tests": [],
+    "test_seconds": 9.14,
+    "wall_seconds": 53.9,
+    "suite_non_decreasing": true,
+    "tests_total": 14,
+    "tests_delta": 5,
+    "tests_added": 5,
+    "tests_revised": 0,
+    "tests_dropped": 0,
+    "app_code_touched": [],
+    "mutation_zero_correct": true,
+    "kill_rate": 1.0,
+    "mutations_authored": 4,
+    "mutations_killed": 4,
+    "survived": []
+  },
+  "files": {
+    "prompt": "cp03.prompt.txt",
+    "build_log": "cp03.build.log"
+  },
+  "agent": {
+    "ok": true,
+    "cost_usd": 0.569366,
+    "input_tokens": 18,
+    "output_tokens": 7379,
+    "cache_read_tokens": 236116,
+    "cache_creation_tokens": 26492,
+    "num_turns": 14,
+    "duration_ms": 176841,
+    "duration_api_ms": 129797,
+    "model": "claude-opus-4-8",
+    "session_id": "a681a488-b2a3-402d-8fbe-7bd1ba50859f",
+    "stop_reason": "success",
+    "result_text": "The suite behaves exactly as required:\n\n- **9 existing tests pass** \u2014 the clients/home/email specs are untouched and still green. This change is purely additive (a new `projects` surface), so none of their asserted behavior is revised.\n- **All 5 new `projects` tests fail** \u2014 and they fail on the missing UI (`projects-page`, `projects-empty`, `project-row-*`), not on the seed contract. That confirms `resetAndSeed` accepted the `projects` fixture while the feature itself isn't built yet, which is the expected pre-implementation state.\n\n## What I wrote\n\n`e2e/specs/projects.spec.ts` \u2014 5 tests covering the change request *\"add a project, pick which client it is for, show each project with the client's name\"*, asserting only through `data-testid` (Channel 1; there are no audit records for this change):\n\n1. **nav \u2192 page** \u2014 `nav-projects` link lands on `/projects` / `projects-page`, with the Home shell unchanged.\n2. **empty state** \u2014 clients exist but no projects \u2192 `projects-empty`, zero rows.\n3. **seeded projects show client *name*** \u2014 three seeded projects render in `projects-table`, each `project-row-<id>` carrying `project-name` and `project-client` as the client's **name** (not id); two projects sharing a client both show that name.\n4. **add + pick client** \u2014 fill `project-form-name`, pick a client in `project-form-client`, submit `project-form-submit`; the new row (server-assigned id, located by content) shows the name and picked client's name, empty state clears, and it survives a reload.\n5. **additive list** \u2014 a project added on top of a seeded one joins the same single list, each with its own client's name.\n\nNotes on deliberate choices:\n- The client picker (`project-form-client`) is driven with `selectOption({ label: 'Globex' })` \u2014 the natural \"pick which client\" control is a `<select>` whose options are client names, consistent with how the feature surfaces the client name elsewhere.\n- Seeds only use honoured fields (`clients: {id,name,email}`, `projects: {id,name,clientId}`), and new rows are matched by content rather than assumed ids, mirroring the existing clients spec.\n\nI made no changes to application source, build scripts, or `e2e/support/*`.",
+    "error": "",
+    "attempts": [
+      {
+        "ok": true,
+        "limit_reached": false,
+        "retryable": false,
+        "cost_usd": 0.569366,
+        "num_turns": 14,
+        "duration_ms": 176841,
+        "duration_api_ms": 129797,
+        "error": ""
+      }
+    ],
+    "app_diff_file": "cp03.agent.appdiff",
+    "test_diff_file": "cp03.agent.testdiff",
+    "stream_file": "cp03.agent.jsonl",
+    "suite_commit": "66c4d8ef4a5720452c6db6571fbe4158b243c49e",
+    "sandbox_leaks": {
+      "hard": [
+        "pom.xml:82: managed by the parent BOM. Found via the cp01 dry run. flyway-core 12.x has H2 support"
+      ],
+      "soft": [
+        "src/main/java/net/officefloor/hq/app/Audit.java:31: /** Append one audit record. Checkpoints assert the exact line(s) in the file. */",
+        "src/main/java/net/officefloor/hq/app/Application.java:12: * At the base this is a bare shell; checkpoints add migrations, officefloor/rest routes + logic,",
+        "src/main/frontend/vite.config.ts:11: // file is gitignored \u2014 it is a build artifact and must never appear in a checkpoint's diff."
+      ]
+    }
+  }
+}

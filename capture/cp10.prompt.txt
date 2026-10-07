@@ -1,0 +1,114 @@
+You are writing ACCEPTANCE TESTS for one change to this application.
+
+You write TESTS ONLY. Do not modify application source, build scripts, or the test support
+helpers (e2e/support/*). A run that changes application code is void.
+
+THE CHANGE REQUEST (as the user wrote it):
+Do not let me add an invoice for nothing. The amount has to be more than zero.
+
+WHAT TO DO
+Write Playwright acceptance test(s) under e2e/specs/ that verify this change request has been
+implemented. Where the request revises behaviour that your EXISTING tests already assert, update
+those tests too — the suite must describe the application as it is meant to be after this change,
+not as it was before.
+
+Assert only through the two public channels below. Never reach into the database, the REST API, or
+application internals.
+
+CHANNEL 1 — the UI, via data-testid
+  Introduced by THIS change (1):
+    invoice-form-amount-error
+  Every anchor available to you (53):
+    app-home
+    app-nav
+    app-root
+    client-detail-page
+    client-email
+    client-form
+    client-form-email
+    client-form-email-error
+    client-form-name
+    client-form-submit
+    client-name
+    client-open-<id>
+    client-projects-empty
+    client-projects-table
+    client-row-<id>
+    client-search
+    clients-empty
+    clients-page
+    clients-table
+    dashboard
+    dashboard-clients-count
+    dashboard-error
+    dashboard-loading
+    dashboard-outstanding-total
+    dashboard-page
+    dashboard-projects-count
+    home-empty
+    invoice-amount
+    invoice-form
+    invoice-form-amount
+    invoice-form-amount-error
+    invoice-form-submit
+    invoice-pay-<id>
+    invoice-row-<id>
+    invoice-status
+    nav-clients
+    nav-dashboard
+    nav-home
+    nav-projects
+    project-client
+    project-detail-page
+    project-form
+    project-form-client
+    project-form-name
+    project-form-submit
+    project-invoices-table
+    project-invoices-total
+    project-name
+    project-open-<id>
+    project-row-<id>
+    projects-empty
+    projects-page
+    projects-table
+  `<id>` / `<currency>` are placeholders: the concrete value comes from the data
+  your test seeds, e.g. client-row-1. Anchors are a stable contract — use them
+  exactly as written.
+
+CHANNEL 2 — the audit file, via auditLines() from ../support/audit
+  Introduced by THIS change (0):
+    (none)
+  Every record format available to you (1):
+    INVOICE_PAID id=<id> amount=<amount>
+
+SEED FIELDS HONOURED by /__test__/seed (anything else is ignored):
+    clients: email, id, name
+    invoices: amount, id, projectId, status
+    projects: clientId, id, name
+
+HOW DATA IS ARRANGED
+Call `resetAndSeed({...})` from `../support/seed` to put the application into the state your test
+needs (it clears all data and the audit file first). Only the seed fields listed above are
+honoured — a field that is not listed is accepted and SILENTLY IGNORED, so seeding it will look
+like it worked and your assertion will fail for an unrelated-looking reason.
+
+THE APPLICATION
+The source in this directory is the application as it stands BEFORE this change request has been
+implemented. You can read it and run it. Your new test SHOULD FAIL against it — the behaviour
+being requested is not there yet. That is expected, and is not a reason to weaken the test. Your
+existing tests should still pass.
+
+YOUR EXISTING TESTS
+  e2e/specs/ holds the 9 spec file(s) you have written so far (43 tests).
+  Their git history is available. Update them where this change request revises
+  behaviour they assert; otherwise leave them alone.
+    client-email-required.spec.ts
+    client-projects.spec.ts
+    client-search.spec.ts
+    clients.spec.ts
+    dashboard.spec.ts
+    invoice-paid.spec.ts
+    money-format.spec.ts
+    project-invoices.spec.ts
+    projects.spec.ts

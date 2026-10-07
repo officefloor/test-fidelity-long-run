@@ -1,0 +1,148 @@
+diff --git a/client-email-unique.spec.ts b/client-email-unique.spec.ts
+new file mode 100644
+index 0000000..49b949c
+--- /dev/null
++++ b/client-email-unique.spec.ts
+@@ -0,0 +1,142 @@
++// Acceptance test for the change request:
++//   "Do not let me add two clients with the same email."
++//
++// Adding a client is only allowed when its email is not already used by an existing client. An
++// attempt to add a second client with an email that already belongs to another client must be
++// rejected: the add-client form surfaces `client-form-email-error` and no second client is created.
++// A different (unused) email still saves (covered by clients.spec.ts and reconfirmed here once a
++// rejected duplicate is corrected).
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed; the `clients` domain
++// honours { id, name, email }. Seeding bypasses the form, so this change is about the ADD action.
++import { test, expect, type Page, type Locator } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++const rows = (page: Page): Locator => page.locator('[data-testid^="client-row-"]');
++
++// Rows whose client-email cell carries exactly the given address, regardless of server-assigned id.
++const rowsWithEmail = (page: Page, email: string): Locator =>
++  rows(page).filter({ has: page.getByTestId('client-email').getByText(email, { exact: true }) });
++
++test.describe('Two clients cannot share the same email', () => {
++  test('adding a client with an email already in use is rejected and saves nothing', async ({
++    page,
++  }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++    });
++
++    await page.goto('/clients');
++    await expect(rows(page)).toHaveCount(1);
++
++    // A different name, but the same email as the existing Acme Corp client.
++    await page.getByTestId('client-form-name').fill('Globex');
++    await page.getByTestId('client-form-email').fill('hello@acme.test');
++    await page.getByTestId('client-form-submit').click();
++
++    // The email error is surfaced...
++    await expect(page.getByTestId('client-form-email-error')).toBeVisible();
++
++    // ...and nothing was saved: still just the one client, and no second row carrying that email.
++    await expect(rows(page)).toHaveCount(1);
++    await expect(rowsWithEmail(page, 'hello@acme.test')).toHaveCount(1);
++    await expect(page.getByTestId('clients-table')).not.toContainText('Globex');
++
++    // Survives a fresh load from the server — the duplicate never reached the list.
++    await page.reload();
++    await expect(rows(page)).toHaveCount(1);
++    await expect(rowsWithEmail(page, 'hello@acme.test')).toHaveCount(1);
++    await expect(page.getByTestId('client-row-1').getByTestId('client-name')).toHaveText('Acme Corp');
++    await expect(page.getByTestId('clients-table')).not.toContainText('Globex');
++  });
++
++  test('the rejected duplicate leaves the existing client untouched', async ({ page }) => {
++    await resetAndSeed({
++      clients: [
++        { id: 1, name: 'Acme Corp', email: 'hello@acme.test' },
++        { id: 2, name: 'Globex', email: 'contact@globex.test' },
++      ],
++    });
++
++    await page.goto('/clients');
++    await expect(rows(page)).toHaveCount(2);
++
++    // Try to add a third client reusing Globex's email.
++    await page.getByTestId('client-form-name').fill('Globex Holdings');
++    await page.getByTestId('client-form-email').fill('contact@globex.test');
++    await page.getByTestId('client-form-submit').click();
++
++    await expect(page.getByTestId('client-form-email-error')).toBeVisible();
++
++    // The two seeded clients are untouched and no new row appeared.
++    await expect(rows(page)).toHaveCount(2);
++    await expect(page.getByTestId('client-row-1').getByTestId('client-email')).toHaveText(
++      'hello@acme.test',
++    );
++    await expect(page.getByTestId('client-row-2').getByTestId('client-email')).toHaveText(
++      'contact@globex.test',
++    );
++    await expect(page.getByTestId('clients-table')).not.toContainText('Globex Holdings');
++
++    await page.reload();
++    await expect(rows(page)).toHaveCount(2);
++    await expect(rowsWithEmail(page, 'contact@globex.test')).toHaveCount(1);
++    await expect(page.getByTestId('clients-table')).not.toContainText('Globex Holdings');
++  });
++
++  test('correcting the email to an unused address then saves the client', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++    });
++
++    await page.goto('/clients');
++    await expect(rows(page)).toHaveCount(1);
++
++    // First a rejected attempt reusing the existing email.
++    await page.getByTestId('client-form-name').fill('Initech');
++    await page.getByTestId('client-form-email').fill('hello@acme.test');
++    await page.getByTestId('client-form-submit').click();
++    await expect(page.getByTestId('client-form-email-error')).toBeVisible();
++    await expect(rows(page)).toHaveCount(1);
++
++    // Correct the email to one not already in use and submit again.
++    await page.getByTestId('client-form-email').fill('info@initech.test');
++    await page.getByTestId('client-form-submit').click();
++
++    // Now it saves: the new client appears with its own email and the error is gone.
++    const initech = rows(page).filter({
++      has: page.getByTestId('client-name').getByText('Initech', { exact: true }),
++    });
++    await expect(initech).toHaveCount(1);
++    await expect(initech.getByTestId('client-email')).toHaveText('info@initech.test');
++    await expect(page.getByTestId('client-form-email-error')).toHaveCount(0);
++    await expect(rows(page)).toHaveCount(2);
++
++    // And it survives a fresh load from the server.
++    await page.reload();
++    await expect(rows(page)).toHaveCount(2);
++    await expect(rowsWithEmail(page, 'info@initech.test')).toHaveCount(1);
++  });
++
++  test('a client with a brand-new email still saves when none clash', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++    });
++
++    await page.goto('/clients');
++    await expect(rows(page)).toHaveCount(1);
++
++    // An email no existing client uses is accepted as normal.
++    await page.getByTestId('client-form-name').fill('Globex');
++    await page.getByTestId('client-form-email').fill('contact@globex.test');
++    await page.getByTestId('client-form-submit').click();
++
++    await expect(page.getByTestId('client-form-email-error')).toHaveCount(0);
++    await expect(rows(page)).toHaveCount(2);
++    await expect(rowsWithEmail(page, 'contact@globex.test')).toHaveCount(1);
++
++    await page.reload();
++    await expect(rows(page)).toHaveCount(2);
++    await expect(rowsWithEmail(page, 'contact@globex.test')).toHaveCount(1);
++  });
++});

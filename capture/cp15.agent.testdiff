@@ -1,0 +1,196 @@
+diff --git a/invoice-status-filter.spec.ts b/invoice-status-filter.spec.ts
+new file mode 100644
+index 0000000..665575b
+--- /dev/null
++++ b/invoice-status-filter.spec.ts
+@@ -0,0 +1,190 @@
++// Acceptance test for the change request:
++//   "Let me narrow that list to one stage. For example only the ones I have sent."
++//
++// The all-invoices page (invoices-page), which lists every invoice from every project, gains a
++// control (data-testid="invoice-status-filter") that narrows the one list down to a SINGLE stage.
++// The invoices move through the stages draft → sent → paid, so choosing a stage leaves only the
++// invoices at that stage — the request's worked example is "only the ones I have sent", i.e. choose
++// SENT and only the sent invoices remain. Before a stage is chosen the list is unfiltered (every
++// invoice shows). Choosing a different stage narrows to THAT stage, and returning to "all stages"
++// brings every invoice back, so the filter is genuinely keyed on the chosen stage and not hardwired
++// to one. Because a filter outlives a click (CLAUDE.md rule 4) the chosen stage lives in the URL and
++// survives a fresh load.
++//
++// The contract for the control: it is a <select> on the invoices page with one option per stage
++// (its label naming the stage: draft / sent / paid) plus a default "all stages" option carrying an
++// empty value (no stage ⇒ unfiltered). The test chooses a stage by finding the option whose label
++// NAMES that stage (case-insensitively) and selecting it by the option's own value, so it binds to
++// the stage's MEANING, not the exact value or capitalisation the control uses internally — the same
++// way the sibling specs match the invoice-status cell by the stage word.
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed (the app's /__test__
++// endpoint): `clients` honours { id, name, email }, `projects` honours { id, name, clientId } and
++// `invoices` honours { id, amount, projectId, status }.
++import { test, expect, type Page, type Locator } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++// Each stage matched by the WORD that names it, case-insensitively, so the test binds to the
++// MEANING and not one capitalisation. Word boundaries keep the three stages distinct.
++const DRAFT = /\bdraft\b/i;
++const SENT = /\bsent\b/i;
++const PAID = /\bpaid\b/i;
++
++const invoiceRows = (page: Page) => page.locator('[data-testid^="invoice-row-"]');
++const statusOf = (page: Page, id: number): Locator =>
++  page.getByTestId(`invoice-row-${id}`).getByTestId('invoice-status');
++
++// Two invoices at EACH stage, spread across every project, so narrowing to one stage must drop the
++// other four rows — a filter that merely hid a single row, or one hardwired to one stage, could not
++// reproduce these results. Project names are chosen so none is a substring of another.
++const SEED = {
++  clients: [
++    { id: 1, name: 'Acme Corp', email: 'hello@acme.test' },
++    { id: 2, name: 'Globex', email: 'contact@globex.test' },
++  ],
++  projects: [
++    { id: 1, name: 'Website Redesign', clientId: 1 },
++    { id: 2, name: 'Mobile App', clientId: 2 },
++    { id: 3, name: 'Billing System', clientId: 1 },
++  ],
++  invoices: [
++    { id: 1, amount: 100, projectId: 1, status: 'DRAFT' },
++    { id: 2, amount: 250, projectId: 2, status: 'SENT' },
++    { id: 3, amount: 500, projectId: 3, status: 'PAID' },
++    { id: 4, amount: 750, projectId: 1, status: 'SENT' },
++    { id: 5, amount: 300, projectId: 2, status: 'DRAFT' },
++    { id: 6, amount: 900, projectId: 1, status: 'PAID' },
++  ],
++};
++
++const DRAFT_IDS = [1, 5];
++const SENT_IDS = [2, 4];
++const PAID_IDS = [3, 6];
++const ALL_IDS = [1, 2, 3, 4, 5, 6];
++
++// The ids of the currently-rendered invoice rows, ascending (order is not what this feature is about).
++async function visibleIds(page: Page): Promise<number[]> {
++  return invoiceRows(page).evaluateAll((els) =>
++    els
++      .map((el) => Number(el.getAttribute('data-testid')!.replace('invoice-row-', '')))
++      .sort((a, b) => a - b),
++  );
++}
++
++// Choose a stage in the filter. The option is found by the stage WORD in its label and selected by
++// that option's own value, so the stage is pinned by meaning, not by an exact value/capitalisation.
++async function chooseStage(page: Page, word: RegExp): Promise<void> {
++  const filter = page.getByTestId('invoice-status-filter');
++  await expect(filter).toBeVisible();
++  const value = await filter
++    .locator('option')
++    .filter({ hasText: word })
++    .first()
++    .evaluate((el: HTMLOptionElement) => el.value);
++  await filter.selectOption(value);
++}
++
++// Return the filter to "all stages": the default option carries no stage, so it has an empty value
++// (an empty value clears the URL key, leaving the list unfiltered).
++async function chooseAllStages(page: Page): Promise<void> {
++  await page.getByTestId('invoice-status-filter').selectOption('');
++}
++
++// Reach the invoices page the way a user would — via its nav link — so the page's own URL is not pinned.
++async function openAllInvoices(page: Page): Promise<void> {
++  await page.goto('/');
++  const nav = page.getByTestId('nav-invoices');
++  await expect(nav).toBeVisible();
++  await nav.click();
++  await expect(page.getByTestId('invoices-page')).toBeVisible();
++}
++
++test.describe('Narrow all invoices to one stage', () => {
++  test('the invoices page offers a stage filter and lists every invoice before one is chosen', async ({
++    page,
++  }) => {
++    await resetAndSeed(SEED);
++
++    await openAllInvoices(page);
++
++    // The new filter control is present on the page.
++    await expect(page.getByTestId('invoice-status-filter')).toBeVisible();
++
++    // Before any stage is chosen the list is unfiltered: every seeded invoice is shown in the table.
++    await expect(page.getByTestId('all-invoices-table')).toBeVisible();
++    await expect(invoiceRows(page)).toHaveCount(ALL_IDS.length);
++    expect(await visibleIds(page)).toEqual(ALL_IDS);
++  });
++
++  test('choosing "sent" narrows the list to only the sent invoices', async ({ page }) => {
++    await resetAndSeed(SEED);
++
++    await openAllInvoices(page);
++    // Precondition: everything is listed, so the narrowing below is a real effect of the filter.
++    await expect(invoiceRows(page)).toHaveCount(ALL_IDS.length);
++
++    // The request's worked example: narrow to "only the ones I have sent".
++    await chooseStage(page, SENT);
++
++    // Only the two SENT invoices remain; every draft and paid invoice has dropped out of the list.
++    await expect(invoiceRows(page)).toHaveCount(SENT_IDS.length);
++    expect(await visibleIds(page)).toEqual(SENT_IDS);
++    for (const id of SENT_IDS) {
++      await expect(page.getByTestId(`invoice-row-${id}`)).toBeVisible();
++      await expect(statusOf(page, id)).toHaveText(SENT);
++    }
++    for (const id of [...DRAFT_IDS, ...PAID_IDS]) {
++      await expect(page.getByTestId(`invoice-row-${id}`)).toHaveCount(0);
++    }
++
++    // The surviving rows still carry their real data — narrowing filters the list, it does not blank it.
++    await expect(page.getByTestId('invoice-row-2').getByTestId('invoice-project')).toHaveText('Mobile App');
++    await expect(page.getByTestId('invoice-row-4').getByTestId('invoice-project')).toHaveText('Website Redesign');
++  });
++
++  test('the filter is keyed on the chosen stage: each stage narrows to its own invoices', async ({
++    page,
++  }) => {
++    await resetAndSeed(SEED);
++
++    await openAllInvoices(page);
++
++    // Drafts only.
++    await chooseStage(page, DRAFT);
++    await expect(invoiceRows(page)).toHaveCount(DRAFT_IDS.length);
++    expect(await visibleIds(page)).toEqual(DRAFT_IDS);
++    for (const id of DRAFT_IDS) {
++      await expect(statusOf(page, id)).toHaveText(DRAFT);
++    }
++
++    // Switching to paid narrows to a DIFFERENT set — proof the filter follows the chosen stage and
++    // is not hardwired to one (the drafts are gone, the paid invoices are now shown).
++    await chooseStage(page, PAID);
++    await expect(invoiceRows(page)).toHaveCount(PAID_IDS.length);
++    expect(await visibleIds(page)).toEqual(PAID_IDS);
++    for (const id of PAID_IDS) {
++      await expect(statusOf(page, id)).toHaveText(PAID);
++    }
++
++    // Returning to "all stages" brings every invoice back.
++    await chooseAllStages(page);
++    await expect(invoiceRows(page)).toHaveCount(ALL_IDS.length);
++    expect(await visibleIds(page)).toEqual(ALL_IDS);
++  });
++
++  test('the chosen stage survives a fresh load', async ({ page }) => {
++    await resetAndSeed(SEED);
++
++    await openAllInvoices(page);
++    await chooseStage(page, SENT);
++    await expect(invoiceRows(page)).toHaveCount(SENT_IDS.length);
++    expect(await visibleIds(page)).toEqual(SENT_IDS);
++
++    // Reloading re-reads the page; the chosen stage is still in effect and the same rows come back
++    // (the filter lives in the URL, not in throwaway component state).
++    await page.reload();
++    await expect(page.getByTestId('invoices-page')).toBeVisible();
++    await expect(invoiceRows(page)).toHaveCount(SENT_IDS.length);
++    expect(await visibleIds(page)).toEqual(SENT_IDS);
++  });
++});

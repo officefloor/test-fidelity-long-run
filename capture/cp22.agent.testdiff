@@ -1,0 +1,187 @@
+diff --git a/invoice-lineitem-remove.spec.ts b/invoice-lineitem-remove.spec.ts
+new file mode 100644
+index 0000000..418ec4b
+--- /dev/null
++++ b/invoice-lineitem-remove.spec.ts
+@@ -0,0 +1,181 @@
++// Acceptance test for the change request:
++//   "Let me change or remove those charge lines on an invoice. Update the total when I do."
++//
++// An invoice's line items are the things being charged for (invoice-lineitems-table, one
++// lineitem-row-<id> each, carrying lineitem-description / -qty / -unitprice / -amount). The invoice
++// total (invoice-amount) is WORKED OUT as the sum of the line amounts — never typed. This change
++// lets the user get rid of a charge line they no longer want: each line gets a REMOVE control
++// (lineitem-remove-<id>). Removing a line drops it from the list and the worked-out total shrinks to
++// match, and the removal sticks across a fresh load from the server.
++//
++// Rows are located by the DESCRIPTION they carry (chosen distinct per test, none a substring of
++// another) and the remove control for a row is found WITHIN that row — so the test binds to the line
++// being removed, not to a particular server-assigned id, exactly as invoice-lineitems.spec.ts locates
++// a row by what it shows.
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed (the app's /__test__
++// endpoint): an invoice honours { id, projectId, status, lineItems } where each line item is
++// { id, description, qty, unitPrice } (the seed inserts a line by its explicit id). This change
++// surfaces no audit records, so there is nothing to assert on the audit channel.
++import { test, expect, type Page, type Locator } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++const lineItemRows = (page: Page) => page.locator('[data-testid^="lineitem-row-"]');
++
++const rowByDescription = (page: Page, description: string): Locator =>
++  lineItemRows(page).filter({
++    has: page.getByTestId('lineitem-description').getByText(description, { exact: true }),
++  });
++
++// The remove control for a given row. Its concrete id (lineitem-remove-<id>) is whatever the server
++// holds for the line, so find it WITHIN the row located by description rather than by a hard-coded id.
++const removeControl = (row: Locator): Locator =>
++  row.locator('[data-testid^="lineitem-remove-"]');
++
++const invoiceTotal = (page: Page): Locator =>
++  page.getByTestId('invoice-detail-page').getByTestId('invoice-amount');
++
++// A figure may be rendered as money ($300.00) or bare (300); assert the value is PRESENT so the test
++// binds to the value, not one presentation. Figures per test are chosen so none is a substring of
++// another.
++async function expectValue(cell: Locator, n: number): Promise<void> {
++  await expect(cell).toContainText(String(n));
++}
++
++async function gotoInvoice(page: Page, id: number): Promise<void> {
++  await page.goto(`/invoices/${id}`);
++  await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++}
++
++test.describe('Charge lines can be removed, and the total follows', () => {
++  test('removing one of several lines drops it and shrinks the total to match', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [
++        {
++          id: 1,
++          projectId: 1,
++          status: 'DRAFT',
++          lineItems: [
++            { id: 1, description: 'Design work', qty: 2, unitPrice: 150 }, // 300
++            { id: 2, description: 'Hosting setup', qty: 3, unitPrice: 80 }, // 240
++            { id: 3, description: 'Copywriting', qty: 1, unitPrice: 70 }, //   70
++          ],
++        },
++      ],
++    });
++
++    await gotoInvoice(page, 1);
++    await expect(lineItemRows(page)).toHaveCount(3);
++    await expectValue(invoiceTotal(page), 610); // 300 + 240 + 70
++
++    // Get rid of the middle charge line.
++    const hosting = rowByDescription(page, 'Hosting setup');
++    await expect(hosting).toHaveCount(1);
++    const remove = removeControl(hosting);
++    await expect(remove).toBeVisible();
++    await remove.click();
++
++    // It is gone; the other two remain, and the total shrinks by that line's amount: 610 - 240 = 370.
++    await expect(rowByDescription(page, 'Hosting setup')).toHaveCount(0);
++    await expect(lineItemRows(page)).toHaveCount(2);
++    await expect(rowByDescription(page, 'Design work')).toHaveCount(1);
++    await expect(rowByDescription(page, 'Copywriting')).toHaveCount(1);
++    await expectValue(invoiceTotal(page), 370);
++
++    // The removal sticks across a fresh load from the server.
++    await page.reload();
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++    await expect(lineItemRows(page)).toHaveCount(2);
++    await expect(rowByDescription(page, 'Hosting setup')).toHaveCount(0);
++    await expect(rowByDescription(page, 'Design work')).toHaveCount(1);
++    await expect(rowByDescription(page, 'Copywriting')).toHaveCount(1);
++    await expectValue(invoiceTotal(page), 370);
++  });
++
++  test('removing the last remaining line empties the table and the total falls to zero', async ({
++    page,
++  }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [
++        {
++          id: 1,
++          projectId: 1,
++          status: 'DRAFT',
++          lineItems: [{ id: 1, description: 'Initial consulting', qty: 2, unitPrice: 100 }], // 200
++        },
++      ],
++    });
++
++    await gotoInvoice(page, 1);
++    await expect(lineItemRows(page)).toHaveCount(1);
++    await expectValue(invoiceTotal(page), 200);
++
++    const remove = removeControl(rowByDescription(page, 'Initial consulting'));
++    await expect(remove).toBeVisible();
++    await remove.click();
++
++    // Nothing is being charged for any more: the table is still there, but empty, and the worked-out
++    // total is zero.
++    await expect(lineItemRows(page)).toHaveCount(0);
++    await expect(page.getByTestId('invoice-lineitems-table')).toBeVisible();
++    await expectValue(invoiceTotal(page), 0);
++
++    await page.reload();
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++    await expect(lineItemRows(page)).toHaveCount(0);
++    await expectValue(invoiceTotal(page), 0);
++  });
++
++  test('removing lines one after another re-works the total each time', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [
++        {
++          id: 1,
++          projectId: 1,
++          status: 'DRAFT',
++          lineItems: [
++            { id: 1, description: 'Alpha item', qty: 1, unitPrice: 500 }, // 500
++            { id: 2, description: 'Bravo item', qty: 2, unitPrice: 30 }, //   60
++            { id: 3, description: 'Charlie item', qty: 3, unitPrice: 7 }, //   21
++          ],
++        },
++      ],
++    });
++
++    await gotoInvoice(page, 1);
++    await expect(lineItemRows(page)).toHaveCount(3);
++    await expectValue(invoiceTotal(page), 581); // 500 + 60 + 21
++
++    // Remove the biggest line first; the total re-works over what remains: 60 + 21 = 81.
++    const removeAlpha = removeControl(rowByDescription(page, 'Alpha item'));
++    await expect(removeAlpha).toBeVisible();
++    await removeAlpha.click();
++    await expect(rowByDescription(page, 'Alpha item')).toHaveCount(0);
++    await expect(lineItemRows(page)).toHaveCount(2);
++    await expectValue(invoiceTotal(page), 81);
++
++    // Remove another; only Bravo is left, so the total is its amount alone: 60.
++    const removeCharlie = removeControl(rowByDescription(page, 'Charlie item'));
++    await expect(removeCharlie).toBeVisible();
++    await removeCharlie.click();
++    await expect(rowByDescription(page, 'Charlie item')).toHaveCount(0);
++    await expect(lineItemRows(page)).toHaveCount(1);
++    await expectValue(invoiceTotal(page), 60);
++
++    // Only Bravo survives — before and after a fresh load.
++    await expect(rowByDescription(page, 'Bravo item')).toHaveCount(1);
++    await page.reload();
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++    await expect(lineItemRows(page)).toHaveCount(1);
++    await expect(rowByDescription(page, 'Bravo item')).toHaveCount(1);
++    await expect(rowByDescription(page, 'Alpha item')).toHaveCount(0);
++    await expect(rowByDescription(page, 'Charlie item')).toHaveCount(0);
++    await expectValue(invoiceTotal(page), 60);
++  });
++});

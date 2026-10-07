@@ -1,0 +1,92 @@
+You are writing ACCEPTANCE TESTS for one change to this application.
+
+You write TESTS ONLY. Do not modify application source, build scripts, or the test support
+helpers (e2e/support/*). A run that changes application code is void.
+
+THE CHANGE REQUEST (as the user wrote it):
+I want to track the projects I do for clients. Let me add a project and pick which client it
+is for. Show each project with the client's name.
+
+WHAT TO DO
+Write Playwright acceptance test(s) under e2e/specs/ that verify this change request has been
+implemented. Where the request revises behaviour that your EXISTING tests already assert, update
+those tests too — the suite must describe the application as it is meant to be after this change,
+not as it was before.
+
+Assert only through the two public channels below. Never reach into the database, the REST API, or
+application internals.
+
+CHANNEL 1 — the UI, via data-testid
+  Introduced by THIS change (11):
+    nav-projects
+    project-client
+    project-form
+    project-form-client
+    project-form-name
+    project-form-submit
+    project-name
+    project-row-<id>
+    projects-empty
+    projects-page
+    projects-table
+  Every anchor available to you (28):
+    app-home
+    app-nav
+    app-root
+    client-email
+    client-form
+    client-form-email
+    client-form-email-error
+    client-form-name
+    client-form-submit
+    client-name
+    client-row-<id>
+    clients-empty
+    clients-page
+    clients-table
+    home-empty
+    nav-clients
+    nav-home
+    nav-projects
+    project-client
+    project-form
+    project-form-client
+    project-form-name
+    project-form-submit
+    project-name
+    project-row-<id>
+    projects-empty
+    projects-page
+    projects-table
+  `<id>` / `<currency>` are placeholders: the concrete value comes from the data
+  your test seeds, e.g. client-row-1. Anchors are a stable contract — use them
+  exactly as written.
+
+CHANNEL 2 — the audit file, via auditLines() from ../support/audit
+  Introduced by THIS change (0):
+    (none)
+  Every record format available to you (0):
+    (none yet)
+
+SEED FIELDS HONOURED by /__test__/seed (anything else is ignored):
+    clients: email, id, name
+    projects: clientId, id, name
+
+HOW DATA IS ARRANGED
+Call `resetAndSeed({...})` from `../support/seed` to put the application into the state your test
+needs (it clears all data and the audit file first). Only the seed fields listed above are
+honoured — a field that is not listed is accepted and SILENTLY IGNORED, so seeding it will look
+like it worked and your assertion will fail for an unrelated-looking reason.
+
+THE APPLICATION
+The source in this directory is the application as it stands BEFORE this change request has been
+implemented. You can read it and run it. Your new test SHOULD FAIL against it — the behaviour
+being requested is not there yet. That is expected, and is not a reason to weaken the test. Your
+existing tests should still pass.
+
+YOUR EXISTING TESTS
+  e2e/specs/ holds the 2 spec file(s) you have written so far (9 tests).
+  Their git history is available. Update them where this change request revises
+  behaviour they assert; otherwise leave them alone.
+    client-email-required.spec.ts
+    clients.spec.ts

@@ -1,0 +1,249 @@
+diff --git a/project-tags.spec.ts b/project-tags.spec.ts
+new file mode 100644
+index 0000000..124b15c
+--- /dev/null
++++ b/project-tags.spec.ts
+@@ -0,0 +1,243 @@
++// Acceptance test for the change request:
++//   "Let me put labels on projects so I can group them."
++//
++// A project carries LABELS (tags). On a project's detail page (/projects/<id>) they live in their
++// own region (project-tags) holding the list of the project's labels (project-tags-list): each label
++// is its own chip (project-tag-<id>, keyed by the tag's id) carrying the label's text, with a control
++// to take that label off the project (project-tag-remove-<id>). The region offers a control to put a
++// new label on the project (project-tag-add) submitted with project-tag-add-submit.
++//
++// Labels GROUP projects: the same label can sit on more than one project. A project's label list
++// belongs to THAT project — a label on a different project is not shown here.
++//
++// Putting a label on a project and taking one off are audited so the grouping can be checked back
++// later: each records exactly one line — `PROJECT_TAGGED project=<project> tag=<tag>` when a label is
++// added, `PROJECT_UNTAGGED project=<project> tag=<tag>` when one is removed. The <project> / <tag>
++// fields identify the project and the tag; the test binds to the MEANING by accepting either the
++// seeded id or the seeded name for each, rather than pinning one choice of identifier. Merely viewing
++// a project's labels records nothing.
++//
++// Asserts ONLY through the two public channels: the UI (data-testid) and the audit file
++// (auditLines()). Data is arranged via resetAndSeed (the app's /__test__ endpoint): `clients` honours
++// { id, name, email }, `projects` honours { id, name, clientId }, `tags` honours { id, name } and
++// `projectTags` (the join putting a label on a project) honours { projectId, tagId }.
++import { test, expect, type Page, type Locator } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++import { auditLines } from '../support/audit';
++
++// A label chip is project-tag-<id>. The prefix "project-tag-" is ALSO shared by the add control
++// (project-tag-add / -add-submit) and the per-chip remove control (project-tag-remove-<id>), so the
++// chips are the elements under that prefix that are neither add nor remove.
++const tagChips = (page: Page): Locator =>
++  page.locator(
++    '[data-testid^="project-tag-"]:not([data-testid^="project-tag-add"]):not([data-testid^="project-tag-remove"])',
++  );
++
++// Locate the one chip carrying a given label text, regardless of its server-assigned id. Label texts
++// in each test are chosen distinct — none a substring of another — so this is unambiguous.
++const chipByLabel = (page: Page, label: string): Locator =>
++  tagChips(page).filter({ hasText: label });
++
++// The remove control for a chip. Its concrete id (project-tag-remove-<id>) is the tag's id, which for
++// a freshly added label is assigned by the server, so find it WITHIN the chip rather than by id.
++const removeIn = (chip: Locator): Locator => chip.locator('[data-testid^="project-tag-remove-"]');
++
++// Audit matchers. The <project> / <tag> fields may be written as the id or the name, so accept either
++// (a known tag id is passed where the tag was seeded; otherwise any id is allowed alongside the name).
++const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
++type Ref = { id: number; name: string };
++const taggedRe = (p: Ref, t: { id?: number; name: string }) =>
++  new RegExp(`^PROJECT_TAGGED project=(?:${p.id}|${esc(p.name)}) tag=(?:${t.id ?? '\\d+'}|${esc(t.name)})$`);
++const untaggedRe = (p: Ref, t: { id?: number; name: string }) =>
++  new RegExp(`^PROJECT_UNTAGGED project=(?:${p.id}|${esc(p.name)}) tag=(?:${t.id ?? '\\d+'}|${esc(t.name)})$`);
++
++const linesMatching = (re: RegExp): string[] => auditLines().filter((l) => re.test(l));
++
++async function gotoProject(page: Page, id: number): Promise<void> {
++  await page.goto(`/projects/${id}`);
++  await expect(page.getByTestId('project-detail-page')).toBeVisible();
++  await expect(page.getByTestId('project-tags')).toBeVisible();
++}
++
++test.describe("A project's labels", () => {
++  test('a project shows its own labels, and not labels that belong to another project', async ({
++    page,
++  }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [
++        { id: 1, name: 'Website Redesign', clientId: 1 },
++        { id: 2, name: 'Mobile App', clientId: 1 },
++      ],
++      tags: [
++        { id: 1, name: 'urgent' },
++        { id: 2, name: 'backend' },
++        { id: 3, name: 'design' },
++      ],
++      projectTags: [
++        { projectId: 1, tagId: 1 },
++        { projectId: 1, tagId: 2 },
++        // A label on a DIFFERENT project — it must not appear on project 1's list.
++        { projectId: 2, tagId: 3 },
++      ],
++    });
++
++    await gotoProject(page, 1);
++    await expect(page.getByTestId('project-tags-list')).toBeVisible();
++
++    // Only this project's two labels are shown, each keyed by its tag id and carrying its text.
++    await expect(tagChips(page)).toHaveCount(2);
++    await expect(page.getByTestId('project-tag-1')).toContainText('urgent');
++    await expect(page.getByTestId('project-tag-2')).toContainText('backend');
++
++    // The other project's label is nowhere on this page.
++    await expect(page.getByTestId('project-tag-3')).toHaveCount(0);
++    await expect(page.getByTestId('project-tags')).not.toContainText('design');
++
++    // Merely viewing a project's labels records nothing — a record is kept on tag/untag, not on view.
++    expect(auditLines()).toEqual([]);
++  });
++
++  test('a project with no labels shows an empty label list', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      tags: [{ id: 1, name: 'urgent' }],
++      // The tag exists but is not put on this project.
++      projectTags: [],
++    });
++
++    await gotoProject(page, 1);
++
++    // The region is present but holds no labels.
++    await expect(tagChips(page)).toHaveCount(0);
++    await expect(page.getByTestId('project-tags')).not.toContainText('urgent');
++    expect(auditLines()).toEqual([]);
++  });
++
++  test('putting a label on a project shows it, persists, and records it once', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      tags: [],
++      projectTags: [],
++    });
++
++    const project = { id: 1, name: 'Website Redesign' };
++
++    await gotoProject(page, 1);
++    await expect(tagChips(page)).toHaveCount(0);
++
++    // Nothing has been recorded yet — reset clears the audit file, so the record below is proof the
++    // tagging (not the seeding) wrote it.
++    expect(auditLines()).toEqual([]);
++
++    // Put a label on the project.
++    await expect(page.getByTestId('project-tag-add')).toBeVisible();
++    await page.getByTestId('project-tag-add').fill('urgent');
++    await page.getByTestId('project-tag-add-submit').click();
++
++    // The label joins the list as its own chip, carrying its text and offering a control to take it
++    // off again. Its id is server-assigned, so locate it by the text it carries.
++    const chip = chipByLabel(page, 'urgent');
++    await expect(chip).toHaveCount(1);
++    await expect(chip).toContainText('urgent');
++    await expect(removeIn(chip)).toBeVisible();
++    await expect(tagChips(page)).toHaveCount(1);
++
++    // Exactly one record was kept for this tagging, identifying the project and the label.
++    expect(linesMatching(taggedRe(project, { name: 'urgent' }))).toHaveLength(1);
++    expect(auditLines()).toHaveLength(1);
++
++    // The label is held by the server, not just the page: it survives a fresh load, and reloading does
++    // not record the tagging a second time.
++    await page.reload();
++    await expect(page.getByTestId('project-tags')).toBeVisible();
++    await expect(chipByLabel(page, 'urgent')).toHaveCount(1);
++    await expect(tagChips(page)).toHaveCount(1);
++    expect(linesMatching(taggedRe(project, { name: 'urgent' }))).toHaveLength(1);
++    expect(auditLines()).toHaveLength(1);
++  });
++
++  test('taking a label off a project drops it, leaves the others, persists, and records it once', async ({
++    page,
++  }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      tags: [
++        { id: 1, name: 'urgent' },
++        { id: 2, name: 'backend' },
++      ],
++      projectTags: [
++        { projectId: 1, tagId: 1 },
++        { projectId: 1, tagId: 2 },
++      ],
++    });
++
++    const project = { id: 1, name: 'Website Redesign' };
++
++    await gotoProject(page, 1);
++    await expect(tagChips(page)).toHaveCount(2);
++    await expect(page.getByTestId('project-tag-1')).toContainText('urgent');
++    await expect(page.getByTestId('project-tag-2')).toContainText('backend');
++    expect(auditLines()).toEqual([]);
++
++    // Take the "urgent" label off the project.
++    await page.getByTestId('project-tag-remove-1').click();
++
++    // Only that label is gone; the other remains on the project.
++    await expect(page.getByTestId('project-tag-1')).toHaveCount(0);
++    await expect(tagChips(page)).toHaveCount(1);
++    await expect(page.getByTestId('project-tag-2')).toContainText('backend');
++    await expect(page.getByTestId('project-tags')).not.toContainText('urgent');
++
++    // Exactly one record was kept for this untagging, identifying the project and the label.
++    expect(linesMatching(untaggedRe(project, { id: 1, name: 'urgent' }))).toHaveLength(1);
++    expect(auditLines()).toHaveLength(1);
++
++    // The removal is held by the server: it survives a fresh load without recording anything more.
++    await page.reload();
++    await expect(page.getByTestId('project-tags')).toBeVisible();
++    await expect(page.getByTestId('project-tag-1')).toHaveCount(0);
++    await expect(page.getByTestId('project-tag-2')).toContainText('backend');
++    await expect(tagChips(page)).toHaveCount(1);
++    expect(linesMatching(untaggedRe(project, { id: 1, name: 'urgent' }))).toHaveLength(1);
++    expect(auditLines()).toHaveLength(1);
++  });
++
++  test('the same label groups more than one project', async ({ page }) => {
++    // "urgent" sits on two different projects — that shared label is how they are grouped.
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [
++        { id: 1, name: 'Website Redesign', clientId: 1 },
++        { id: 2, name: 'Mobile App', clientId: 1 },
++      ],
++      tags: [
++        { id: 1, name: 'urgent' },
++        { id: 2, name: 'backend' },
++      ],
++      projectTags: [
++        { projectId: 1, tagId: 1 },
++        // The same "urgent" label also on project 2, plus a label unique to project 2.
++        { projectId: 2, tagId: 1 },
++        { projectId: 2, tagId: 2 },
++      ],
++    });
++
++    // Project 1 carries the shared label.
++    await gotoProject(page, 1);
++    await expect(tagChips(page)).toHaveCount(1);
++    await expect(page.getByTestId('project-tag-1')).toContainText('urgent');
++
++    // Project 2 carries the SAME label (same tag id) alongside its own.
++    await gotoProject(page, 2);
++    await expect(tagChips(page)).toHaveCount(2);
++    await expect(page.getByTestId('project-tag-1')).toContainText('urgent');
++    await expect(page.getByTestId('project-tag-2')).toContainText('backend');
++
++    // Reading the grouping records nothing.
++    expect(auditLines()).toEqual([]);
++  });
++});

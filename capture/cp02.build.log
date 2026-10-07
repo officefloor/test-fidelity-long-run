@@ -1,0 +1,20 @@
+$ bin/build
+
+$ npm ci --silent (cwd e2e)
+
+$ npx playwright install chromium (cwd e2e)
+
+$ npx playwright test --reporter=json --workers=1 --output=/home/daniel/test-fidelity-long-run/work/202610060034/cp02/.run/pw-artifacts
+
+Running 9 tests using 1 worker
+
+[1A[2K[1/9] [chromium] › client-email-required.spec.ts:18:7 › A client cannot be saved without a proper email › submitting with an empty email is rejected and saves nothing
+[1A[2K[2/9] [chromium] › client-email-required.spec.ts:41:7 › A client cannot be saved without a proper email › submitting with a malformed email is rejected and saves nothing
+[1A[2K[3/9] [chromium] › client-email-required.spec.ts:62:7 › A client cannot be saved without a proper email › a rejected submit does not disturb the clients already in the list
+[1A[2K[4/9] [chromium] › client-email-required.spec.ts:88:7 › A client cannot be saved without a proper email › correcting the email to a proper address then saves the client
+[1A[2K[5/9] [chromium] › clients.spec.ts:11:7 › Clients › a link in the nav opens the clients list
+[1A[2K[6/9] [chromium] › clients.spec.ts:29:7 › Clients › with no clients the list shows an empty state
+[1A[2K[7/9] [chromium] › clients.spec.ts:40:7 › Clients › all seeded clients are shown in one list, each with name and email
+[1A[2K[8/9] [chromium] › clients.spec.ts:72:7 › Clients › adding a client with a name and email shows it in the list
+[1A[2K[9/9] [chromium] › clients.spec.ts:99:7 › Clients › a client added on top of seeded clients joins the same single list
+[1A[2K  9 passed (3.6s)

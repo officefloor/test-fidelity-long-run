@@ -1,0 +1,134 @@
+diff --git a/invoice-dates.spec.ts b/invoice-dates.spec.ts
+new file mode 100644
+index 0000000..305be0f
+--- /dev/null
++++ b/invoice-dates.spec.ts
+@@ -0,0 +1,128 @@
++// Acceptance test for the change request:
++//   "Put two dates on each invoice. One for when it went out. One for when it is due. Show them
++//    both."
++//
++// Each invoice now carries two dates: the date it WENT OUT (issued) and the date it is DUE. Both are
++// SHOWN on the project's detail page, each behind its own stable anchor inside the invoice's row:
++//   - invoice-issued — when the invoice went out
++//   - invoice-due    — when the invoice is due
++// The two are distinct values in distinct cells (not the same date shown twice, not swapped), and
++// each invoice shows ITS OWN pair.
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed (the app's /__test__
++// endpoint): `clients` honours { id, name, email }, `projects` honours { id, name, clientId } and
++// `invoices` honours { id, amount, projectId, status, issuedDate, dueDate }.
++import { test, expect, type Page, type Locator } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++const issuedOf = (page: Page, id: number): Locator =>
++  page.getByTestId(`invoice-row-${id}`).getByTestId('invoice-issued');
++const dueOf = (page: Page, id: number): Locator =>
++  page.getByTestId(`invoice-row-${id}`).getByTestId('invoice-due');
++
++// The request names no date format, so the assertions bind to WHICH date a cell shows rather than to
++// one presentation. A date may be rendered ISO (2019-03-14), US-style (3/14/2019) or long
++// ("March 14, 2019") — in every common rendering the four-digit year and the day-of-month both
++// appear, so a cell "shows" a given date when it contains that date's year AND its day. The four
++// dates seeded below are chosen with four DISTINCT years (2019/2020/2021/2022) and four distinct day
++// numbers, none a substring of another or of any month/year token — so requiring a cell to carry its
++// own year and NOT any of the other three years pins it to exactly one of the four dates. That is
++// what proves the issued and due cells are not the same value, not swapped, and not borrowed from the
++// other invoice.
++type D = { iso: string; year: string; day: string };
++const d = (iso: string): D => {
++  const [year, , day] = iso.split('-');
++  return { iso, year, day: String(Number(day)) };
++};
++
++async function expectShows(cell: Locator, want: D, others: D[]): Promise<void> {
++  await expect(cell).toBeVisible();
++  await expect(cell).toContainText(want.year);
++  await expect(cell).toContainText(want.day);
++  for (const other of others) {
++    if (other.year !== want.year) {
++      await expect(cell).not.toContainText(other.year);
++    }
++  }
++}
++
++test.describe('Each invoice shows an issued date and a due date', () => {
++  test('an invoice shows both dates, as distinct values in their own cells', async ({ page }) => {
++    const issued = d('2019-03-14');
++    const due = d('2020-07-28');
++
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [
++        { id: 1, amount: 100, projectId: 1, status: 'UNPAID', issuedDate: issued.iso, dueDate: due.iso },
++      ],
++    });
++
++    await page.goto('/projects/1');
++    await expect(page.getByTestId('project-detail-page')).toBeVisible();
++
++    // Both dates are shown, each behind its own anchor.
++    await expect(issuedOf(page, 1)).toBeVisible();
++    await expect(dueOf(page, 1)).toBeVisible();
++
++    // The "went out" cell shows the issued date (2019) and NOT the due date (2020); the "due" cell
++    // shows the due date (2020) and NOT the issued date (2019). So the two are distinct and not
++    // swapped.
++    await expectShows(issuedOf(page, 1), issued, [due]);
++    await expectShows(dueOf(page, 1), due, [issued]);
++  });
++
++  test('each invoice shows its OWN pair of dates', async ({ page }) => {
++    const a = { issued: d('2019-03-14'), due: d('2020-07-28') };
++    const b = { issued: d('2021-11-16'), due: d('2022-09-23') };
++    const all = [a.issued, a.due, b.issued, b.due];
++
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [
++        { id: 1, amount: 100, projectId: 1, status: 'UNPAID', issuedDate: a.issued.iso, dueDate: a.due.iso },
++        { id: 2, amount: 250, projectId: 1, status: 'UNPAID', issuedDate: b.issued.iso, dueDate: b.due.iso },
++      ],
++    });
++
++    await page.goto('/projects/1');
++    await expect(page.getByTestId('project-detail-page')).toBeVisible();
++
++    // Every invoice row carries both date anchors.
++    await expect(page.locator('[data-testid^="invoice-row-"]')).toHaveCount(2);
++    await expect(page.locator('[data-testid="invoice-issued"]')).toHaveCount(2);
++    await expect(page.locator('[data-testid="invoice-due"]')).toHaveCount(2);
++
++    // Each invoice shows its own issued and due dates — pinned to exactly one of the four distinct
++    // dates, so no row borrows another row's dates and no cell shows the wrong one of its pair.
++    await expectShows(issuedOf(page, 1), a.issued, all);
++    await expectShows(dueOf(page, 1), a.due, all);
++    await expectShows(issuedOf(page, 2), b.issued, all);
++    await expectShows(dueOf(page, 2), b.due, all);
++  });
++
++  test('both dates are held by the server: they survive a fresh load', async ({ page }) => {
++    const issued = d('2019-03-14');
++    const due = d('2020-07-28');
++
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [
++        { id: 1, amount: 100, projectId: 1, status: 'UNPAID', issuedDate: issued.iso, dueDate: due.iso },
++      ],
++    });
++
++    await page.goto('/projects/1');
++    await expectShows(issuedOf(page, 1), issued, [due]);
++    await expectShows(dueOf(page, 1), due, [issued]);
++
++    // Reloading re-reads from the server; both dates are still shown, in the same cells.
++    await page.reload();
++    await expect(page.getByTestId('project-detail-page')).toBeVisible();
++    await expectShows(issuedOf(page, 1), issued, [due]);
++    await expectShows(dueOf(page, 1), due, [issued]);
++  });
++});

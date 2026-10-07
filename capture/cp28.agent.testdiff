@@ -1,0 +1,269 @@
+diff --git a/project-notes.spec.ts b/project-notes.spec.ts
+new file mode 100644
+index 0000000..557f2a7
+--- /dev/null
++++ b/project-notes.spec.ts
+@@ -0,0 +1,263 @@
++// Acceptance test for the change request:
++//   "Let me write notes on a project. Show the newest one first."
++//
++// A project keeps a running list of free-text NOTES. On a project's detail page (/projects/<id>)
++// those notes live in their own region (project-notes): a project with at least one note shows the
++// list (project-notes-list) and each note is its own row (note-row-<id>, keyed by the note's id)
++// carrying its text (note-text); a project with no notes shows an empty state (project-notes-empty)
++// instead of the list. The region offers a form (note-form) to write a new note: its text field is
++// note-form-text and it is submitted with note-form-submit.
++//
++// The notes are shown NEWEST FIRST — ordered by when each was written (the note's `at`), most recent
++// at the top, independent of the order the rows were created or their ids. A freshly written note is
++// the most recent, so it appears at the top of the list.
++//
++// A note belongs to ITS target: the project's notes are the notes whose target is THIS project — a
++// note on a different project, or a note on something else entirely, is not shown here.
++//
++// Writing / viewing notes is NOT audited (this change introduces no audit record), so the audit file
++// stays empty throughout.
++//
++// Asserts ONLY through the two public channels: the UI (data-testid) and the audit file
++// (auditLines()). Data is arranged via resetAndSeed (the app's /__test__ endpoint): `clients` honours
++// { id, name, email }, `projects` honours { id, name, clientId } and `notes` honours
++// { id, targetType, targetId, text, at } — `targetType`/`targetId` say what the note is ON (a project
++// note is targetType 'PROJECT', targetId the project's id) and `at` is when it was written, used to
++// order newest first.
++import { test, expect, type Page, type Locator } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++import { auditLines } from '../support/audit';
++
++const noteRows = (page: Page): Locator => page.locator('[data-testid^="note-row-"]');
++
++// Each row's text, resolved in DOM order — so `toHaveText([...])` on this asserts both the exact set
++// of notes shown AND the order they are shown in (newest first).
++const noteTexts = (page: Page): Locator => noteRows(page).getByTestId('note-text');
++
++// The row carrying a given note text, regardless of its server-assigned id. Texts in each test are
++// chosen distinct (none a substring of another) so this is unambiguous.
++const rowByText = (page: Page, text: string): Locator => noteRows(page).filter({ hasText: text });
++
++async function gotoProject(page: Page, id: number): Promise<void> {
++  await page.goto(`/projects/${id}`);
++  await expect(page.getByTestId('project-detail-page')).toBeVisible();
++  await expect(page.getByTestId('project-notes')).toBeVisible();
++}
++
++test.describe('Notes on a project, newest first', () => {
++  test('a project with no notes shows an empty state, not the list', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [
++        { id: 1, name: 'Website Redesign', clientId: 1 },
++        { id: 2, name: 'Mobile App', clientId: 1 },
++      ],
++      // A note on a DIFFERENT project — project 1 still has none of its own.
++      notes: [
++        {
++          id: 1,
++          targetType: 'PROJECT',
++          targetId: 2,
++          text: 'Belongs to the mobile app',
++          at: '2026-03-01T09:00:00Z',
++        },
++      ],
++    });
++
++    await gotoProject(page, 1);
++
++    // No notes on this project: the empty state shows, the list and rows do not.
++    await expect(page.getByTestId('project-notes-empty')).toBeVisible();
++    await expect(noteRows(page)).toHaveCount(0);
++    await expect(page.getByTestId('project-notes-list')).toHaveCount(0);
++    // The other project's note is nowhere on this page.
++    await expect(page.getByTestId('project-notes')).not.toContainText('Belongs to the mobile app');
++
++    // Notes are not audited — nothing has been recorded.
++    expect(auditLines()).toEqual([]);
++  });
++
++  test("a project shows its own notes newest first, and not notes on something else", async ({
++    page,
++  }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [
++        { id: 1, name: 'Website Redesign', clientId: 1 },
++        { id: 2, name: 'Mobile App', clientId: 1 },
++      ],
++      // Three notes on project 1 whose `at` order (newest → oldest = 2, 3, 1) deliberately differs
++      // from both their id order and the order they are listed in the fixture, so the assertion binds
++      // to "newest first by `at`" and not to insertion or id order.
++      notes: [
++        {
++          id: 1,
++          targetType: 'PROJECT',
++          targetId: 1,
++          text: 'Oldest: scoped the work',
++          at: '2026-01-10T09:00:00Z',
++        },
++        {
++          id: 2,
++          targetType: 'PROJECT',
++          targetId: 1,
++          text: 'Newest: shipped the beta',
++          at: '2026-09-20T09:00:00Z',
++        },
++        {
++          id: 3,
++          targetType: 'PROJECT',
++          targetId: 1,
++          text: 'Middle: client approved the design',
++          at: '2026-05-15T09:00:00Z',
++        },
++        // A note on a DIFFERENT project (even though its `at` is the most recent of all) must not
++        // appear on project 1's list, nor be pulled to the top by its recency.
++        {
++          id: 4,
++          targetType: 'PROJECT',
++          targetId: 2,
++          text: 'On the other project',
++          at: '2026-12-31T09:00:00Z',
++        },
++        // A note on something else entirely (same id-space, different target type) is not a project
++        // note and must not show here.
++        {
++          id: 5,
++          targetType: 'CLIENT',
++          targetId: 1,
++          text: 'On the client, not the project',
++          at: '2026-11-01T09:00:00Z',
++        },
++      ],
++    });
++
++    await gotoProject(page, 1);
++    await expect(page.getByTestId('project-notes-list')).toBeVisible();
++    await expect(page.getByTestId('project-notes-empty')).toHaveCount(0);
++
++    // Only this project's three notes are shown, each keyed by its id and carrying its text.
++    await expect(noteRows(page)).toHaveCount(3);
++    await expect(page.getByTestId('note-row-1').getByTestId('note-text')).toHaveText(
++      'Oldest: scoped the work',
++    );
++    await expect(page.getByTestId('note-row-2').getByTestId('note-text')).toHaveText(
++      'Newest: shipped the beta',
++    );
++    await expect(page.getByTestId('note-row-3').getByTestId('note-text')).toHaveText(
++      'Middle: client approved the design',
++    );
++
++    // Shown NEWEST FIRST: by `at`, that is note 2, then note 3, then note 1.
++    await expect(noteTexts(page)).toHaveText([
++      'Newest: shipped the beta',
++      'Middle: client approved the design',
++      'Oldest: scoped the work',
++    ]);
++
++    // Notes on other targets are nowhere on this page.
++    await expect(page.getByTestId('note-row-4')).toHaveCount(0);
++    await expect(page.getByTestId('note-row-5')).toHaveCount(0);
++    await expect(page.getByTestId('project-notes')).not.toContainText('On the other project');
++    await expect(page.getByTestId('project-notes')).not.toContainText('On the client, not the project');
++
++    // Merely viewing notes records nothing.
++    expect(auditLines()).toEqual([]);
++  });
++
++  test('writing a note adds it to the top (newest first) and it persists', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      // Two existing notes, both written in the past (older than a note written now).
++      notes: [
++        {
++          id: 1,
++          targetType: 'PROJECT',
++          targetId: 1,
++          text: 'Signed the contract',
++          at: '2026-02-01T09:00:00Z',
++        },
++        {
++          id: 2,
++          targetType: 'PROJECT',
++          targetId: 1,
++          text: 'Had the kickoff call',
++          at: '2026-07-01T09:00:00Z',
++        },
++      ],
++    });
++
++    await gotoProject(page, 1);
++
++    // Starts with the two seeded notes, newest first (the kickoff, then the signing).
++    await expect(noteTexts(page)).toHaveText(['Had the kickoff call', 'Signed the contract']);
++
++    // Nothing has been recorded — reset clears the audit file; writing a note must not add to it.
++    expect(auditLines()).toEqual([]);
++
++    // Write a new note.
++    await expect(page.getByTestId('note-form')).toBeVisible();
++    await page.getByTestId('note-form-text').fill('Shipped the first milestone');
++    await page.getByTestId('note-form-submit').click();
++
++    // It joins the list as its own row (its id is server-assigned, so locate it by its text) and,
++    // being the most recently written, sits at the TOP of the newest-first list.
++    const newRow = rowByText(page, 'Shipped the first milestone');
++    await expect(newRow).toHaveCount(1);
++    await expect(newRow.getByTestId('note-text')).toHaveText('Shipped the first milestone');
++    await expect(noteRows(page)).toHaveCount(3);
++    await expect(noteTexts(page)).toHaveText([
++      'Shipped the first milestone',
++      'Had the kickoff call',
++      'Signed the contract',
++    ]);
++
++    // Still not audited.
++    expect(auditLines()).toEqual([]);
++
++    // The note is held by the server, not just the page: it survives a fresh load, keeping its place
++    // at the top of the newest-first list.
++    await page.reload();
++    await expect(page.getByTestId('project-notes')).toBeVisible();
++    await expect(noteRows(page)).toHaveCount(3);
++    await expect(noteTexts(page)).toHaveText([
++      'Shipped the first milestone',
++      'Had the kickoff call',
++      'Signed the contract',
++    ]);
++    expect(auditLines()).toEqual([]);
++  });
++
++  test('a note written onto an empty project replaces the empty state with the list', async ({
++    page,
++  }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      notes: [],
++    });
++
++    await gotoProject(page, 1);
++
++    // Nothing yet: the empty state is shown, not the list.
++    await expect(page.getByTestId('project-notes-empty')).toBeVisible();
++    await expect(noteRows(page)).toHaveCount(0);
++
++    // Write the project's first note.
++    await page.getByTestId('note-form-text').fill('First note on this project');
++    await page.getByTestId('note-form-submit').click();
++
++    // The list now shows the one note, and the empty state is gone.
++    await expect(page.getByTestId('project-notes-list')).toBeVisible();
++    await expect(page.getByTestId('project-notes-empty')).toHaveCount(0);
++    await expect(noteRows(page)).toHaveCount(1);
++    await expect(noteTexts(page)).toHaveText(['First note on this project']);
++
++    // It persists across a fresh load, and nothing was audited.
++    await page.reload();
++    await expect(page.getByTestId('project-notes-list')).toBeVisible();
++    await expect(noteTexts(page)).toHaveText(['First note on this project']);
++    expect(auditLines()).toEqual([]);
++  });
++});

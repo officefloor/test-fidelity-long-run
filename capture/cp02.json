@@ -1,0 +1,373 @@
+{
+  "checkpoint": 2,
+  "checkpoint_id": "cp02_client_email_validation",
+  "type": "additive",
+  "mutates": [],
+  "mode": "agent",
+  "code_view": "previous",
+  "no_code_change": false,
+  "request": "Every client needs an email. Do not let me save one without a proper email address.\n",
+  "prompt": "You are writing ACCEPTANCE TESTS for one change to this application.\n\nYou write TESTS ONLY. Do not modify application source, build scripts, or the test support\nhelpers (e2e/support/*). A run that changes application code is void.\n\nTHE CHANGE REQUEST (as the user wrote it):\nEvery client needs an email. Do not let me save one without a proper email address.\n\nWHAT TO DO\nWrite Playwright acceptance test(s) under e2e/specs/ that verify this change request has been\nimplemented. Where the request revises behaviour that your EXISTING tests already assert, update\nthose tests too \u2014 the suite must describe the application as it is meant to be after this change,\nnot as it was before.\n\nAssert only through the two public channels below. Never reach into the database, the REST API, or\napplication internals.\n\nCHANNEL 1 \u2014 the UI, via data-testid\n  Introduced by THIS change (1):\n    client-form-email-error\n  Every anchor available to you (17):\n    app-home\n    app-nav\n    app-root\n    client-email\n    client-form\n    client-form-email\n    client-form-email-error\n    client-form-name\n    client-form-submit\n    client-name\n    client-row-<id>\n    clients-empty\n    clients-page\n    clients-table\n    home-empty\n    nav-clients\n    nav-home\n  `<id>` / `<currency>` are placeholders: the concrete value comes from the data\n  your test seeds, e.g. client-row-1. Anchors are a stable contract \u2014 use them\n  exactly as written.\n\nCHANNEL 2 \u2014 the audit file, via auditLines() from ../support/audit\n  Introduced by THIS change (0):\n    (none)\n  Every record format available to you (0):\n    (none yet)\n\nSEED FIELDS HONOURED by /__test__/seed (anything else is ignored):\n    clients: email, id, name\n\nHOW DATA IS ARRANGED\nCall `resetAndSeed({...})` from `../support/seed` to put the application into the state your test\nneeds (it clears all data and the audit file first). Only the seed fields listed above are\nhonoured \u2014 a field that is not listed is accepted and SILENTLY IGNORED, so seeding it will look\nlike it worked and your assertion will fail for an unrelated-looking reason.\n\nTHE APPLICATION\nThe source in this directory is the application as it stands BEFORE this change request has been\nimplemented. You can read it and run it. Your new test SHOULD FAIL against it \u2014 the behaviour\nbeing requested is not there yet. That is expected, and is not a reason to weaken the test. Your\nexisting tests should still pass.\n\nYOUR EXISTING TESTS\n  e2e/specs/ holds the 1 spec file(s) you have written so far (5 tests).\n  Their git history is available. Update them where this change request revises\n  behaviour they assert; otherwise leave them alone.\n    clients.spec.ts\n",
+  "contract": {
+    "checkpoint": 2,
+    "no_code_change": false,
+    "new_testids": [
+      "client-form-email-error"
+    ],
+    "new_audit_records": null,
+    "available_testids": [
+      "app-home",
+      "app-nav",
+      "app-root",
+      "client-email",
+      "client-form",
+      "client-form-email",
+      "client-form-email-error",
+      "client-form-name",
+      "client-form-submit",
+      "client-name",
+      "client-row-<id>",
+      "clients-empty",
+      "clients-page",
+      "clients-table",
+      "home-empty",
+      "nav-clients",
+      "nav-home"
+    ],
+    "available_audit_records": null,
+    "seed_accepts": {
+      "clients": [
+        "email",
+        "id",
+        "name"
+      ]
+    }
+  },
+  "reference": {
+    "repo": "officehq-tanstack-officefloor",
+    "origin": "git@github.com:officefloor/officehq-tanstack-officefloor.git",
+    "branch": "evolve/202610020135/just-solve/chain2",
+    "repairs_applied": [
+      "005-seed-advances-the-clients-identity"
+    ]
+  },
+  "suite": {
+    "files": {
+      "client-email-required.spec.ts": [
+        "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing",
+        "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing",
+        "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list",
+        "client-email-required.spec.ts::correcting the email to a proper address then saves the client"
+      ],
+      "clients.spec.ts": [
+        "clients.spec.ts::a link in the nav opens the clients list",
+        "clients.spec.ts::with no clients the list shows an empty state",
+        "clients.spec.ts::all seeded clients are shown in one list, each with name and email",
+        "clients.spec.ts::adding a client with a name and email shows it in the list",
+        "clients.spec.ts::a client added on top of seeded clients joins the same single list"
+      ]
+    },
+    "total_tests": 9,
+    "file_delta": {
+      "added": [
+        "client-email-required.spec.ts"
+      ],
+      "removed": [],
+      "modified": []
+    },
+    "test_delta": {
+      "added": [
+        "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list",
+        "client-email-required.spec.ts::correcting the email to a proper address then saves the client",
+        "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing",
+        "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing"
+      ],
+      "removed": []
+    },
+    "test_moves": {
+      "added": [
+        "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing",
+        "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing",
+        "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list",
+        "client-email-required.spec.ts::correcting the email to a proper address then saves the client"
+      ],
+      "revised": [],
+      "dropped": [],
+      "file_gone": []
+    },
+    "gate_id_delta": {
+      "added": [
+        "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list",
+        "client-email-required.spec.ts::correcting the email to a proper address then saves the client",
+        "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing",
+        "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing"
+      ],
+      "removed": []
+    }
+  },
+  "source": {
+    "kind": "agent",
+    "suite_repo": "/home/daniel/test-fidelity-long-run/runs/202610060034/chain2/suite",
+    "suite_commit": "ddd9e23944800818a4bc0a4f81a759fb5ce13601",
+    "code_view": "previous",
+    "view_checkpoint": 1,
+    "files_added": [
+      "client-email-required.spec.ts"
+    ],
+    "files_removed": []
+  },
+  "gate": {
+    "build_ok": true,
+    "total_selected": 9,
+    "passed": 9,
+    "failed_count": 0,
+    "failed": [],
+    "repeats": 2,
+    "flaky": [],
+    "flaky_count": 0,
+    "results": {
+      "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing": true,
+      "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing": true,
+      "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list": true,
+      "client-email-required.spec.ts::correcting the email to a proper address then saves the client": true,
+      "clients.spec.ts::a link in the nav opens the clients list": true,
+      "clients.spec.ts::with no clients the list shows an empty state": true,
+      "clients.spec.ts::all seeded clients are shown in one list, each with name and email": true,
+      "clients.spec.ts::adding a client with a name and email shows it in the list": true,
+      "clients.spec.ts::a client added on top of seeded clients joins the same single list": true
+    },
+    "results_repeats": [
+      {
+        "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing": true,
+        "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing": true,
+        "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list": true,
+        "client-email-required.spec.ts::correcting the email to a proper address then saves the client": true,
+        "clients.spec.ts::a link in the nav opens the clients list": true,
+        "clients.spec.ts::with no clients the list shows an empty state": true,
+        "clients.spec.ts::all seeded clients are shown in one list, each with name and email": true,
+        "clients.spec.ts::adding a client with a name and email shows it in the list": true,
+        "clients.spec.ts::a client added on top of seeded clients joins the same single list": true
+      }
+    ],
+    "detail": [
+      {
+        "test_id": "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 719,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 358,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 232,
+        "failure": ""
+      },
+      {
+        "test_id": "client-email-required.spec.ts::correcting the email to a proper address then saves the client",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 390,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::a link in the nav opens the clients list",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 153,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::with no clients the list shows an empty state",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 102,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::all seeded clients are shown in one list, each with name and email",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 127,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::adding a client with a name and email shows it in the list",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 450,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::a client added on top of seeded clients joins the same single list",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 299,
+        "failure": ""
+      }
+    ],
+    "error": "",
+    "gate_invalid": false,
+    "gate_attempts": 1,
+    "test_seconds": 2.75,
+    "wall_seconds": 41.5
+  },
+  "mutations": [
+    {
+      "id": "zero",
+      "kind": "zero",
+      "description": "application at cp01 \u2014 this change's feature absent",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list",
+        "client-email-required.spec.ts::correcting the email to a proper address then saves the client",
+        "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing",
+        "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 9,
+      "failed_count": 4,
+      "error": ""
+    },
+    {
+      "id": "001-blank-email-passes-validation",
+      "kind": "authored",
+      "description": "An empty email is treated as valid, so the form submits it. The server and the DB still\nrefuse, so no row appears \u2014 which means a test that only checks \"no client was created\"\nstill passes. Catching it needs the error to be asserted.",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 9,
+      "failed_count": 1,
+      "error": "",
+      "file": "src/main/frontend/features/clients/email.ts",
+      "applied": true,
+      "clause": "Do not let me save one without a proper email address",
+      "uncalibrated": false
+    },
+    {
+      "id": "002-malformed-email-passes-validation",
+      "kind": "authored",
+      "description": "Any non-blank text counts as an email, so 'not-an-email' submits. Distinct from 001: a\nsuite can easily cover the blank case and never try a malformed one.",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list",
+        "client-email-required.spec.ts::correcting the email to a proper address then saves the client",
+        "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 9,
+      "failed_count": 3,
+      "error": "",
+      "file": "src/main/frontend/features/clients/email.ts",
+      "applied": true,
+      "clause": "a proper email address",
+      "uncalibrated": false
+    },
+    {
+      "id": "003-rejection-is-silent",
+      "kind": "authored",
+      "description": "Validation still blocks the save, but the error message is never rendered \u2014 the form just\ndoes nothing. Killed only by a test that asserts the user is told why.",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "client-email-required.spec.ts::a rejected submit does not disturb the clients already in the list",
+        "client-email-required.spec.ts::correcting the email to a proper address then saves the client",
+        "client-email-required.spec.ts::submitting with a malformed email is rejected and saves nothing",
+        "client-email-required.spec.ts::submitting with an empty email is rejected and saves nothing"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 9,
+      "failed_count": 4,
+      "error": "",
+      "file": "src/main/frontend/features/clients/ClientForm.tsx",
+      "applied": true,
+      "clause": "Do not let me save one",
+      "uncalibrated": false
+    }
+  ],
+  "verdict": {
+    "green": true,
+    "flaky_tests": [],
+    "test_seconds": 2.75,
+    "wall_seconds": 41.5,
+    "suite_non_decreasing": true,
+    "tests_total": 9,
+    "tests_delta": 4,
+    "tests_added": 4,
+    "tests_revised": 0,
+    "tests_dropped": 0,
+    "app_code_touched": [],
+    "mutation_zero_correct": true,
+    "kill_rate": 1.0,
+    "mutations_authored": 3,
+    "mutations_killed": 3,
+    "survived": []
+  },
+  "files": {
+    "prompt": "cp02.prompt.txt",
+    "build_log": "cp02.build.log"
+  },
+  "agent": {
+    "ok": true,
+    "cost_usd": 0.377641,
+    "input_tokens": 14,
+    "output_tokens": 4659,
+    "cache_read_tokens": 148982,
+    "cache_creation_tokens": 18495,
+    "num_turns": 9,
+    "duration_ms": 113354,
+    "duration_api_ms": 71391,
+    "model": "claude-opus-4-8",
+    "session_id": "e5c7577a-b854-4ca1-8c9b-3b443497e5fe",
+    "stop_reason": "success",
+    "result_text": "The results are exactly what's expected for acceptance tests written ahead of the feature:\n\n- **5 passed** \u2014 all existing `clients.spec.ts` tests still pass (they use valid emails, which the change request doesn't alter).\n- **4 failed** \u2014 my new `client-email-required.spec.ts` tests fail because the `client-form-email-error` anchor and the validation behind it don't exist yet, which is precisely the behavior the change request asks for.\n\n## Summary\n\nThe change request \u2014 *\"Every client needs an email. Do not let me save one without a proper email address.\"* \u2014 is a new constraint on saving. No existing test asserted the opposite (they all submit valid emails), so none needed revising; I added one new spec.\n\n**`e2e/specs/client-email-required.spec.ts`** (4 tests), asserting only through the UI via `data-testid`:\n\n1. **Empty email** \u2014 submit with a name but blank email \u2192 `client-form-email-error` appears, no row is created, empty state persists (reconfirmed after `page.reload()` to prove nothing was saved server-side, not just hidden optimistically).\n2. **Malformed email** (`not-an-email`) \u2014 rejected with the error, nothing persisted across a reload.\n3. **Rejected submit on top of seeded data** (`initech@`) \u2014 the error shows, and the pre-existing `client-row-1` is untouched (count stays 1, name/email intact after reload).\n4. **Correction flow** \u2014 a bad email (`bruce`) is rejected, then corrected to `bruce@wayne.test` and saved successfully; the row appears, the error clears, and it survives a reload.\n\nEach rejection test verifies both public signals of the requirement: the error anchor is surfaced **and** no client is actually saved (via a reload-and-recount), so the test can't be satisfied by merely showing an error while still persisting. I did not touch any application source, build scripts, or support helpers.",
+    "error": "",
+    "attempts": [
+      {
+        "ok": true,
+        "limit_reached": false,
+        "retryable": false,
+        "cost_usd": 0.377641,
+        "num_turns": 9,
+        "duration_ms": 113354,
+        "duration_api_ms": 71391,
+        "error": ""
+      }
+    ],
+    "app_diff_file": "cp02.agent.appdiff",
+    "test_diff_file": "cp02.agent.testdiff",
+    "stream_file": "cp02.agent.jsonl",
+    "suite_commit": "ddd9e23944800818a4bc0a4f81a759fb5ce13601",
+    "sandbox_leaks": {
+      "hard": [
+        "pom.xml:82: managed by the parent BOM. Found via the cp01 dry run. flyway-core 12.x has H2 support"
+      ],
+      "soft": [
+        "src/main/java/net/officefloor/hq/app/Audit.java:31: /** Append one audit record. Checkpoints assert the exact line(s) in the file. */",
+        "src/main/java/net/officefloor/hq/app/Application.java:12: * At the base this is a bare shell; checkpoints add migrations, officefloor/rest routes + logic,",
+        "src/main/frontend/vite.config.ts:11: // file is gitignored \u2014 it is a build artifact and must never appear in a checkpoint's diff."
+      ]
+    }
+  }
+}

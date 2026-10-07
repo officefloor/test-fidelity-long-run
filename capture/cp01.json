@@ -1,0 +1,350 @@
+{
+  "checkpoint": 1,
+  "checkpoint_id": "cp01_clients",
+  "type": "additive",
+  "mutates": [],
+  "mode": "agent",
+  "code_view": "previous",
+  "no_code_change": false,
+  "request": "I want to keep track of my clients. Let me add a client with their name and email.\nShow me all my clients in one list.\n",
+  "prompt": "You are writing ACCEPTANCE TESTS for one change to this application.\n\nYou write TESTS ONLY. Do not modify application source, build scripts, or the test support\nhelpers (e2e/support/*). A run that changes application code is void.\n\nTHE CHANGE REQUEST (as the user wrote it):\nI want to keep track of my clients. Let me add a client with their name and email.\nShow me all my clients in one list.\n\nWHAT TO DO\nWrite Playwright acceptance test(s) under e2e/specs/ that verify this change request has been\nimplemented. Where the request revises behaviour that your EXISTING tests already assert, update\nthose tests too \u2014 the suite must describe the application as it is meant to be after this change,\nnot as it was before.\n\nAssert only through the two public channels below. Never reach into the database, the REST API, or\napplication internals.\n\nCHANNEL 1 \u2014 the UI, via data-testid\n  Introduced by THIS change (16):\n    app-home\n    app-nav\n    app-root\n    client-email\n    client-form\n    client-form-email\n    client-form-name\n    client-form-submit\n    client-name\n    client-row-<id>\n    clients-empty\n    clients-page\n    clients-table\n    home-empty\n    nav-clients\n    nav-home\n  Every anchor available to you (16):\n    app-home\n    app-nav\n    app-root\n    client-email\n    client-form\n    client-form-email\n    client-form-name\n    client-form-submit\n    client-name\n    client-row-<id>\n    clients-empty\n    clients-page\n    clients-table\n    home-empty\n    nav-clients\n    nav-home\n  `<id>` / `<currency>` are placeholders: the concrete value comes from the data\n  your test seeds, e.g. client-row-1. Anchors are a stable contract \u2014 use them\n  exactly as written.\n\nCHANNEL 2 \u2014 the audit file, via auditLines() from ../support/audit\n  Introduced by THIS change (0):\n    (none)\n  Every record format available to you (0):\n    (none yet)\n\nSEED FIELDS HONOURED by /__test__/seed (anything else is ignored):\n    clients: email, id, name\n\nHOW DATA IS ARRANGED\nCall `resetAndSeed({...})` from `../support/seed` to put the application into the state your test\nneeds (it clears all data and the audit file first). Only the seed fields listed above are\nhonoured \u2014 a field that is not listed is accepted and SILENTLY IGNORED, so seeding it will look\nlike it worked and your assertion will fail for an unrelated-looking reason.\n\nTHE APPLICATION\nThe source in this directory is the application as it stands BEFORE this change request has been\nimplemented. You can read it and run it. Your new test SHOULD FAIL against it \u2014 the behaviour\nbeing requested is not there yet. That is expected, and is not a reason to weaken the test. Your\nexisting tests should still pass.\n\nYOUR EXISTING TESTS\n  e2e/specs/ is empty: this is the first change request, so there is nothing to\n  update yet.\n",
+  "contract": {
+    "checkpoint": 1,
+    "no_code_change": false,
+    "new_testids": [
+      "app-home",
+      "app-nav",
+      "app-root",
+      "client-email",
+      "client-form",
+      "client-form-email",
+      "client-form-name",
+      "client-form-submit",
+      "client-name",
+      "client-row-<id>",
+      "clients-empty",
+      "clients-page",
+      "clients-table",
+      "home-empty",
+      "nav-clients",
+      "nav-home"
+    ],
+    "new_audit_records": null,
+    "available_testids": [
+      "app-home",
+      "app-nav",
+      "app-root",
+      "client-email",
+      "client-form",
+      "client-form-email",
+      "client-form-name",
+      "client-form-submit",
+      "client-name",
+      "client-row-<id>",
+      "clients-empty",
+      "clients-page",
+      "clients-table",
+      "home-empty",
+      "nav-clients",
+      "nav-home"
+    ],
+    "available_audit_records": null,
+    "seed_accepts": {
+      "clients": [
+        "email",
+        "id",
+        "name"
+      ]
+    }
+  },
+  "reference": {
+    "repo": "officehq-tanstack-officefloor",
+    "origin": "git@github.com:officefloor/officehq-tanstack-officefloor.git",
+    "branch": "evolve/202610020135/just-solve/chain2",
+    "repairs_applied": [
+      "005-seed-advances-the-clients-identity"
+    ]
+  },
+  "suite": {
+    "files": {
+      "clients.spec.ts": [
+        "clients.spec.ts::a link in the nav opens the clients list",
+        "clients.spec.ts::with no clients the list shows an empty state",
+        "clients.spec.ts::all seeded clients are shown in one list, each with name and email",
+        "clients.spec.ts::adding a client with a name and email shows it in the list",
+        "clients.spec.ts::a client added on top of seeded clients joins the same single list"
+      ]
+    },
+    "total_tests": 5,
+    "file_delta": {
+      "added": [
+        "clients.spec.ts"
+      ],
+      "removed": [],
+      "modified": []
+    },
+    "test_delta": {
+      "added": [
+        "clients.spec.ts::a client added on top of seeded clients joins the same single list",
+        "clients.spec.ts::a link in the nav opens the clients list",
+        "clients.spec.ts::adding a client with a name and email shows it in the list",
+        "clients.spec.ts::all seeded clients are shown in one list, each with name and email",
+        "clients.spec.ts::with no clients the list shows an empty state"
+      ],
+      "removed": []
+    },
+    "test_moves": {
+      "added": [
+        "clients.spec.ts::a link in the nav opens the clients list",
+        "clients.spec.ts::with no clients the list shows an empty state",
+        "clients.spec.ts::all seeded clients are shown in one list, each with name and email",
+        "clients.spec.ts::adding a client with a name and email shows it in the list",
+        "clients.spec.ts::a client added on top of seeded clients joins the same single list"
+      ],
+      "revised": [],
+      "dropped": [],
+      "file_gone": []
+    },
+    "gate_id_delta": {
+      "added": [
+        "clients.spec.ts::a client added on top of seeded clients joins the same single list",
+        "clients.spec.ts::a link in the nav opens the clients list",
+        "clients.spec.ts::adding a client with a name and email shows it in the list",
+        "clients.spec.ts::all seeded clients are shown in one list, each with name and email",
+        "clients.spec.ts::with no clients the list shows an empty state"
+      ],
+      "removed": []
+    }
+  },
+  "source": {
+    "kind": "agent",
+    "suite_repo": "/home/daniel/test-fidelity-long-run/runs/202610060034/chain2/suite",
+    "suite_commit": "fa36fc9f1d0c6536c0e7f1187d62d32149e869c7",
+    "code_view": "previous",
+    "view_checkpoint": 0,
+    "files_added": [
+      "clients.spec.ts"
+    ],
+    "files_removed": []
+  },
+  "gate": {
+    "build_ok": true,
+    "total_selected": 5,
+    "passed": 5,
+    "failed_count": 0,
+    "failed": [],
+    "repeats": 2,
+    "flaky": [],
+    "flaky_count": 0,
+    "results": {
+      "clients.spec.ts::a link in the nav opens the clients list": true,
+      "clients.spec.ts::with no clients the list shows an empty state": true,
+      "clients.spec.ts::all seeded clients are shown in one list, each with name and email": true,
+      "clients.spec.ts::adding a client with a name and email shows it in the list": true,
+      "clients.spec.ts::a client added on top of seeded clients joins the same single list": true
+    },
+    "results_repeats": [
+      {
+        "clients.spec.ts::a link in the nav opens the clients list": true,
+        "clients.spec.ts::with no clients the list shows an empty state": true,
+        "clients.spec.ts::all seeded clients are shown in one list, each with name and email": true,
+        "clients.spec.ts::adding a client with a name and email shows it in the list": true,
+        "clients.spec.ts::a client added on top of seeded clients joins the same single list": true
+      }
+    ],
+    "detail": [
+      {
+        "test_id": "clients.spec.ts::a link in the nav opens the clients list",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 246,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::with no clients the list shows an empty state",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 247,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::all seeded clients are shown in one list, each with name and email",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 272,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::adding a client with a name and email shows it in the list",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 450,
+        "failure": ""
+      },
+      {
+        "test_id": "clients.spec.ts::a client added on top of seeded clients joins the same single list",
+        "category": "functionality",
+        "passed": true,
+        "duration_ms": 434,
+        "failure": ""
+      }
+    ],
+    "error": "",
+    "gate_invalid": false,
+    "gate_attempts": 1,
+    "test_seconds": 1.59,
+    "wall_seconds": 37.3
+  },
+  "mutations": [
+    {
+      "id": "001-list-shows-only-the-first-client",
+      "kind": "authored",
+      "description": "Only the first client is rendered. Killed by any test that seeds more than one client and\nasserts how many rows appear; survived by one that seeds a single client, or that only\nchecks the table is visible.",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "clients.spec.ts::a client added on top of seeded clients joins the same single list",
+        "clients.spec.ts::all seeded clients are shown in one list, each with name and email"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 5,
+      "failed_count": 2,
+      "error": "",
+      "file": "src/main/frontend/features/clients/ClientList.tsx",
+      "applied": true,
+      "clause": "Show me all my clients in one list",
+      "uncalibrated": false
+    },
+    {
+      "id": "002-created-client-loses-its-email",
+      "kind": "authored",
+      "description": "The form posts the name but blanks the email. The client is still created, so a test that\nonly counts rows after submitting passes; catching this needs an assertion on the email it\ntyped. (Observable only at cp01: from cp02 the DB CHECK rejects a blank email outright.)",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "clients.spec.ts::a client added on top of seeded clients joins the same single list",
+        "clients.spec.ts::adding a client with a name and email shows it in the list"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 5,
+      "failed_count": 2,
+      "error": "",
+      "file": "src/main/frontend/features/clients/ClientForm.tsx",
+      "applied": true,
+      "clause": "add a client with their name and email",
+      "uncalibrated": false
+    },
+    {
+      "id": "003-email-column-shows-the-name",
+      "kind": "authored",
+      "description": "The email cell renders the client's name. The read path rather than the write path, and\ninvisible to any test that asserts only that the cell exists.",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "clients.spec.ts::a client added on top of seeded clients joins the same single list",
+        "clients.spec.ts::adding a client with a name and email shows it in the list",
+        "clients.spec.ts::all seeded clients are shown in one list, each with name and email"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 5,
+      "failed_count": 3,
+      "error": "",
+      "file": "src/main/frontend/features/clients/ClientList.tsx",
+      "applied": true,
+      "clause": "with their name and email",
+      "uncalibrated": false
+    },
+    {
+      "id": "004-no-empty-state",
+      "kind": "authored",
+      "description": "With no clients the list renders nothing instead of saying so. The empty case is the one\nmost easily left untested, and it is the first thing a user of a new install sees.",
+      "expect_kill": true,
+      "killed": true,
+      "correct": true,
+      "new_failures": [
+        "clients.spec.ts::adding a client with a name and email shows it in the list",
+        "clients.spec.ts::with no clients the list shows an empty state"
+      ],
+      "build_ok": true,
+      "gate_invalid": false,
+      "total_selected": 5,
+      "failed_count": 2,
+      "error": "",
+      "file": "src/main/frontend/features/clients/ClientList.tsx",
+      "applied": true,
+      "clause": "Show me all my clients in one list",
+      "uncalibrated": false
+    }
+  ],
+  "verdict": {
+    "green": true,
+    "flaky_tests": [],
+    "test_seconds": 1.59,
+    "wall_seconds": 37.3,
+    "suite_non_decreasing": true,
+    "tests_total": 5,
+    "tests_delta": 5,
+    "tests_added": 5,
+    "tests_revised": 0,
+    "tests_dropped": 0,
+    "app_code_touched": [],
+    "mutation_zero_correct": null,
+    "kill_rate": 1.0,
+    "mutations_authored": 4,
+    "mutations_killed": 4,
+    "survived": []
+  },
+  "files": {
+    "prompt": "cp01.prompt.txt",
+    "build_log": "cp01.build.log"
+  },
+  "agent": {
+    "ok": true,
+    "cost_usd": 0.48641,
+    "input_tokens": 18,
+    "output_tokens": 6718,
+    "cache_read_tokens": 208480,
+    "cache_creation_tokens": 21242,
+    "num_turns": 14,
+    "duration_ms": 138719,
+    "duration_api_ms": 87436,
+    "model": "claude-opus-4-8",
+    "session_id": "6fc1a145-63d7-4617-86f1-152d0adbe920",
+    "stop_reason": "success",
+    "result_text": "All 5 tests fail against the pre-change app \u2014 exactly as expected, since the clients feature doesn't exist yet. The failures are for the right reasons (missing `clients-page`, `clients-empty`, `client-row-*`, form, etc.), not seed-contract breaks or unrelated errors.\n\n## Summary\n\nI wrote one acceptance spec, `e2e/specs/clients.spec.ts`, covering the change request *\"keep track of my clients\u2026 add a client with name and email\u2026 show all my clients in one list.\"* It asserts only through the UI via `data-testid`, and arranges data only through `resetAndSeed` (seeding `clients` with the honoured `{ id, name, email }` fields).\n\nFive tests, exercising all 16 anchors meaningfully:\n\n1. **Nav \u2192 list** \u2014 `nav-clients` is reachable from `app-nav`, lands on `/clients` (`clients-page`); also confirms the shell (`app-root`, `app-nav`) and Home's unchanged `home-empty` still hold.\n2. **Empty state** \u2014 with no clients, `clients-empty` shows and zero `client-row-*` exist.\n3. **List seeded clients** \u2014 three seeded clients each appear as `client-row-<id>` carrying `client-name` and `client-email`; `clients-table` visible, `clients-empty` absent.\n4. **Add a client** \u2014 fill `client-form-name` / `client-form-email` in `client-form`, submit via `client-form-submit`; the new client appears (located by content since the server assigns the id), and `clients-empty` disappears.\n5. **Add on top of seeded** \u2014 a pre-seeded client and a newly added one coexist in the one list.\n\nNotes:\n- `e2e/specs/` was empty (first change request), so there were no existing tests to update.\n- The added client's row is located by its name text rather than a hardcoded id, since the id is server-assigned.\n- I did not touch any application source, build scripts, or support helpers.\n\nThe spec is correctly red against the current app and should pass once the feature is implemented.",
+    "error": "",
+    "attempts": [
+      {
+        "ok": true,
+        "limit_reached": false,
+        "retryable": false,
+        "cost_usd": 0.48641,
+        "num_turns": 14,
+        "duration_ms": 138719,
+        "duration_api_ms": 87436,
+        "error": ""
+      }
+    ],
+    "app_diff_file": "cp01.agent.appdiff",
+    "test_diff_file": "cp01.agent.testdiff",
+    "stream_file": "cp01.agent.jsonl",
+    "suite_commit": "fa36fc9f1d0c6536c0e7f1187d62d32149e869c7",
+    "sandbox_leaks": {
+      "hard": [
+        "pom.xml:82: managed by the parent BOM. Found via the cp01 dry run. flyway-core 12.x has H2 support"
+      ],
+      "soft": [
+        "src/main/java/net/officefloor/hq/app/Audit.java:31: /** Append one audit record. Checkpoints assert the exact line(s) in the file. */",
+        "src/main/java/net/officefloor/hq/app/TestSupportController.java:31: // TODO: TRUNCATE the domain tables that exist at this checkpoint (inject a JdbcTemplate/repo).",
+        "src/main/java/net/officefloor/hq/app/Application.java:12: * At the base this is a bare shell; checkpoints add migrations, officefloor/rest routes + logic,",
+        "src/main/frontend/vite.config.ts:11: // file is gitignored \u2014 it is a build artifact and must never appear in a checkpoint's diff."
+      ]
+    }
+  }
+}

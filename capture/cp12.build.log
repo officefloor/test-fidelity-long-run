@@ -1,0 +1,169 @@
+$ bin/build
+
+$ npm ci --silent (cwd e2e)
+
+$ npx playwright install chromium (cwd e2e)
+
+$ npx playwright test --reporter=json --workers=1 --output=/home/daniel/test-fidelity-long-run/work/202610060034/cp12/.run/pw-artifacts
+
+Running 54 tests using 1 worker
+
+[1A[2K[1/54] [chromium] › client-email-required.spec.ts:18:7 › A client cannot be saved without a proper email › submitting with an empty email is rejected and saves nothing
+[1A[2K[2/54] [chromium] › client-email-required.spec.ts:41:7 › A client cannot be saved without a proper email › submitting with a malformed email is rejected and saves nothing
+[1A[2K[3/54] [chromium] › client-email-required.spec.ts:62:7 › A client cannot be saved without a proper email › a rejected submit does not disturb the clients already in the list
+[1A[2K[4/54] [chromium] › client-email-required.spec.ts:88:7 › A client cannot be saved without a proper email › correcting the email to a proper address then saves the client
+[1A[2K[5/54] [chromium] › client-projects.spec.ts:23:7 › Client projects › opening a client from the list lands on its detail page
+[1A[2K[6/54] [chromium] › client-projects.spec.ts:42:7 › Client projects › the detail page lists the projects being done for that client
+[1A[2K[7/54] [chromium] › client-projects.spec.ts:76:7 › Client projects › opening a different client shows that client's own projects
+[1A[2K[8/54] [chromium] › client-projects.spec.ts:101:7 › Client projects › a client with no projects shows an empty state
+[1A[2K[9/54] [chromium] › client-projects.spec.ts:120:7 › Client projects › opening a client surfaces its projects end to end from the list
+[1A[2K[10/54] [chromium] › client-search.spec.ts:20:7 › Client search › the clients page offers a search box
+[1A[2K[11/54] [chromium] › client-search.spec.ts:32:7 › Client search › typing a name narrows the list to the matching clients
+[1A[2K[12/54] [chromium] › client-search.spec.ts:52:7 › Client search › a more specific query narrows to a single client
+[1A[2K[13/54] [chromium] › client-search.spec.ts:64:7 › Client search › clearing the search box restores the full list
+[1A[2K[14/54] [chromium] › client-search.spec.ts:79:7 › Client search › a query that matches no client leaves no rows
+[1A[2K[15/54] [chromium] › clients.spec.ts:11:7 › Clients › a link in the nav opens the clients list
+[1A[2K[16/54] [chromium] › clients.spec.ts:29:7 › Clients › with no clients the list shows an empty state
+[1A[2K[17/54] [chromium] › clients.spec.ts:40:7 › Clients › all seeded clients are shown in one list, each with name and email
+[1A[2K[18/54] [chromium] › clients.spec.ts:72:7 › Clients › adding a client with a name and email shows it in the list
+[1A[2K[19/54] [chromium] › clients.spec.ts:99:7 › Clients › a client added on top of seeded clients joins the same single list
+[1A[2K[20/54] [chromium] › dashboard.spec.ts:45:7 › Dashboard home screen › a link in the nav opens the dashboard
+[1A[2K[21/54] [chromium] › dashboard.spec.ts:62:7 › Dashboard home screen › shows how many clients and projects there are, and how much is still owed
+[1A[2K[22/54] [chromium] › dashboard.spec.ts:98:7 › Dashboard home screen › with nothing seeded it shows no clients, no projects and nothing owed
+[1A[2K[23/54] [chromium] › dashboard.spec.ts:108:7 › Dashboard home screen › money still owed counts only unpaid invoices — fully paid work owes nothing
+[1A[2K[24/54] [chromium] › dashboard.spec.ts:140:7 › Dashboard home screen › while its data is loading it shows a loading indicator, then the figures
+[1A[2K[25/54] [chromium] › dashboard.spec.ts:179:7 › Dashboard home screen › when its data cannot be loaded it shows an error instead of made-up figures
+[1A[2K[26/54] [chromium] › invoice-amount-positive.spec.ts:26:7 › An invoice cannot be added for zero or less › submitting an amount of zero is rejected and adds nothing
+[1A[2K[27/54] [chromium] › invoice-amount-positive.spec.ts:54:7 › An invoice cannot be added for zero or less › submitting a negative amount is rejected and adds nothing
+[1A[2K[28/54] [chromium] › invoice-amount-positive.spec.ts:80:7 › An invoice cannot be added for zero or less › submitting a blank amount is rejected and adds nothing
+[1A[2K[29/54] [chromium] › invoice-amount-positive.spec.ts:104:7 › An invoice cannot be added for zero or less › a rejected attempt does not disturb the invoices already listed
+[1A[2K[30/54] [chromium] › invoice-amount-positive.spec.ts:130:7 › An invoice cannot be added for zero or less › correcting the amount to more than zero then adds the invoice
+[1A[2K[31/54] [chromium] › invoice-dates.spec.ts:50:7 › Each invoice shows an issued date and a due date › an invoice shows both dates, as distinct values in their own cells
+[1A[2K[32/54] [chromium] › invoice-dates.spec.ts:76:7 › Each invoice shows an issued date and a due date › each invoice shows its OWN pair of dates
+[1A[2K[33/54] [chromium] › invoice-dates.spec.ts:106:7 › Each invoice shows an issued date and a due date › both dates are held by the server: they survive a fresh load
+[1A[2K[34/54] [chromium] › invoice-paid.spec.ts:37:7 › Mark an invoice as paid › marking an unpaid invoice flips its status to paid, persists, and records it once
+[1A[2K[35/54] [chromium] › invoice-paid.spec.ts:75:7 › Mark an invoice as paid › marking one invoice leaves the others untouched, and each marking keeps its own record
+[1A[2K[36/54] [chromium] › invoice-paid.spec.ts:112:7 › Mark an invoice as paid › an invoice seeded as paid is shown as paid from the start
+[1A[2K[37/54] [chromium] › invoice-sort-due.spec.ts:55:7 › Sort a project's invoices by due date › the project detail page offers a control to sort invoices by due date
+[1A[2K[38/54] [chromium] › invoice-sort-due.spec.ts:71:7 › Sort a project's invoices by due date › activating the control re-orders the invoices by their due date
+[1A[2K  1) [chromium] › invoice-sort-due.spec.ts:71:7 › Sort a project's invoices by due date › activating the control re-orders the invoices by their due date 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoContainEqual[2m([22m[32mexpected[39m[2m) // deep equality[22m
+
+    Expected value: [32m[][39m
+    Received array: [31m[[4, 2, 1, 3], [3, 1, 2, 4]][39m
+
+      85 |     const sorted = await rowOrder(page);
+      86 |     expect(sorted).not.toEqual(ID_ORDER);
+    > 87 |     expect([DUE_ASCENDING, DUE_DESCENDING]).toContainEqual(sorted);
+         |                                             ^
+      88 |
+      89 |     // Still the same four invoices — sorting reorders the list, it does not add, drop or duplicate
+      90 |     // rows, and it does not pull in the other project's invoice.
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp12/e2e/specs/invoice-sort-due.spec.ts:87:45
+
+
+[1A[2K[39/54] [chromium] › invoice-sort-due.spec.ts:95:7 › Sort a project's invoices by due date › the chosen sort survives a fresh load
+[1A[2K[40/54] [chromium] › money-format.spec.ts:45:7 › Money is shown properly — dollar sign and cents › each invoice amount on a project is shown as $amount.cc
+[1A[2K[41/54] [chromium] › money-format.spec.ts:65:7 › Money is shown properly — dollar sign and cents › a project's invoices total is shown as $amount.cc
+[1A[2K[42/54] [chromium] › money-format.spec.ts:83:7 › Money is shown properly — dollar sign and cents › a project with no invoices still shows its total as money: $0.00
+[1A[2K[43/54] [chromium] › money-format.spec.ts:97:7 › Money is shown properly — dollar sign and cents › the dashboard outstanding total is shown as $amount.cc
+[1A[2K[44/54] [chromium] › money-format.spec.ts:113:7 › Money is shown properly — dollar sign and cents › the dashboard shows nothing-owed as money: $0.00
+[1A[2K[45/54] [chromium] › project-invoices.spec.ts:29:7 › Project invoices › opening a project from the list lands on its detail page
+[1A[2K[46/54] [chromium] › project-invoices.spec.ts:49:7 › Project invoices › the detail page lists the project invoices with their amounts and what they add up to
+[1A[2K[47/54] [chromium] › project-invoices.spec.ts:86:7 › Project invoices › a project with no invoices shows an empty list that adds up to zero
+[1A[2K[48/54] [chromium] › project-invoices.spec.ts:101:7 › Project invoices › adding a new invoice for an amount shows it and grows the total
+[1A[2K  2) [chromium] › project-invoices.spec.ts:101:7 › Project invoices › adding a new invoice for an amount shows it and grows the total 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: locator('[data-testid^="invoice-row-"]').filter({ has: getByTestId('invoice-amount').getByText('300') })
+    Expected: [32m1[39m
+    Received: [31m0[39m
+    Call log:
+      [2m- expect.toHaveCount with timeout 5000ms[22m
+    [2m  - waiting for locator('[data-testid^="invoice-row-"]').filter({ has: getByTestId('invoice-amount').getByText('300') })[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+
+
+      120 |       has: page.getByTestId('invoice-amount').getByText('300', { exact: false }),
+      121 |     });
+    > 122 |     await expect(addedRow).toHaveCount(1);
+          |                            ^
+      123 |
+      124 |     // Both invoices are now listed, and the total has grown to 100 + 300 = 400.
+      125 |     await expect(invoiceRows(page)).toHaveCount(2);
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp12/e2e/specs/project-invoices.spec.ts:122:28
+
+
+[1A[2K[49/54] [chromium] › project-invoices.spec.ts:139:7 › Project invoices › a new invoice added to an empty project appears and the total reflects it
+[1A[2K[50/54] [chromium] › projects.spec.ts:24:7 › Projects › a link in the nav opens the projects page
+[1A[2K[51/54] [chromium] › projects.spec.ts:42:7 › Projects › with no projects the list shows an empty state
+[1A[2K[52/54] [chromium] › projects.spec.ts:57:7 › Projects › every seeded project is shown with its name and the name of the client it is for
+[1A[2K[53/54] [chromium] › projects.spec.ts:96:7 › Projects › adding a project and picking its client shows it with that client name
+[1A[2K[54/54] [chromium] › projects.spec.ts:132:7 › Projects › a project added on top of seeded projects joins the same single list
+[1A[2K  3) [chromium] › projects.spec.ts:132:7 › Projects › a project added on top of seeded projects joins the same single list 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: locator('[data-testid^="project-row-"]')
+    Expected: [32m2[39m
+    Received: [31m1[39m
+    Call log:
+      [2m- expect.toHaveCount with timeout 5000ms[22m
+    [2m  - waiting for locator('[data-testid^="project-row-"]')[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+
+
+      148 |     // Both the pre-existing and the newly added project are shown together in the one list, each
+      149 |     // with its own client's name.
+    > 150 |     await expect(projectRows(page)).toHaveCount(2);
+          |                                     ^
+      151 |     await expect(page.getByTestId('project-row-1').getByTestId('project-name')).toHaveText(
+      152 |       'Website Redesign',
+      153 |     );
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp12/e2e/specs/projects.spec.ts:150:37
+
+
+[1A[2K  3 failed
+    [chromium] › invoice-sort-due.spec.ts:71:7 › Sort a project's invoices by due date › activating the control re-orders the invoices by their due date 
+    [chromium] › project-invoices.spec.ts:101:7 › Project invoices › adding a new invoice for an amount shows it and grows the total 
+    [chromium] › projects.spec.ts:132:7 › Projects › a project added on top of seeded projects joins the same single list 
+  51 passed (25.7s)

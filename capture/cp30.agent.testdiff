@@ -1,0 +1,302 @@
+diff --git a/invoice-payments.spec.ts b/invoice-payments.spec.ts
+new file mode 100644
+index 0000000..767b02c
+--- /dev/null
++++ b/invoice-payments.spec.ts
+@@ -0,0 +1,296 @@
++// Acceptance test for the change request:
++//   "Let me record what a client has paid on an invoice. Store the amount and the date. Show it on
++//    the invoice."
++//
++// An invoice gains a record of what has been PAID against it. On the invoice's own detail page
++// (invoice-detail-page, the child route /invoices/<id>) a payments region (invoice-payments) shows
++// the payments taken against that invoice in a table (invoice-payments-table); each payment is its
++// own row (payment-row-<id>) carrying the AMOUNT paid (payment-amount) and the DATE it was paid
++// (payment-date). A payment is recorded with the payments form (payment-form): an amount and a date
++// (payment-form-amount / payment-form-date, submitted with payment-form-submit). A recorded payment
++// must be a real payment — a missing or non-positive amount is rejected with a visible error
++// (payment-form-error) and nothing is recorded. A valid payment joins the list, shows its amount and
++// date, is scoped to its own invoice, and survives a fresh load from the server.
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed (the app's /__test__
++// endpoint): `clients` honours { id, name, email }, `projects` honours { id, name, clientId },
++// `invoices` honours { id, amount, projectId, status } and `payments` honours
++// { id, invoiceId, amount, date }. This change surfaces no audit records, so there is nothing to
++// assert on the audit channel.
++import { test, expect, type Page, type Locator } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++const paymentRows = (page: Page) => page.locator('[data-testid^="payment-row-"]');
++
++// A seeded payment is addressed by its fixture id; a freshly recorded one gets a server-assigned id,
++// so it is located instead by the AMOUNT it carries (amounts in each test are chosen distinct and
++// none a substring of another). Mirrors how invoice-lineitems.spec.ts finds a freshly added row.
++const rowById = (page: Page, id: number): Locator => page.getByTestId(`payment-row-${id}`);
++const rowByAmount = (page: Page, amount: number): Locator =>
++  paymentRows(page).filter({ has: page.getByTestId('payment-amount').getByText(String(amount)) });
++
++// The request names no date format, so a date assertion binds to WHICH date a cell shows rather than
++// to one presentation (ISO 2021-03-14, US 3/14/2021, or long "March 14, 2021"): in every common
++// rendering the four-digit year and the day-of-month both appear. Dates in each test are chosen with
++// DISTINCT years and distinct day numbers, so requiring a cell to carry its own year and day — and
++// NOT any other seeded year — pins it to exactly one date. Mirrors invoice-dates.spec.ts.
++type D = { iso: string; year: string; day: string };
++const d = (iso: string): D => {
++  const [year, , day] = iso.split('-');
++  return { iso, year, day: String(Number(day)) };
++};
++
++// A payment amount may be rendered as money ($60.00) or bare (60); assert the figure is PRESENT so
++// the test binds to the value, not one presentation.
++async function expectAmount(cell: Locator, amount: number): Promise<void> {
++  await expect(cell).toContainText(String(amount));
++}
++
++async function expectDate(cell: Locator, want: D, others: D[]): Promise<void> {
++  await expect(cell).toContainText(want.year);
++  await expect(cell).toContainText(want.day);
++  for (const other of others) {
++    if (other.year !== want.year) {
++      await expect(cell).not.toContainText(other.year);
++    }
++  }
++}
++
++async function gotoInvoice(page: Page, id: number): Promise<void> {
++  await page.goto(`/invoices/${id}`);
++  await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++}
++
++test.describe('An invoice shows what has been paid against it', () => {
++  test('the detail page shows each seeded payment with its amount and date', async ({ page }) => {
++    const first = d('2021-03-14');
++    const second = d('2022-08-19');
++
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [{ id: 1, amount: 500, projectId: 1, status: 'SENT' }],
++      payments: [
++        { id: 1, invoiceId: 1, amount: 60, date: first.iso },
++        { id: 2, invoiceId: 1, amount: 175, date: second.iso },
++      ],
++    });
++
++    await gotoInvoice(page, 1);
++
++    // The payments are shown on the invoice, in their own region and table.
++    await expect(page.getByTestId('invoice-payments')).toBeVisible();
++    await expect(page.getByTestId('invoice-payments-table')).toBeVisible();
++    await expect(paymentRows(page)).toHaveCount(2);
++
++    // Each payment shows its own amount and its own date.
++    await expectAmount(rowById(page, 1).getByTestId('payment-amount'), 60);
++    await expectDate(rowById(page, 1).getByTestId('payment-date'), first, [second]);
++
++    await expectAmount(rowById(page, 2).getByTestId('payment-amount'), 175);
++    await expectDate(rowById(page, 2).getByTestId('payment-date'), second, [first]);
++  });
++
++  test('an invoice with no payments shows the region but no payment rows', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [{ id: 1, amount: 500, projectId: 1, status: 'SENT' }],
++      payments: [],
++    });
++
++    await gotoInvoice(page, 1);
++
++    // Nothing paid yet: the region is still there, ready to record a payment, but shows no rows.
++    await expect(page.getByTestId('invoice-payments')).toBeVisible();
++    await expect(paymentRows(page)).toHaveCount(0);
++  });
++
++  test("payments are scoped to their own invoice", async ({ page }) => {
++    const onOne = d('2021-03-14');
++    const onTwo = d('2022-08-19');
++
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [
++        { id: 1, amount: 500, projectId: 1, status: 'SENT' },
++        { id: 2, amount: 800, projectId: 1, status: 'SENT' },
++      ],
++      payments: [
++        { id: 1, invoiceId: 1, amount: 60, date: onOne.iso },
++        { id: 2, invoiceId: 2, amount: 175, date: onTwo.iso },
++      ],
++    });
++
++    // Invoice 1's detail shows only invoice 1's payment, not invoice 2's.
++    await gotoInvoice(page, 1);
++    await expect(paymentRows(page)).toHaveCount(1);
++    await expect(rowById(page, 1)).toBeVisible();
++    await expect(rowById(page, 2)).toHaveCount(0);
++    await expectAmount(rowById(page, 1).getByTestId('payment-amount'), 60);
++
++    // Invoice 2's detail shows only invoice 2's payment.
++    await gotoInvoice(page, 2);
++    await expect(paymentRows(page)).toHaveCount(1);
++    await expect(rowById(page, 2)).toBeVisible();
++    await expect(rowById(page, 1)).toHaveCount(0);
++    await expectAmount(rowById(page, 2).getByTestId('payment-amount'), 175);
++  });
++});
++
++test.describe('Recording a payment on an invoice', () => {
++  test('recording a payment shows its amount and date, and it survives a fresh load', async ({
++    page,
++  }) => {
++    const when = d('2023-05-27');
++
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [{ id: 1, amount: 500, projectId: 1, status: 'SENT' }],
++      payments: [],
++    });
++
++    await gotoInvoice(page, 1);
++    await expect(paymentRows(page)).toHaveCount(0);
++
++    // Record what the client paid: an amount and the date it was paid.
++    await expect(page.getByTestId('payment-form')).toBeVisible();
++    await page.getByTestId('payment-form-amount').fill('250');
++    await page.getByTestId('payment-form-date').fill(when.iso);
++    await page.getByTestId('payment-form-submit').click();
++
++    // It joins the list, showing the amount paid and the date.
++    const added = rowByAmount(page, 250);
++    await expect(added).toHaveCount(1);
++    await expectAmount(added.getByTestId('payment-amount'), 250);
++    await expectDate(added.getByTestId('payment-date'), when, []);
++    await expect(paymentRows(page)).toHaveCount(1);
++
++    // The payment is held by the server: it survives a fresh load.
++    await page.reload();
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++    await expect(paymentRows(page)).toHaveCount(1);
++    const reloaded = rowByAmount(page, 250);
++    await expectAmount(reloaded.getByTestId('payment-amount'), 250);
++    await expectDate(reloaded.getByTestId('payment-date'), when, []);
++  });
++
++  test('recording a payment adds to those already on the invoice', async ({ page }) => {
++    const seeded = d('2021-03-14');
++    const added = d('2023-05-27');
++
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [{ id: 1, amount: 500, projectId: 1, status: 'SENT' }],
++      payments: [{ id: 1, invoiceId: 1, amount: 60, date: seeded.iso }],
++    });
++
++    await gotoInvoice(page, 1);
++    await expect(paymentRows(page)).toHaveCount(1);
++
++    await page.getByTestId('payment-form-amount').fill('250');
++    await page.getByTestId('payment-form-date').fill(added.iso);
++    await page.getByTestId('payment-form-submit').click();
++
++    // Both payments are now shown — the new one did not replace the seeded one.
++    await expect(paymentRows(page)).toHaveCount(2);
++    await expectAmount(rowById(page, 1).getByTestId('payment-amount'), 60);
++    await expectDate(rowById(page, 1).getByTestId('payment-date'), seeded, [added]);
++
++    const newRow = rowByAmount(page, 250);
++    await expect(newRow).toHaveCount(1);
++    await expectDate(newRow.getByTestId('payment-date'), added, [seeded]);
++  });
++});
++
++test.describe('A recorded payment must be a real payment', () => {
++  const seedNoPayments = () =>
++    resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [{ id: 1, amount: 500, projectId: 1, status: 'SENT' }],
++      payments: [],
++    });
++
++  test('an empty submission is rejected and records nothing', async ({ page }) => {
++    await seedNoPayments();
++
++    await gotoInvoice(page, 1);
++    await expect(paymentRows(page)).toHaveCount(0);
++
++    // No amount, no date — there is nothing to record.
++    await page.getByTestId('payment-form-amount').fill('');
++    await page.getByTestId('payment-form-date').fill('');
++    await page.getByTestId('payment-form-submit').click();
++
++    await expect(page.getByTestId('payment-form-error')).toBeVisible();
++
++    // Nothing was recorded, even after a fresh load from the server.
++    await expect(paymentRows(page)).toHaveCount(0);
++    await page.reload();
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++    await expect(paymentRows(page)).toHaveCount(0);
++  });
++
++  test('an amount that is not more than zero is rejected and records nothing', async ({ page }) => {
++    await seedNoPayments();
++
++    await gotoInvoice(page, 1);
++    await expect(paymentRows(page)).toHaveCount(0);
++
++    // An amount of zero is not a payment.
++    await page.getByTestId('payment-form-amount').fill('0');
++    await page.getByTestId('payment-form-date').fill('2023-05-27');
++    await page.getByTestId('payment-form-submit').click();
++    await expect(page.getByTestId('payment-form-error')).toBeVisible();
++    await expect(paymentRows(page)).toHaveCount(0);
++
++    // Neither is a negative amount.
++    await page.getByTestId('payment-form-amount').fill('-40');
++    await page.getByTestId('payment-form-date').fill('2023-05-27');
++    await page.getByTestId('payment-form-submit').click();
++    await expect(page.getByTestId('payment-form-error')).toBeVisible();
++    await expect(paymentRows(page)).toHaveCount(0);
++
++    // Nothing was recorded by any rejected attempt, even after a fresh load.
++    await page.reload();
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++    await expect(paymentRows(page)).toHaveCount(0);
++  });
++
++  test('correcting a rejected payment then records it', async ({ page }) => {
++    const when = d('2023-05-27');
++    await seedNoPayments();
++
++    await gotoInvoice(page, 1);
++
++    // A rejected attempt first — an amount of zero.
++    await page.getByTestId('payment-form-amount').fill('0');
++    await page.getByTestId('payment-form-date').fill(when.iso);
++    await page.getByTestId('payment-form-submit').click();
++    await expect(page.getByTestId('payment-form-error')).toBeVisible();
++    await expect(paymentRows(page)).toHaveCount(0);
++
++    // Correct it to a real amount and submit again.
++    await page.getByTestId('payment-form-amount').fill('250');
++    await page.getByTestId('payment-form-date').fill(when.iso);
++    await page.getByTestId('payment-form-submit').click();
++
++    // Now it records: the payment appears with its amount and date, and the error is gone.
++    const added = rowByAmount(page, 250);
++    await expect(added).toHaveCount(1);
++    await expectAmount(added.getByTestId('payment-amount'), 250);
++    await expectDate(added.getByTestId('payment-date'), when, []);
++    await expect(page.getByTestId('payment-form-error')).toHaveCount(0);
++    await expect(paymentRows(page)).toHaveCount(1);
++
++    // And it survives a fresh load from the server.
++    await page.reload();
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++    await expect(paymentRows(page)).toHaveCount(1);
++    await expectAmount(rowByAmount(page, 250).getByTestId('payment-amount'), 250);
++  });
++});

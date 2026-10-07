@@ -1,0 +1,172 @@
+diff --git a/statement-print-summary.spec.ts b/statement-print-summary.spec.ts
+new file mode 100644
+index 0000000..bb1fc86
+--- /dev/null
++++ b/statement-print-summary.spec.ts
+@@ -0,0 +1,166 @@
++// Acceptance test for the change request:
++//   "Give me a clean printable summary of a client's statement. Show the grand total they owe."
++//
++// A client's statement (client-statement, revealed on the client detail page by client-statement-open
++// — see client-statement.spec) now carries a CLEAN PRINTABLE SUMMARY: a compact header block that
++// identifies WHO the statement is for and HOW MUCH they owe in total, without the per-invoice /
++// per-job detail. That summary is the thing you would hand to a client.
++//
++// Introduced by this change (4 anchors):
++//   - statement-print-view    — the printable summary block itself (the clean, hand-to-the-client view).
++//   - statement-client-name   — the client the statement is for, read inside the print view.
++//   - statement-client-email  — that client's email, read inside the print view.
++//   - statement-grand-total   — the GRAND TOTAL the client owes, read inside the print view.
++//
++// WHAT THE GRAND TOTAL IS. The statement is about what the client STILL OWES: each invoice carries a
++// `due` (its amount minus what has been paid — see client-statement.spec / invoice-due-amount.spec) and
++// the statement already rolls those up into the outstanding total (client-outstanding-total). The
++// printable summary's grand total is that same roll-up — the SUM, across all the client's invoices, of
++// what is still left to pay — surfaced as the summary's one headline figure. It is therefore NOT the
++// gross of every invoice amount (payments must have been netted off), and it never includes another
++// client's invoices.
++//
++// The seeded figures are chosen (as in client-statement.spec) so the grand total can only come from
++// summing the per-invoice dues:
++//   Acme (client 1): inv 1 amount 500 / paid 200 / due 300,
++//                    inv 2 amount 400 / paid 400 / due   0,
++//                    inv 3 amount 150 / paid   0 / due 150
++//                    -> grand total 300 + 0 + 150 = 450.
++// That 450 is none of the plausible wrong readings — not the gross of every amount (1050), not the gross
++// of the not-fully-paid ones (650), and not anything that includes Globex's invoice (999 / its 949
++// remainder). A SECOND client (Globex) owns a job with its own invoice so isolation can be proven.
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed (the app's /__test__
++// endpoint): `clients` honours { id, name, email }, `projects` honours { id, name, clientId },
++// `invoices` honours { id, amount, projectId, status } and `payments` honours
++// { id, invoiceId, amount, date }. This change surfaces no audit records, so there is nothing to assert
++// on the audit channel.
++import { test, expect, type Page, type Locator } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++// Money is shown "properly" everywhere in this app — a dollar sign and two cents digits, e.g. $450.00
++// (money-format.spec). Each figure is asserted as CONTAINMENT: the leading "$" keeps a figure from
++// matching inside a larger number ($450.00 cannot match within $1450.00) and tolerates a surrounding
++// label, while still pinning the value. Every figure below stays under a thousand, so thousands
++// grouping never arises.
++const money = (dollars: number): RegExp => new RegExp(`\\$${dollars}\\.00`);
++
++// The printable summary and the fields read INSIDE it — scoping to the print view is what binds each
++// value to the summary block (the client's name, email and owed total also appear elsewhere on the page).
++const printView = (page: Page): Locator => page.getByTestId('statement-print-view');
++const clientName = (page: Page): Locator => printView(page).getByTestId('statement-client-name');
++const clientEmail = (page: Page): Locator => printView(page).getByTestId('statement-client-email');
++const grandTotal = (page: Page): Locator => printView(page).getByTestId('statement-grand-total');
++
++// Reach a client's statement the way a user would: open the client's detail page, then open the
++// statement with its own control. The printable summary is part of the statement, so it is available
++// once the statement is open. We wait only on the statement container itself (client-statement), not
++// on any inner table: the statement groups invoices by job (statement-group-by-job.spec), so a
++// multi-job client has SEVERAL statement tables and a client with no invoices has NONE — the
++// container is the one element present in every case.
++async function openStatement(page: Page, clientId: number): Promise<void> {
++  await page.goto(`/clients/${clientId}`);
++  await expect(page.getByTestId('client-detail-page')).toBeVisible();
++  const opener = page.getByTestId('client-statement-open');
++  await expect(opener).toBeVisible();
++  await opener.click();
++  await expect(page.getByTestId('client-statement')).toBeVisible();
++}
++
++// Acme (client 1) with two jobs and three invoices carrying distinct amount/paid/due triples, plus a
++// SECOND client (Globex) whose invoice must never leak into Acme's summary.
++async function seedTwoClients(): Promise<void> {
++  await resetAndSeed({
++    clients: [
++      { id: 1, name: 'Acme Corp', email: 'hello@acme.test' },
++      { id: 2, name: 'Globex', email: 'contact@globex.test' },
++    ],
++    projects: [
++      { id: 1, name: 'Website Redesign', clientId: 1 },
++      { id: 2, name: 'Mobile App', clientId: 1 },
++      { id: 3, name: 'Billing System', clientId: 2 }, // Globex's — must not appear on Acme's
++    ],
++    invoices: [
++      { id: 1, amount: 500, projectId: 1, status: 'SENT' }, // 200 paid -> due 300
++      { id: 2, amount: 400, projectId: 2, status: 'SENT' }, // 400 paid -> due 0
++      { id: 3, amount: 150, projectId: 1, status: 'SENT' }, // nothing  -> due 150
++      { id: 4, amount: 999, projectId: 3, status: 'SENT' }, // Globex's own
++    ],
++    payments: [
++      { id: 1, invoiceId: 1, amount: 200, date: '2021-03-14' },
++      { id: 2, invoiceId: 2, amount: 400, date: '2022-08-19' },
++      { id: 3, invoiceId: 4, amount: 50, date: '2023-05-27' }, // Globex's — excluded figure and all
++    ],
++  });
++}
++
++test.describe('A client statement has a clean printable summary with the grand total owed', () => {
++  test('the printable summary names the client and shows their email', async ({ page }) => {
++    await seedTwoClients();
++    await openStatement(page, 1);
++
++    // The summary block is present, and it identifies whose statement this is.
++    await expect(printView(page)).toBeVisible();
++    await expect(clientName(page)).toBeVisible();
++    await expect(clientName(page)).toContainText('Acme Corp');
++    await expect(clientEmail(page)).toBeVisible();
++    await expect(clientEmail(page)).toContainText('hello@acme.test');
++  });
++
++  test('the printable summary shows the grand total the client owes', async ({ page }) => {
++    await seedTwoClients();
++    await openStatement(page, 1);
++
++    const total = grandTotal(page);
++    await expect(total).toBeVisible();
++
++    // The grand total is the sum of the per-invoice dues: 300 + 0 + 150 = 450.
++    await expect(total).toContainText(money(450));
++
++    // Not the gross of every amount (1050), nor the gross of the not-fully-paid invoices (650): the
++    // partial payment on invoice 1 and the full payment on invoice 2 must both have been netted off.
++    await expect(total).not.toContainText(money(1050));
++    await expect(total).not.toContainText(money(650));
++    // And Globex's invoice (999, or its 949 unpaid remainder) is no part of Acme's grand total.
++    await expect(total).not.toContainText(money(999));
++    await expect(total).not.toContainText(money(949));
++  });
++
++  test("a different client's printable summary shows only that client's own details and owed total", async ({
++    page,
++  }) => {
++    await seedTwoClients();
++    await openStatement(page, 2);
++
++    // The summary is Globex's: its own name and email, not Acme's.
++    await expect(printView(page)).toBeVisible();
++    await expect(clientName(page)).toContainText('Globex');
++    await expect(clientEmail(page)).toContainText('contact@globex.test');
++    await expect(printView(page)).not.toContainText('Acme Corp');
++    await expect(printView(page)).not.toContainText('hello@acme.test');
++
++    // Globex owes only its own invoice's remainder: 999 - 50 = 949. Acme's 450 is nowhere here.
++    const total = grandTotal(page);
++    await expect(total).toContainText(money(949));
++    await expect(total).not.toContainText(money(450));
++  });
++
++  test('a client with no invoices has a printable summary whose grand total is zero', async ({
++    page,
++  }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [],
++      payments: [],
++    });
++
++    await openStatement(page, 1);
++
++    // The summary still names the client, and zero is money too: the grand total is $0.00, not a bare 0.
++    await expect(printView(page)).toBeVisible();
++    await expect(clientName(page)).toContainText('Acme Corp');
++    await expect(clientEmail(page)).toContainText('hello@acme.test');
++    await expect(grandTotal(page)).toContainText(money(0));
++  });
++});

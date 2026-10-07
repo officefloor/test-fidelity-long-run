@@ -1,0 +1,1825 @@
+$ bin/build
+
+$ npm ci --silent (cwd e2e)
+
+$ npx playwright install chromium (cwd e2e)
+
+$ npx playwright test --reporter=json --workers=1 --output=/home/daniel/test-fidelity-long-run/work/202610060034/cp57/.run/pw-artifacts
+
+Running 258 tests using 1 worker
+
+[1A[2K[1/258] [chromium] › all-invoices.spec.ts:43:7 › All invoices in one place › a link in the nav opens the invoices page
+[1A[2K[2/258] [chromium] › all-invoices.spec.ts:59:7 › All invoices in one place › lists every invoice from every project, each with its project and its stage
+[1A[2K[3/258] [chromium] › all-invoices.spec.ts:107:7 › All invoices in one place › with no invoices anywhere it shows an empty state and no table
+[1A[2K[4/258] [chromium] › client-archive.spec.ts:32:7 › Archive a client › archiving a client drops it from the list, persists, keeps the client, and records it once
+[1A[2K  1) [chromium] › client-archive.spec.ts:32:7 › Archive a client › archiving a client drops it from the list, persists, keeps the client, and records it once 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('clients-empty')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('clients-empty')[22m
+
+
+      57 |     await expect(page.getByTestId('client-row-1')).toHaveCount(0);
+      58 |     await expect(clientRows(page)).toHaveCount(0);
+    > 59 |     await expect(page.getByTestId('clients-empty')).toBeVisible();
+         |                                                     ^
+      60 |
+      61 |     // Exactly one record was kept for this archive, carrying the client's id.
+      62 |     expect(archivedRecordsFor(1)).toHaveLength(1);
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-archive.spec.ts:59:53
+
+
+[1A[2K[5/258] [chromium] › client-archive.spec.ts:85:7 › Archive a client › archiving one client leaves the others on the list, and each archive keeps its own record
+[1A[2K[6/258] [chromium] › client-archive.spec.ts:136:7 › Archive a client › archiving a client also drops it from the name search
+[1A[2K[7/258] [chromium] › client-archive.spec.ts:178:7 › Archive a client › a client seeded archived starts off both the list and the search, and seeding records nothing
+[1A[2K[8/258] [chromium] › client-contacts.spec.ts:26:7 › Client contacts › a client's detail page surfaces its contacts, each with name, email and role
+[1A[2K[9/258] [chromium] › client-contacts.spec.ts:68:7 › Client contacts › opening a different client shows that client's own contacts
+[1A[2K[10/258] [chromium] › client-contacts.spec.ts:97:7 › Client contacts › a client with no contacts lists none
+[1A[2K[11/258] [chromium] › client-contacts.spec.ts:118:7 › Client contacts › adding a contact with a name, email and role shows it on the client page
+[1A[2K[12/258] [chromium] › client-contacts.spec.ts:159:7 › Client contacts › a contact added on top of seeded contacts joins the same single list
+[1A[2K  2) [chromium] › client-contacts.spec.ts:159:7 › Client contacts › a contact added on top of seeded contacts joins the same single list 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: locator('[data-testid^="contact-row-"]')
+    Expected: [32m2[39m
+    Received: [31m1[39m
+    Call log:
+      [2m- expect.toHaveCount with timeout 5000ms[22m
+    [2m  - waiting for locator('[data-testid^="contact-row-"]')[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+
+
+      174 |
+      175 |     // Both the pre-existing and the newly added contact are shown together in the one list.
+    > 176 |     await expect(contactRows(page)).toHaveCount(2);
+          |                                     ^
+      177 |     await expect(page.getByTestId('contact-row-1').getByTestId('contact-name')).toHaveText(
+      178 |       'Alice Stone',
+      179 |     );
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-contacts.spec.ts:176:37
+
+
+[1A[2K[13/258] [chromium] › client-contacts.spec.ts:187:7 › Client contacts › a contact added for one client does not appear on another client
+[1A[2K[14/258] [chromium] › client-counts.spec.ts:24:7 › Client project and contact counts › a client's detail page shows how many projects and contacts it has
+[1A[2K[15/258] [chromium] › client-counts.spec.ts:55:7 › Client project and contact counts › a different client's page shows that client's own counts
+[1A[2K[16/258] [chromium] › client-counts.spec.ts:84:7 › Client project and contact counts › a client with no projects and no contacts shows zero for each
+[1A[2K[17/258] [chromium] › client-counts.spec.ts:106:7 › Client project and contact counts › adding a contact increases the contacts count on the page
+[1A[2K[18/258] [chromium] › client-edit.spec.ts:32:7 › Edit a client from the list › editing a client's name and email updates its row, persists, and records it once
+[1A[2K[19/258] [chromium] › client-edit.spec.ts:91:7 › Edit a client from the list › renaming a client while keeping its own email is allowed (not a duplicate of itself)
+[1A[2K[20/258] [chromium] › client-edit.spec.ts:128:7 › Edit a client from the list › cancelling an edit closes the form, keeps the original values, and records nothing
+[1A[2K[21/258] [chromium] › client-edit.spec.ts:162:7 › Edit a client from the list › an edit with a blank or malformed email is rejected and changes nothing
+[1A[2K[22/258] [chromium] › client-edit.spec.ts:193:7 › Edit a client from the list › editing a client to an email already used by another client is rejected
+[1A[2K[23/258] [chromium] › client-edit.spec.ts:226:7 › Edit a client from the list › editing one client leaves the others on the list untouched
+[1A[2K[24/258] [chromium] › client-email-required.spec.ts:18:7 › A client cannot be saved without a proper email › submitting with an empty email is rejected and saves nothing
+[1A[2K[25/258] [chromium] › client-email-required.spec.ts:41:7 › A client cannot be saved without a proper email › submitting with a malformed email is rejected and saves nothing
+[1A[2K[26/258] [chromium] › client-email-required.spec.ts:62:7 › A client cannot be saved without a proper email › a rejected submit does not disturb the clients already in the list
+[1A[2K[27/258] [chromium] › client-email-required.spec.ts:88:7 › A client cannot be saved without a proper email › correcting the email to a proper address then saves the client
+[1A[2K[28/258] [chromium] › client-email-unique.spec.ts:22:7 › Two clients cannot share the same email › adding a client with an email already in use is rejected and saves nothing
+[1A[2K[29/258] [chromium] › client-email-unique.spec.ts:53:7 › Two clients cannot share the same email › the rejected duplicate leaves the existing client untouched
+[1A[2K[30/258] [chromium] › client-email-unique.spec.ts:87:7 › Two clients cannot share the same email › correcting the email to an unused address then saves the client
+[1A[2K[31/258] [chromium] › client-email-unique.spec.ts:121:7 › Two clients cannot share the same email › a client with a brand-new email still saves when none clash
+[1A[2K[32/258] [chromium] › client-main-contact.spec.ts:51:7 › A client's main contact › a client with a seeded main contact shows who it is, scoped to that client
+[1A[2K[33/258] [chromium] › client-main-contact.spec.ts:86:7 › A client's main contact › a client with no main contact picked shows none, yet still offers a choice per contact
+[1A[2K[34/258] [chromium] › client-main-contact.spec.ts:110:7 › A client's main contact › picking a main contact shows it, persists across a reload, and records it exactly once
+[1A[2K[35/258] [chromium] › client-main-contact.spec.ts:147:7 › A client's main contact › picking a different contact replaces the main contact — only one at a time
+[1A[2K[36/258] [chromium] › client-main-contact.spec.ts:182:7 › A client's main contact › each client has its own main contact, independent of other clients
+[1A[2K[37/258] [chromium] › client-projects-show-all.spec.ts:80:7 › A client page shows active projects by default, with a way to see the rest › by default a client's page lists only their active projects
+[1A[2K[38/258] [chromium] › client-projects-show-all.spec.ts:106:7 › A client page shows active projects by default, with a way to see the rest › turning on show-all reveals the finished and hidden projects alongside the active ones
+[1A[2K[39/258] [chromium] › client-projects-show-all.spec.ts:134:7 › A client page shows active projects by default, with a way to see the rest › turning show-all off again returns to just the active projects
+[1A[2K[40/258] [chromium] › client-projects-show-all.spec.ts:156:7 › A client page shows active projects by default, with a way to see the rest › a client whose projects are all finished or hidden shows empty by default, revealed by show-all
+[1A[2K[41/258] [chromium] › client-projects.spec.ts:23:7 › Client projects › opening a client from the list lands on its detail page
+[1A[2K[42/258] [chromium] › client-projects.spec.ts:42:7 › Client projects › the detail page lists the projects being done for that client
+[1A[2K[43/258] [chromium] › client-projects.spec.ts:76:7 › Client projects › opening a different client shows that client's own projects
+[1A[2K[44/258] [chromium] › client-projects.spec.ts:101:7 › Client projects › a client with no projects shows an empty state
+[1A[2K[45/258] [chromium] › client-projects.spec.ts:120:7 › Client projects › opening a client surfaces its projects end to end from the list
+[1A[2K[46/258] [chromium] › client-search.spec.ts:20:7 › Client search › the clients page offers a search box
+[1A[2K[47/258] [chromium] › client-search.spec.ts:32:7 › Client search › typing a name narrows the list to the matching clients
+[1A[2K[48/258] [chromium] › client-search.spec.ts:52:7 › Client search › a more specific query narrows to a single client
+[1A[2K[49/258] [chromium] › client-search.spec.ts:64:7 › Client search › clearing the search box restores the full list
+[1A[2K[50/258] [chromium] › client-search.spec.ts:79:7 › Client search › a query that matches no client leaves no rows
+[1A[2K[51/258] [chromium] › client-sort.spec.ts:110:7 › Sort clients by name or by how much they owe › the clients page offers a sort control over the one list
+[1A[2K[52/258] [chromium] › client-sort.spec.ts:121:7 › Sort clients by name or by how much they owe › sorting by name arranges the clients alphabetically by name
+[1A[2K[53/258] [chromium] › client-sort.spec.ts:137:7 › Sort clients by name or by how much they owe › sorting by how much they owe arranges the clients by their outstanding balance
+[1A[2K[54/258] [chromium] › client-sort.spec.ts:155:7 › Sort clients by name or by how much they owe › switching between the two sorts re-arranges the same list each way
+[1A[2K[55/258] [chromium] › client-sort.spec.ts:175:7 › Sort clients by name or by how much they owe › the chosen sort survives a fresh load
+[1A[2K[56/258] [chromium] › client-split-payment.spec.ts:112:7 › Splitting a client payment across several invoices › the panel lists the client’s owed invoices, each with its current balance and an input
+[1A[2K  3) [chromium] › client-split-payment.spec.ts:112:7 › Splitting a client payment across several invoices › the panel lists the client’s owed invoices, each with its current balance and an input 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('payment-allocations')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('payment-allocations')[22m
+
+
+      76 |   await expect(page.getByTestId('client-detail-page')).toBeVisible();
+      77 |   await expect(page.getByTestId('client-payment')).toBeVisible();
+    > 78 |   await expect(page.getByTestId('payment-allocations')).toBeVisible();
+         |                                                         ^
+      79 | }
+      80 |
+      81 | // Reveal the client statement on the detail page — the way client-statement.spec does — to read the
+
+        at openPaymentPanel (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-split-payment.spec.ts:78:57)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-split-payment.spec.ts:116:5
+
+
+[1A[2K[57/258] [chromium] › client-split-payment.spec.ts:138:7 › Splitting a client payment across several invoices › splitting a lump sum brings every invoice’s balance down by its own share
+[1A[2K  4) [chromium] › client-split-payment.spec.ts:138:7 › Splitting a client payment across several invoices › splitting a lump sum brings every invoice’s balance down by its own share 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('payment-allocations')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('payment-allocations')[22m
+
+
+      76 |   await expect(page.getByTestId('client-detail-page')).toBeVisible();
+      77 |   await expect(page.getByTestId('client-payment')).toBeVisible();
+    > 78 |   await expect(page.getByTestId('payment-allocations')).toBeVisible();
+         |                                                         ^
+      79 | }
+      80 |
+      81 | // Reveal the client statement on the detail page — the way client-statement.spec does — to read the
+
+        at openPaymentPanel (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-split-payment.spec.ts:78:57)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-split-payment.spec.ts:142:5
+
+
+[1A[2K[58/258] [chromium] › client-split-payment.spec.ts:174:7 › Splitting a client payment across several invoices › the split touches only the invoices it is allocated to
+[1A[2K  5) [chromium] › client-split-payment.spec.ts:174:7 › Splitting a client payment across several invoices › the split touches only the invoices it is allocated to 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('payment-allocations')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('payment-allocations')[22m
+
+
+      76 |   await expect(page.getByTestId('client-detail-page')).toBeVisible();
+      77 |   await expect(page.getByTestId('client-payment')).toBeVisible();
+    > 78 |   await expect(page.getByTestId('payment-allocations')).toBeVisible();
+         |                                                         ^
+      79 | }
+      80 |
+      81 | // Reveal the client statement on the detail page — the way client-statement.spec does — to read the
+
+        at openPaymentPanel (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-split-payment.spec.ts:78:57)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-split-payment.spec.ts:187:5
+
+
+[1A[2K[59/258] [chromium] › client-split-payment.spec.ts:208:7 › Splitting a client payment across several invoices › the panel is scoped to the client — another client’s invoice is not offered
+[1A[2K  6) [chromium] › client-split-payment.spec.ts:208:7 › Splitting a client payment across several invoices › the panel is scoped to the client — another client’s invoice is not offered 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('payment-allocations')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('payment-allocations')[22m
+
+
+      76 |   await expect(page.getByTestId('client-detail-page')).toBeVisible();
+      77 |   await expect(page.getByTestId('client-payment')).toBeVisible();
+    > 78 |   await expect(page.getByTestId('payment-allocations')).toBeVisible();
+         |                                                         ^
+      79 | }
+      80 |
+      81 | // Reveal the client statement on the detail page — the way client-statement.spec does — to read the
+
+        at openPaymentPanel (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-split-payment.spec.ts:78:57)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-split-payment.spec.ts:230:5
+
+
+[1A[2K[60/258] [chromium] › client-statement.spec.ts:132:7 › A client statement puts all their invoices in one place › the statement is revealed by its open control
+[1A[2K  7) [chromium] › client-statement.spec.ts:132:7 › A client statement puts all their invoices in one place › the statement is revealed by its open control 
+
+    Error: expect.toBeVisible: Error: strict mode violation: getByTestId('client-statement-table') resolved to 2 elements:
+        1) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-1').getByTestId('client-statement-table')
+        2) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-2').getByTestId('client-statement-table')
+
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('client-statement-table')[22m
+
+
+      144 |
+      145 |     await expect(page.getByTestId('client-statement')).toBeVisible();
+    > 146 |     await expect(page.getByTestId('client-statement-table')).toBeVisible();
+          |                                                              ^
+      147 |   });
+      148 |
+      149 |   test("lists every invoice of the client, from every project, each with its figures", async ({
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-statement.spec.ts:146:62
+
+
+[1A[2K[61/258] [chromium] › client-statement.spec.ts:149:7 › A client statement puts all their invoices in one place › lists every invoice of the client, from every project, each with its figures
+[1A[2K  8) [chromium] › client-statement.spec.ts:149:7 › A client statement puts all their invoices in one place › lists every invoice of the client, from every project, each with its figures 
+
+    Error: expect.toBeVisible: Error: strict mode violation: getByTestId('client-statement-table') resolved to 2 elements:
+        1) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-1').getByTestId('client-statement-table')
+        2) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-2').getByTestId('client-statement-table')
+
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('client-statement-table')[22m
+
+
+       96 |   await opener.click();
+       97 |   await expect(page.getByTestId('client-statement')).toBeVisible();
+    >  98 |   await expect(page.getByTestId('client-statement-table')).toBeVisible();
+          |                                                            ^
+       99 | }
+      100 |
+      101 | // A client (Acme) with TWO projects and invoices spread across BOTH, plus a SECOND client (Globex)
+
+        at openStatement (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-statement.spec.ts:98:60)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-statement.spec.ts:153:5
+
+
+[1A[2K[62/258] [chromium] › client-statement.spec.ts:182:7 › A client statement puts all their invoices in one place › another client's invoice is not on this client's statement
+[1A[2K  9) [chromium] › client-statement.spec.ts:182:7 › A client statement puts all their invoices in one place › another client's invoice is not on this client's statement 
+
+    Error: expect.toBeVisible: Error: strict mode violation: getByTestId('client-statement-table') resolved to 2 elements:
+        1) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-1').getByTestId('client-statement-table')
+        2) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-2').getByTestId('client-statement-table')
+
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('client-statement-table')[22m
+
+
+       96 |   await opener.click();
+       97 |   await expect(page.getByTestId('client-statement')).toBeVisible();
+    >  98 |   await expect(page.getByTestId('client-statement-table')).toBeVisible();
+          |                                                            ^
+       99 | }
+      100 |
+      101 | // A client (Acme) with TWO projects and invoices spread across BOTH, plus a SECOND client (Globex)
+
+        at openStatement (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-statement.spec.ts:98:60)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-statement.spec.ts:184:5
+
+
+[1A[2K[63/258] [chromium] › client-statement.spec.ts:191:7 › A client statement puts all their invoices in one place › each invoice shows its worked-out status: owing, part paid, or paid
+[1A[2K  10) [chromium] › client-statement.spec.ts:191:7 › A client statement puts all their invoices in one place › each invoice shows its worked-out status: owing, part paid, or paid 
+
+    Error: expect.toBeVisible: Error: strict mode violation: getByTestId('client-statement-table') resolved to 2 elements:
+        1) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-1').getByTestId('client-statement-table')
+        2) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-2').getByTestId('client-statement-table')
+
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('client-statement-table')[22m
+
+
+       96 |   await opener.click();
+       97 |   await expect(page.getByTestId('client-statement')).toBeVisible();
+    >  98 |   await expect(page.getByTestId('client-statement-table')).toBeVisible();
+          |                                                            ^
+       99 | }
+      100 |
+      101 | // A client (Acme) with TWO projects and invoices spread across BOTH, plus a SECOND client (Globex)
+
+        at openStatement (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-statement.spec.ts:98:60)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-statement.spec.ts:193:5
+
+
+[1A[2K[64/258] [chromium] › client-statement.spec.ts:200:7 › A client statement puts all their invoices in one place › the statement shows the total the client still owes
+[1A[2K  11) [chromium] › client-statement.spec.ts:200:7 › A client statement puts all their invoices in one place › the statement shows the total the client still owes 
+
+    Error: expect.toBeVisible: Error: strict mode violation: getByTestId('client-statement-table') resolved to 2 elements:
+        1) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-1').getByTestId('client-statement-table')
+        2) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-2').getByTestId('client-statement-table')
+
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('client-statement-table')[22m
+
+
+       96 |   await opener.click();
+       97 |   await expect(page.getByTestId('client-statement')).toBeVisible();
+    >  98 |   await expect(page.getByTestId('client-statement-table')).toBeVisible();
+          |                                                            ^
+       99 | }
+      100 |
+      101 | // A client (Acme) with TWO projects and invoices spread across BOTH, plus a SECOND client (Globex)
+
+        at openStatement (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-statement.spec.ts:98:60)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-statement.spec.ts:202:5
+
+
+[1A[2K[65/258] [chromium] › client-statement.spec.ts:219:7 › A client statement puts all their invoices in one place › a different client's statement shows only that client's own invoices and owed total
+[1A[2K[66/258] [chromium] › client-statement.spec.ts:242:7 › A client statement puts all their invoices in one place › a client with no invoices has an empty statement that owes nothing
+[1A[2K  12) [chromium] › client-statement.spec.ts:242:7 › A client statement puts all their invoices in one place › a client with no invoices has an empty statement that owes nothing 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('client-statement-table')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('client-statement-table')[22m
+
+
+       96 |   await opener.click();
+       97 |   await expect(page.getByTestId('client-statement')).toBeVisible();
+    >  98 |   await expect(page.getByTestId('client-statement-table')).toBeVisible();
+          |                                                            ^
+       99 | }
+      100 |
+      101 | // A client (Acme) with TWO projects and invoices spread across BOTH, plus a SECOND client (Globex)
+
+        at openStatement (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-statement.spec.ts:98:60)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/client-statement.spec.ts:250:5
+
+
+[1A[2K[67/258] [chromium] › client-statement.spec.ts:257:7 › A client statement puts all their invoices in one place › recording a payment lowers what the client owes
+[1A[2K[68/258] [chromium] › clients.spec.ts:11:7 › Clients › a link in the nav opens the clients list
+[1A[2K[69/258] [chromium] › clients.spec.ts:29:7 › Clients › with no clients the list shows an empty state
+[1A[2K[70/258] [chromium] › clients.spec.ts:40:7 › Clients › all seeded clients are shown in one list, each with name and email
+[1A[2K[71/258] [chromium] › clients.spec.ts:72:7 › Clients › adding a client with a name and email shows it in the list
+[1A[2K[72/258] [chromium] › clients.spec.ts:99:7 › Clients › a client added on top of seeded clients joins the same single list
+[1A[2K[73/258] [chromium] › contact-email-valid.spec.ts:24:7 › A contact cannot be saved with a bad email › submitting with a malformed email is rejected and saves nothing
+[1A[2K[74/258] [chromium] › contact-email-valid.spec.ts:53:7 › A contact cannot be saved with a bad email › an address with no domain after the @ is rejected and saves nothing
+[1A[2K[75/258] [chromium] › contact-email-valid.spec.ts:75:7 › A contact cannot be saved with a bad email › a rejected submit does not disturb the contacts already listed
+[1A[2K[76/258] [chromium] › contact-email-valid.spec.ts:109:7 › A contact cannot be saved with a bad email › correcting the email to a proper address then saves the contact
+[1A[2K[77/258] [chromium] › dashboard-overdue.spec.ts:54:7 › Dashboard: how many sent invoices are overdue › counts the sent invoices whose due date has passed — not drafts, paid, or not-yet-due
+[1A[2K[78/258] [chromium] › dashboard-overdue.spec.ts:96:7 › Dashboard: how many sent invoices are overdue › shows zero when no sent invoice is past due
+[1A[2K[79/258] [chromium] › dashboard-overdue.spec.ts:120:7 › Dashboard: how many sent invoices are overdue › sending a past-due draft is what makes it overdue — the count grows by one
+[1A[2K[80/258] [chromium] › dashboard-overdue.spec.ts:152:7 › Dashboard: how many sent invoices are overdue › while its data is loading it shows a loading indicator, then the count
+[1A[2K[81/258] [chromium] › dashboard-overdue.spec.ts:181:7 › Dashboard: how many sent invoices are overdue › when its data cannot be loaded it shows an error instead of a made-up count
+[1A[2K[82/258] [chromium] › dashboard-owed-sent.spec.ts:44:7 › Money owed counts only invoices I have sent, not drafts › a draft is not money owed: only the sent invoices add up to the owed total
+[1A[2K[83/258] [chromium] › dashboard-owed-sent.spec.ts:79:7 › Money owed counts only invoices I have sent, not drafts › with only drafts seeded, nothing is owed — no invoice has been sent
+[1A[2K[84/258] [chromium] › dashboard-owed-sent.spec.ts:100:7 › Money owed counts only invoices I have sent, not drafts › sending a draft is what makes its money owed — the owed total grows by that amount
+[1A[2K[85/258] [chromium] › dashboard-top-clients.spec.ts:77:7 › Dashboard: my top five clients, ranked by how much they owe › the dashboard surfaces a top-clients region
+[1A[2K[86/258] [chromium] › dashboard-top-clients.spec.ts:101:7 › Dashboard: my top five clients, ranked by how much they owe › lists the five highest owers, most first, dropping the client who owes least
+[1A[2K[87/258] [chromium] › dashboard-top-clients.spec.ts:161:7 › Dashboard: my top five clients, ranked by how much they owe › ranks by what is still owed — net of payments, not the gross amount invoiced
+[1A[2K[88/258] [chromium] › dashboard-top-clients.spec.ts:208:7 › Dashboard: my top five clients, ranked by how much they owe › with fewer than five clients it lists them all, still ranked by what they owe
+[1A[2K[89/258] [chromium] › dashboard-top-clients.spec.ts:241:7 › Dashboard: my top five clients, ranked by how much they owe › while its data is loading it shows a loading indicator, then the clients
+[1A[2K[90/258] [chromium] › dashboard-top-clients.spec.ts:280:7 › Dashboard: my top five clients, ranked by how much they owe › when its data cannot be loaded it shows an error instead of a made-up list
+[1A[2K[91/258] [chromium] › dashboard.spec.ts:47:7 › Dashboard home screen › a link in the nav opens the dashboard
+[1A[2K[92/258] [chromium] › dashboard.spec.ts:64:7 › Dashboard home screen › shows how many clients and projects there are, and how much is still owed
+[1A[2K[93/258] [chromium] › dashboard.spec.ts:107:7 › Dashboard home screen › with nothing seeded it shows no clients, no projects and nothing owed
+[1A[2K[94/258] [chromium] › dashboard.spec.ts:117:7 › Dashboard home screen › money still owed counts only sent invoices — paid work and unsent drafts owe nothing
+[1A[2K[95/258] [chromium] › dashboard.spec.ts:153:7 › Dashboard home screen › while its data is loading it shows a loading indicator, then the figures
+[1A[2K[96/258] [chromium] › dashboard.spec.ts:192:7 › Dashboard home screen › when its data cannot be loaded it shows an error instead of made-up figures
+[1A[2K[97/258] [chromium] › discount-in-owed.spec.ts:62:7 › The discount is taken off what is still owed on an invoice › the amount still to pay is the discounted total minus payments, not the gross amount
+[1A[2K[98/258] [chromium] › discount-in-owed.spec.ts:111:7 › The discount is taken off what a client owes on their statement › each invoice row and the outstanding total net off the discount
+[1A[2K  13) [chromium] › discount-in-owed.spec.ts:111:7 › The discount is taken off what a client owes on their statement › each invoice row and the outstanding total net off the discount 
+
+    Error: expect.toBeVisible: Error: strict mode violation: getByTestId('client-statement-table') resolved to 2 elements:
+        1) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-1').getByTestId('client-statement-table')
+        2) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-2').getByTestId('client-statement-table')
+
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('client-statement-table')[22m
+
+
+      105 |   await opener.click();
+      106 |   await expect(page.getByTestId('client-statement')).toBeVisible();
+    > 107 |   await expect(page.getByTestId('client-statement-table')).toBeVisible();
+          |                                                            ^
+      108 | }
+      109 |
+      110 | test.describe('The discount is taken off what a client owes on their statement', () => {
+
+        at openStatement (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/discount-in-owed.spec.ts:107:60)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/discount-in-owed.spec.ts:129:5
+
+
+[1A[2K[99/258] [chromium] › discount-in-owed.spec.ts:166:7 › The discount is taken off the money owed on the home screen › the dashboard owed total sums the discounted totals of the sent invoices
+[1A[2K[100/258] [chromium] › global-search.spec.ts:35:7 › Global search across clients and projects › the home page offers one global search box
+[1A[2K[101/258] [chromium] › global-search.spec.ts:47:7 › Global search across clients and projects › a term matching a client and a project surfaces both
+[1A[2K[102/258] [chromium] › global-search.spec.ts:67:7 › Global search across clients and projects › a term matching only a client shows it under clients and nothing under projects
+[1A[2K[103/258] [chromium] › global-search.spec.ts:85:7 › Global search across clients and projects › a term matching only a project shows it under projects and nothing under clients
+[1A[2K[104/258] [chromium] › global-search.spec.ts:103:7 › Global search across clients and projects › a term matching nothing surfaces no clients and no projects
+[1A[2K[105/258] [chromium] › invoice-amount-positive.spec.ts:26:7 › An invoice cannot be added for zero or less › submitting an amount of zero is rejected and adds nothing
+[1A[2K[106/258] [chromium] › invoice-amount-positive.spec.ts:54:7 › An invoice cannot be added for zero or less › submitting a negative amount is rejected and adds nothing
+[1A[2K[107/258] [chromium] › invoice-amount-positive.spec.ts:80:7 › An invoice cannot be added for zero or less › submitting a blank amount is rejected and adds nothing
+[1A[2K[108/258] [chromium] › invoice-amount-positive.spec.ts:104:7 › An invoice cannot be added for zero or less › a rejected attempt does not disturb the invoices already listed
+[1A[2K[109/258] [chromium] › invoice-amount-positive.spec.ts:130:7 › An invoice cannot be added for zero or less › correcting the amount to more than zero then adds the invoice
+[1A[2K[110/258] [chromium] › invoice-cancel.spec.ts:73:7 › Cancel an invoice sent by mistake › a sent invoice offers a cancel control; cancelling it marks it cancelled and keeps a record
+[1A[2K[111/258] [chromium] › invoice-cancel.spec.ts:117:7 › Cancel an invoice sent by mistake › a cancelled invoice stops counting toward what I am owed
+[1A[2K[112/258] [chromium] › invoice-cancel.spec.ts:154:7 › Cancel an invoice sent by mistake › only a sent invoice can be cancelled — a draft offers no cancel control
+[1A[2K[113/258] [chromium] › invoice-dates.spec.ts:50:7 › Each invoice shows an issued date and a due date › an invoice shows both dates, as distinct values in their own cells
+[1A[2K[114/258] [chromium] › invoice-dates.spec.ts:76:7 › Each invoice shows an issued date and a due date › each invoice shows its OWN pair of dates
+[1A[2K[115/258] [chromium] › invoice-dates.spec.ts:106:7 › Each invoice shows an issued date and a due date › both dates are held by the server: they survive a fresh load
+[1A[2K[116/258] [chromium] › invoice-discount.spec.ts:61:7 › An invoice shows its subtotal, the discount taken off, and the final total › a 10% discount off a $500 subtotal takes off $50, leaving $450
+[1A[2K[117/258] [chromium] › invoice-discount.spec.ts:86:7 › An invoice shows its subtotal, the discount taken off, and the final total › a different percentage takes off a different amount: 25% off $800 is $200, leaving $600
+[1A[2K[118/258] [chromium] › invoice-discount.spec.ts:111:7 › An invoice shows its subtotal, the discount taken off, and the final total › with no discount, the discount is $0.00 and the total equals the subtotal
+[1A[2K[119/258] [chromium] › invoice-discount.spec.ts:138:7 › An invoice shows its subtotal, the discount taken off, and the final total › each invoice shows its own subtotal, discount and total, and they survive a fresh load
+[1A[2K[120/258] [chromium] › invoice-due-amount.spec.ts:54:7 › An invoice shows how much is still left to pay after payments › with payments recorded, the remaining is the amount minus what has been paid
+[1A[2K  14) [chromium] › invoice-due-amount.spec.ts:54:7 › An invoice shows how much is still left to pay after payments › with payments recorded, the remaining is the amount minus what has been paid 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('invoice-due-amount')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('invoice-due-amount')[22m
+
+
+      44 | async function expectDue(page: Page, dollars: number): Promise<void> {
+      45 |   const cell = page.getByTestId('invoice-due-amount');
+    > 46 |   await expect(cell).toBeVisible();
+         |                      ^
+      47 |   await expect(cell).toContainText(due(dollars));
+      48 | }
+      49 |
+
+        at expectDue (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-due-amount.spec.ts:46:22)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-due-amount.spec.ts:71:11
+
+
+[1A[2K[121/258] [chromium] › invoice-due-amount.spec.ts:74:7 › An invoice shows how much is still left to pay after payments › with nothing paid yet, the whole amount is still due
+[1A[2K  15) [chromium] › invoice-due-amount.spec.ts:74:7 › An invoice shows how much is still left to pay after payments › with nothing paid yet, the whole amount is still due 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('invoice-due-amount')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('invoice-due-amount')[22m
+
+
+      44 | async function expectDue(page: Page, dollars: number): Promise<void> {
+      45 |   const cell = page.getByTestId('invoice-due-amount');
+    > 46 |   await expect(cell).toBeVisible();
+         |                      ^
+      47 |   await expect(cell).toContainText(due(dollars));
+      48 | }
+      49 |
+
+        at expectDue (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-due-amount.spec.ts:46:22)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-due-amount.spec.ts:85:11
+
+
+[1A[2K[122/258] [chromium] › invoice-due-amount.spec.ts:88:7 › An invoice shows how much is still left to pay after payments › once payments cover the amount, nothing is left to pay
+[1A[2K  16) [chromium] › invoice-due-amount.spec.ts:88:7 › An invoice shows how much is still left to pay after payments › once payments cover the amount, nothing is left to pay 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('invoice-due-amount')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('invoice-due-amount')[22m
+
+
+      44 | async function expectDue(page: Page, dollars: number): Promise<void> {
+      45 |   const cell = page.getByTestId('invoice-due-amount');
+    > 46 |   await expect(cell).toBeVisible();
+         |                      ^
+      47 |   await expect(cell).toContainText(due(dollars));
+      48 | }
+      49 |
+
+        at expectDue (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-due-amount.spec.ts:46:22)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-due-amount.spec.ts:103:11
+
+
+[1A[2K[123/258] [chromium] › invoice-due-amount.spec.ts:106:7 › An invoice shows how much is still left to pay after payments › the amount left is scoped to its own invoice
+[1A[2K  17) [chromium] › invoice-due-amount.spec.ts:106:7 › An invoice shows how much is still left to pay after payments › the amount left is scoped to its own invoice 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('invoice-due-amount')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('invoice-due-amount')[22m
+
+
+      44 | async function expectDue(page: Page, dollars: number): Promise<void> {
+      45 |   const cell = page.getByTestId('invoice-due-amount');
+    > 46 |   await expect(cell).toBeVisible();
+         |                      ^
+      47 |   await expect(cell).toContainText(due(dollars));
+      48 | }
+      49 |
+
+        at expectDue (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-due-amount.spec.ts:46:22)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-due-amount.spec.ts:124:11
+
+
+[1A[2K[124/258] [chromium] › invoice-due-amount.spec.ts:130:7 › An invoice shows how much is still left to pay after payments › recording another payment lowers the amount left, and it survives a fresh load
+[1A[2K  18) [chromium] › invoice-due-amount.spec.ts:130:7 › An invoice shows how much is still left to pay after payments › recording another payment lowers the amount left, and it survives a fresh load 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('invoice-due-amount')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('invoice-due-amount')[22m
+
+
+      44 | async function expectDue(page: Page, dollars: number): Promise<void> {
+      45 |   const cell = page.getByTestId('invoice-due-amount');
+    > 46 |   await expect(cell).toBeVisible();
+         |                      ^
+      47 |   await expect(cell).toContainText(due(dollars));
+      48 | }
+      49 |
+
+        at expectDue (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-due-amount.spec.ts:46:22)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-due-amount.spec.ts:143:11
+
+
+[1A[2K[125/258] [chromium] › invoice-lineitem-remove.spec.ts:51:7 › Charge lines can be removed, and the total follows › removing one of several lines drops it and shrinks the total to match
+[1A[2K[126/258] [chromium] › invoice-lineitem-remove.spec.ts:97:7 › Charge lines can be removed, and the total follows › removing the last remaining line empties the table and the total falls to zero
+[1A[2K[127/258] [chromium] › invoice-lineitem-remove.spec.ts:133:7 › Charge lines can be removed, and the total follows › removing lines one after another re-works the total each time
+[1A[2K[128/258] [chromium] › invoice-lineitem-unit.spec.ts:47:7 › A charge line says how many, in what unit, and shows its amount › each seeded line shows how many, its unit, the price each, and its own amount
+[1A[2K[129/258] [chromium] › invoice-lineitem-unit.spec.ts:89:7 › A charge line says how many, in what unit, and shows its amount › each line carries its OWN unit, not a shared one
+[1A[2K[130/258] [chromium] › invoice-lineitem-unit.spec.ts:124:7 › A charge line says how many, in what unit, and shows its amount › the add form takes a unit; the new line shows it with its amount and survives a reload
+[1A[2K  19) [chromium] › invoice-lineitem-unit.spec.ts:124:7 › A charge line says how many, in what unit, and shows its amount › the add form takes a unit; the new line shows it with its amount and survives a reload 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: locator('[data-testid^="lineitem-row-"]').filter({ has: getByTestId('lineitem-description').getByText('Support retainer', { exact: true }) })
+    Expected: [32m1[39m
+    Received: [31m0[39m
+    Call log:
+      [2m- expect.toHaveCount with timeout 5000ms[22m
+    [2m  - waiting for locator('[data-testid^="lineitem-row-"]').filter({ has: getByTestId('lineitem-description').getByText('Support retainer', { exact: true }) })[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+
+
+      154 |     // The new line joins the list carrying its unit, and shows its own amount: 6 × 90 = 540.
+      155 |     const added = rowByDescription(page, 'Support retainer');
+    > 156 |     await expect(added).toHaveCount(1);
+          |                         ^
+      157 |     await expectValue(added.getByTestId('lineitem-qty'), 6);
+      158 |     await expect(added.getByTestId('lineitem-unit')).toContainText('weeks');
+      159 |     await expectValue(added.getByTestId('lineitem-unitprice'), 90);
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-lineitem-unit.spec.ts:156:25
+
+
+[1A[2K[131/258] [chromium] › invoice-lineitems.spec.ts:59:7 › An invoice is a list of things charged for, with the total worked out › opening an invoice from its project lands on the invoice detail page
+[1A[2K[132/258] [chromium] › invoice-lineitems.spec.ts:87:7 › An invoice is a list of things charged for, with the total worked out › the detail page lists each line item with its description, quantity, unit, price and amount
+[1A[2K[133/258] [chromium] › invoice-lineitems.spec.ts:129:7 › An invoice is a list of things charged for, with the total worked out › an invoice with no line items shows an empty table and a total of zero
+[1A[2K[134/258] [chromium] › invoice-lineitems.spec.ts:143:7 › An invoice is a list of things charged for, with the total worked out › adding a line item lists it, works out its amount, and grows the total
+[1A[2K  20) [chromium] › invoice-lineitems.spec.ts:143:7 › An invoice is a list of things charged for, with the total worked out › adding a line item lists it, works out its amount, and grows the total 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: locator('[data-testid^="lineitem-row-"]').filter({ has: getByTestId('lineitem-description').getByText('Extra pages', { exact: true }) })
+    Expected: [32m1[39m
+    Received: [31m0[39m
+    Call log:
+      [2m- expect.toHaveCount with timeout 5000ms[22m
+    [2m  - waiting for locator('[data-testid^="lineitem-row-"]').filter({ has: getByTestId('lineitem-description').getByText('Extra pages', { exact: true }) })[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+
+
+      169 |     // It joins the list with its unit and its amount worked out: 4 × 90 = 360.
+      170 |     const added = rowByDescription(page, 'Extra pages');
+    > 171 |     await expect(added).toHaveCount(1);
+          |                         ^
+      172 |     await expectValue(added.getByTestId('lineitem-qty'), 4);
+      173 |     await expect(added.getByTestId('lineitem-unit')).toContainText('pages');
+      174 |     await expectValue(added.getByTestId('lineitem-unitprice'), 90);
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-lineitems.spec.ts:171:25
+
+
+[1A[2K[135/258] [chromium] › invoice-lineitems.spec.ts:206:7 › A line item must describe a real charge › an empty submission is rejected and adds nothing
+[1A[2K[136/258] [chromium] › invoice-lineitems.spec.ts:231:7 › A line item must describe a real charge › a quantity or price that is not more than zero is rejected and adds nothing
+[1A[2K[137/258] [chromium] › invoice-lineitems.spec.ts:272:7 › A line item must describe a real charge › correcting a rejected line item then adds it and grows the total
+[1A[2K  21) [chromium] › invoice-lineitems.spec.ts:272:7 › A line item must describe a real charge › correcting a rejected line item then adds it and grows the total 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: locator('[data-testid^="lineitem-row-"]').filter({ has: getByTestId('lineitem-description').getByText('Consulting', { exact: true }) })
+    Expected: [32m1[39m
+    Received: [31m0[39m
+    Call log:
+      [2m- expect.toHaveCount with timeout 5000ms[22m
+    [2m  - waiting for locator('[data-testid^="lineitem-row-"]').filter({ has: getByTestId('lineitem-description').getByText('Consulting', { exact: true }) })[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+
+
+      295 |     // and the total grows to 100 + 120 = 220.
+      296 |     const added = rowByDescription(page, 'Consulting');
+    > 297 |     await expect(added).toHaveCount(1);
+          |                         ^
+      298 |     await expectValue(added.getByTestId('lineitem-amount'), 120);
+      299 |     await expect(lineItemRows(page)).toHaveCount(2);
+      300 |     await expect(page.getByTestId('lineitem-form-error')).toHaveCount(0);
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-lineitems.spec.ts:297:25
+
+
+[1A[2K[138/258] [chromium] › invoice-notes.spec.ts:54:7 › Notes on an invoice, newest first › an invoice with no notes shows an empty state, not the list
+[1A[2K[139/258] [chromium] › invoice-notes.spec.ts:87:7 › Notes on an invoice, newest first › an invoice shows its own notes newest first, and not notes on something else
+[1A[2K[140/258] [chromium] › invoice-notes.spec.ts:176:7 › Notes on an invoice, newest first › writing a note adds it to the top (newest first) and it persists
+[1A[2K[141/258] [chromium] › invoice-notes.spec.ts:241:7 › Notes on an invoice, newest first › a note written onto an empty invoice replaces the empty state with the list
+[1A[2K[142/258] [chromium] › invoice-pagination.spec.ts:78:7 › Show the invoice list a page at a time › the invoices page shows a pager and only one page of invoices at a time
+[1A[2K[143/258] [chromium] › invoice-pagination.spec.ts:98:7 › Show the invoice list a page at a time › next and previous walk fixed-size pages that together cover every invoice exactly once
+[1A[2K[144/258] [chromium] › invoice-pagination.spec.ts:154:7 › Show the invoice list a page at a time › you cannot page before the first page or past the last page
+[1A[2K[145/258] [chromium] › invoice-pagination.spec.ts:183:7 › Show the invoice list a page at a time › the current page lives in the URL and survives a fresh load
+[1A[2K[146/258] [chromium] › invoice-paid.spec.ts:80:7 › An invoice’s status is worked out from its payments › with nothing paid yet, the invoice is still owing
+[1A[2K  22) [chromium] › invoice-paid.spec.ts:80:7 › An invoice’s status is worked out from its payments › with nothing paid yet, the invoice is still owing 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveText[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: getByTestId('invoice-status-panel')
+    Expected pattern: [32m/owing/i[39m
+    Received string:  [31m"StatusSENT"[39m
+    Call log:
+      [2m- expect.toHaveText with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('invoice-status-panel')[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+
+
+      65 |   await expect(panel).toBeVisible();
+      66 |   if (status === 'owing') {
+    > 67 |     await expect(panel).toHaveText(OWING);
+         |                         ^
+      68 |     await expect(panel).not.toHaveText(PAID); // nothing paid: not "paid", not "part paid"
+      69 |   } else if (status === 'part') {
+      70 |     await expect(panel).toHaveText(PART);
+
+        at expectStatus (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-paid.spec.ts:67:25)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-paid.spec.ts:91:5
+
+
+[1A[2K[147/258] [chromium] › invoice-paid.spec.ts:94:7 › An invoice’s status is worked out from its payments › with some but not all of the amount paid, the invoice is part paid
+[1A[2K[148/258] [chromium] › invoice-paid.spec.ts:111:7 › An invoice’s status is worked out from its payments › once payments cover the amount, the invoice is paid
+[1A[2K  23) [chromium] › invoice-paid.spec.ts:111:7 › An invoice’s status is worked out from its payments › once payments cover the amount, the invoice is paid 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveText[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: getByTestId('invoice-status-panel')
+    Expected pattern: [32m/\bpaid\b/i[39m
+    Received string:  [31m"StatusPAID"[39m
+    Call log:
+      [2m- expect.toHaveText with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('invoice-status-panel')[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusPAID"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusPAID"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusPAID"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusPAID"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusPAID"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusPAID"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusPAID"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusPAID"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusPAID"[22m
+
+
+      71 |     await expect(panel).not.toHaveText(OWING); // some paid: no longer merely owing
+      72 |   } else {
+    > 73 |     await expect(panel).toHaveText(PAID);
+         |                         ^
+      74 |     await expect(panel).not.toHaveText(PART); // fully paid, not part paid
+      75 |     await expect(panel).not.toHaveText(OWING);
+      76 |   }
+
+        at expectStatus (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-paid.spec.ts:73:25)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-paid.spec.ts:129:5
+
+
+[1A[2K[149/258] [chromium] › invoice-paid.spec.ts:135:7 › An invoice’s status is worked out from its payments › the status is worked out per invoice from its own payments
+[1A[2K  24) [chromium] › invoice-paid.spec.ts:135:7 › An invoice’s status is worked out from its payments › the status is worked out per invoice from its own payments 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveText[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: getByTestId('invoice-status-panel')
+    Expected pattern: [32m/owing/i[39m
+    Received string:  [31m"StatusSENT"[39m
+    Call log:
+      [2m- expect.toHaveText with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('invoice-status-panel')[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+
+
+      65 |   await expect(panel).toBeVisible();
+      66 |   if (status === 'owing') {
+    > 67 |     await expect(panel).toHaveText(OWING);
+         |                         ^
+      68 |     await expect(panel).not.toHaveText(PAID); // nothing paid: not "paid", not "part paid"
+      69 |   } else if (status === 'part') {
+      70 |     await expect(panel).toHaveText(PART);
+
+        at expectStatus (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-paid.spec.ts:67:25)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-paid.spec.ts:153:5
+
+
+[1A[2K[150/258] [chromium] › invoice-paid.spec.ts:156:7 › An invoice’s status is worked out from its payments › recording payments moves the status owing -> part paid -> paid, keeping a record for each
+[1A[2K  25) [chromium] › invoice-paid.spec.ts:156:7 › An invoice’s status is worked out from its payments › recording payments moves the status owing -> part paid -> paid, keeping a record for each 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveText[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: getByTestId('invoice-status-panel')
+    Expected pattern: [32m/owing/i[39m
+    Received string:  [31m"StatusSENT"[39m
+    Call log:
+      [2m- expect.toHaveText with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('invoice-status-panel')[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+
+
+      65 |   await expect(panel).toBeVisible();
+      66 |   if (status === 'owing') {
+    > 67 |     await expect(panel).toHaveText(OWING);
+         |                         ^
+      68 |     await expect(panel).not.toHaveText(PAID); // nothing paid: not "paid", not "part paid"
+      69 |   } else if (status === 'part') {
+      70 |     await expect(panel).toHaveText(PART);
+
+        at expectStatus (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-paid.spec.ts:67:25)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-paid.spec.ts:173:5
+
+
+[1A[2K[151/258] [chromium] › invoice-paid.spec.ts:202:7 › An invoice’s status is worked out from its payments › an invoice is no longer flipped to paid by hand
+[1A[2K  26) [chromium] › invoice-paid.spec.ts:202:7 › An invoice’s status is worked out from its payments › an invoice is no longer flipped to paid by hand 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveText[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: getByTestId('invoice-status-panel')
+    Expected pattern: [32m/owing/i[39m
+    Received string:  [31m"StatusSENT"[39m
+    Call log:
+      [2m- expect.toHaveText with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('invoice-status-panel')[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+    [2m  -   locator resolved to <section data-testid="invoice-status-panel">…</section>[22m
+    [2m  -   unexpected value "StatusSENT"[22m
+
+
+      65 |   await expect(panel).toBeVisible();
+      66 |   if (status === 'owing') {
+    > 67 |     await expect(panel).toHaveText(OWING);
+         |                         ^
+      68 |     await expect(panel).not.toHaveText(PAID); // nothing paid: not "paid", not "part paid"
+      69 |   } else if (status === 'part') {
+      70 |     await expect(panel).toHaveText(PART);
+
+        at expectStatus (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-paid.spec.ts:67:25)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-paid.spec.ts:222:5
+
+
+[1A[2K[152/258] [chromium] › invoice-payments.spec.ts:65:7 › An invoice shows what has been paid against it › the detail page shows each seeded payment with its amount and date
+[1A[2K[153/258] [chromium] › invoice-payments.spec.ts:94:7 › An invoice shows what has been paid against it › an invoice with no payments shows the region but no payment rows
+[1A[2K[154/258] [chromium] › invoice-payments.spec.ts:109:7 › An invoice shows what has been paid against it › payments are scoped to their own invoice
+[1A[2K[155/258] [chromium] › invoice-payments.spec.ts:143:7 › Recording a payment on an invoice › recording a payment shows its amount and date, and it survives a fresh load
+[1A[2K[156/258] [chromium] › invoice-payments.spec.ts:180:7 › Recording a payment on an invoice › recording a payment adds to those already on the invoice
+[1A[2K[157/258] [chromium] › invoice-payments.spec.ts:218:7 › A recorded payment must be a real payment › an empty submission is rejected and records nothing
+[1A[2K[158/258] [chromium] › invoice-payments.spec.ts:238:7 › A recorded payment must be a real payment › an amount that is not more than zero is rejected and records nothing
+[1A[2K[159/258] [chromium] › invoice-payments.spec.ts:264:7 › A recorded payment must be a real payment › correcting a rejected payment then records it
+[1A[2K[160/258] [chromium] › invoice-send.spec.ts:40:7 › Invoices move through stages: draft → sent › a draft offers a send control, and sending it flips the stage to sent
+[1A[2K[161/258] [chromium] › invoice-send.spec.ts:78:7 › Invoices move through stages: draft → sent › sending one invoice records it and leaves the others as drafts
+[1A[2K[162/258] [chromium] › invoice-send.spec.ts:118:7 › Invoices move through stages: draft → sent › a newly created invoice starts as a draft that can then be sent
+[1A[2K[163/258] [chromium] › invoice-send.spec.ts:149:7 › Invoices move through stages: draft → sent › an invoice already sent shows no further send control
+[1A[2K[164/258] [chromium] › invoice-sort-due.spec.ts:55:7 › Sort a project's invoices by due date › the project detail page offers a control to sort invoices by due date
+[1A[2K[165/258] [chromium] › invoice-sort-due.spec.ts:71:7 › Sort a project's invoices by due date › activating the control re-orders the invoices by their due date
+[1A[2K  27) [chromium] › invoice-sort-due.spec.ts:71:7 › Sort a project's invoices by due date › activating the control re-orders the invoices by their due date 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoContainEqual[2m([22m[32mexpected[39m[2m) // deep equality[22m
+
+    Expected value: [32m[][39m
+    Received array: [31m[[4, 2, 1, 3], [3, 1, 2, 4]][39m
+
+      85 |     const sorted = await rowOrder(page);
+      86 |     expect(sorted).not.toEqual(ID_ORDER);
+    > 87 |     expect([DUE_ASCENDING, DUE_DESCENDING]).toContainEqual(sorted);
+         |                                             ^
+      88 |
+      89 |     // Still the same four invoices — sorting reorders the list, it does not add, drop or duplicate
+      90 |     // rows, and it does not pull in the other project's invoice.
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/invoice-sort-due.spec.ts:87:45
+
+
+[1A[2K[166/258] [chromium] › invoice-sort-due.spec.ts:95:7 › Sort a project's invoices by due date › the chosen sort survives a fresh load
+[1A[2K[167/258] [chromium] › invoice-status-filter.spec.ts:103:7 › Narrow all invoices to one stage › the invoices page offers a stage filter and lists every invoice before one is chosen
+[1A[2K[168/258] [chromium] › invoice-status-filter.spec.ts:119:7 › Narrow all invoices to one stage › choosing "sent" narrows the list to only the sent invoices
+[1A[2K[169/258] [chromium] › invoice-status-filter.spec.ts:145:7 › Narrow all invoices to one stage › the filter is keyed on the chosen stage: each stage narrows to its own invoices
+[1A[2K[170/258] [chromium] › invoice-status-filter.spec.ts:175:7 › Narrow all invoices to one stage › the chosen stage survives a fresh load
+[1A[2K[171/258] [chromium] › invoice-tax.spec.ts:73:7 › An invoice adds sales tax on top of the discount, and the amount includes it › tax is worked out after the discount: 20% of the $450 net is $90, for a $540 total
+[1A[2K[172/258] [chromium] › invoice-tax.spec.ts:121:7 › An invoice adds sales tax on top of the discount, and the amount includes it › with no discount, the tax is charged on the whole subtotal
+[1A[2K[173/258] [chromium] › invoice-tax.spec.ts:146:7 › An invoice adds sales tax on top of the discount, and the amount includes it › with no tax, the tax figure is $0.00 and the total is just the discounted net
+[1A[2K[174/258] [chromium] › invoice-tax.spec.ts:173:7 › An invoice adds sales tax on top of the discount, and the amount includes it › each invoice shows its own tax and total, and they survive a fresh load
+[1A[2K[175/258] [chromium] › jobs-terminology.spec.ts:26:7 › The feature is called "jobs", not "projects" › the nav link calls the section Jobs
+[1A[2K[176/258] [chromium] › jobs-terminology.spec.ts:38:7 › The feature is called "jobs", not "projects" › the list page is titled Jobs, empties with "No jobs yet.", and adds a Job
+[1A[2K[177/258] [chromium] › jobs-terminology.spec.ts:64:7 › The feature is called "jobs", not "projects" › a job's detail page is titled Job, not Project
+[1A[2K[178/258] [chromium] › jobs-terminology.spec.ts:79:7 › The feature is called "jobs", not "projects" › the dashboard figure is labelled Jobs, not Projects
+[1A[2K[179/258] [chromium] › jobs-terminology.spec.ts:96:7 › The feature is called "jobs", not "projects" › a client's page labels the count Jobs and uses 'jobs' in its own list
+[1A[2K[180/258] [chromium] › jobs-terminology.spec.ts:121:7 › The feature is called "jobs", not "projects" › the all-invoices table heads the column Job, not Project
+[1A[2K  28) [chromium] › jobs-terminology.spec.ts:121:7 › The feature is called "jobs", not "projects" › the all-invoices table heads the column Job, not Project 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('all-invoices-table').getByRole('columnheader', { name: 'Job', exact: true })
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('all-invoices-table').getByRole('columnheader', { name: 'Job', exact: true })[22m
+
+
+      133 |     // is gone. (The seeded job name "Website Redesign" never contains the word, so the header is the
+      134 |     // only place the column word could appear.)
+    > 135 |     await expect(table.getByRole('columnheader', { name: 'Job', exact: true })).toBeVisible();
+          |                                                                                 ^
+      136 |     await expect(table.getByRole('columnheader', { name: 'Project', exact: true })).toHaveCount(0);
+      137 |   });
+      138 |
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/jobs-terminology.spec.ts:135:81
+
+
+[1A[2K[181/258] [chromium] › jobs-terminology.spec.ts:139:7 › The feature is called "jobs", not "projects" › global search uses "jobs" in its placeholder and its results column
+[1A[2K  29) [chromium] › jobs-terminology.spec.ts:139:7 › The feature is called "jobs", not "projects" › global search uses "jobs" in its placeholder and its results column 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('search-projects').getByRole('columnheader', { name: 'Job', exact: true })
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('search-projects').getByRole('columnheader', { name: 'Job', exact: true })[22m
+
+
+      151 |     // anchor (search-projects) is unchanged.
+      152 |     const jobHits = page.getByTestId('search-projects');
+    > 153 |     await expect(jobHits.getByRole('columnheader', { name: 'Job', exact: true })).toBeVisible();
+          |                                                                                   ^
+      154 |     await expect(jobHits.getByRole('columnheader', { name: 'Project', exact: true })).toHaveCount(0);
+      155 |   });
+      156 | });
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/jobs-terminology.spec.ts:153:83
+
+
+[1A[2K[182/258] [chromium] › money-commas.spec.ts:99:7 › Bigger amounts are shown with thousands separators (commas) › each invoice amount on the invoices page is grouped
+[1A[2K[183/258] [chromium] › money-commas.spec.ts:112:7 › Bigger amounts are shown with thousands separators (commas) › each invoice amount and the project's invoices total are grouped on the project page
+[1A[2K[184/258] [chromium] › money-commas.spec.ts:128:7 › Bigger amounts are shown with thousands separators (commas) › the project's budget standing figures are grouped
+[1A[2K[185/258] [chromium] › money-commas.spec.ts:140:7 › Bigger amounts are shown with thousands separators (commas) › the dashboard outstanding total is grouped
+[1A[2K[186/258] [chromium] › money-commas.spec.ts:148:7 › Bigger amounts are shown with thousands separators (commas) › a recorded payment is grouped on the invoice
+[1A[2K[187/258] [chromium] › money-commas.spec.ts:159:7 › Bigger amounts are shown with thousands separators (commas) › the client statement groups every amount, paid, due and the outstanding total
+[1A[2K[188/258] [chromium] › money-commas.spec.ts:182:7 › Bigger amounts are shown with thousands separators (commas) › invoice line items and their worked-out total are grouped
+[1A[2K[189/258] [chromium] › money-format.spec.ts:45:7 › Money is shown properly — dollar sign and cents › each invoice amount on a project is shown as $amount.cc
+[1A[2K[190/258] [chromium] › money-format.spec.ts:65:7 › Money is shown properly — dollar sign and cents › a project's invoices total is shown as $amount.cc
+[1A[2K[191/258] [chromium] › money-format.spec.ts:83:7 › Money is shown properly — dollar sign and cents › a project with no invoices still shows its total as money: $0.00
+[1A[2K[192/258] [chromium] › money-format.spec.ts:97:7 › Money is shown properly — dollar sign and cents › the dashboard outstanding total is shown as $amount.cc
+[1A[2K[193/258] [chromium] › money-format.spec.ts:114:7 › Money is shown properly — dollar sign and cents › the dashboard shows nothing-owed as money: $0.00
+[1A[2K[194/258] [chromium] › project-archive.spec.ts:33:7 › Archive a project › archiving a project drops it from the list, persists, keeps the project, and records it once
+[1A[2K  30) [chromium] › project-archive.spec.ts:33:7 › Archive a project › archiving a project drops it from the list, persists, keeps the project, and records it once 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('projects-empty')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('projects-empty')[22m
+
+
+      60 |     await expect(page.getByTestId('project-row-1')).toHaveCount(0);
+      61 |     await expect(projectRows(page)).toHaveCount(0);
+    > 62 |     await expect(page.getByTestId('projects-empty')).toBeVisible();
+         |                                                      ^
+      63 |
+      64 |     // Exactly one record was kept for this archive, carrying the project's id.
+      65 |     expect(archivedRecordsFor(1)).toHaveLength(1);
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/project-archive.spec.ts:62:54
+
+
+[1A[2K[195/258] [chromium] › project-archive.spec.ts:88:7 › Archive a project › archiving one project leaves the others on the list, and each archive keeps its own record
+[1A[2K[196/258] [chromium] › project-archive.spec.ts:155:7 › Archive a project › a project seeded archived starts off the list and is revealed by the Show-archived toggle
+[1A[2K[197/258] [chromium] › project-archive.spec.ts:196:7 › Archive a project › an archived project is kept off the list on its client's detail page
+[1A[2K[198/258] [chromium] › project-budget.spec.ts:48:7 › Project budget — invoiced against it and what is left › the budget panel shows the budget, what has been invoiced, and what is left
+[1A[2K  31) [chromium] › project-budget.spec.ts:48:7 › Project budget — invoiced against it and what is left › the budget panel shows the budget, what has been invoiced, and what is left 
+
+    Error: expect.toHaveValue: Error: Not an input element
+    Call log:
+      [2m- expect.toHaveValue with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('project-budget')[22m
+
+
+      71 |
+      72 |     // The budget that was set on the project.
+    > 73 |     await expect(page.getByTestId('project-budget')).toHaveValue(budgetValue(1000));
+         |                                                      ^
+      74 |
+      75 |     // Invoiced against it = this project's three invoices: 100 + 250 + 50 = 400 (the other project's
+      76 |     // 999 is excluded).
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/project-budget.spec.ts:73:54
+
+
+[1A[2K[199/258] [chromium] › project-budget.spec.ts:84:7 › Project budget — invoiced against it and what is left › setting a budget is held by the server and determines what is left
+[1A[2K  32) [chromium] › project-budget.spec.ts:84:7 › Project budget — invoiced against it and what is left › setting a budget is held by the server and determines what is left 
+
+    Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element
+    Call log:
+      [2m- waiting for getByTestId('project-budget')[22m
+    [2m  -   locator resolved to <dd data-testid="project-budget">$0.00</dd>[22m
+    [2m  -   fill("1000")[22m
+    [2m  - attempting fill action[22m
+    [2m  -   waiting for element to be visible, enabled and editable[22m
+
+
+      40 | // change saves on whichever of those the implementation listens for.
+      41 | async function setBudget(page: Page, control: Locator, dollars: number): Promise<void> {
+    > 42 |   await control.fill(String(dollars));
+         |                 ^
+      43 |   await control.press('Enter');
+      44 |   await control.press('Tab');
+      45 | }
+
+        at setBudget (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/project-budget.spec.ts:42:17)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/project-budget.spec.ts:103:11
+
+
+[1A[2K[200/258] [chromium] › project-budget.spec.ts:117:7 › Project budget — invoiced against it and what is left › invoiced tracks the project invoices — raising a new one reduces what is left
+[1A[2K  33) [chromium] › project-budget.spec.ts:117:7 › Project budget — invoiced against it and what is left › invoiced tracks the project invoices — raising a new one reduces what is left 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveText[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: getByTestId('project-invoiced')
+    Expected pattern: [32m/^\$500\.00$/[39m
+    Received string:  [31m"$200.00"[39m
+    Call log:
+      [2m- expect.toHaveText with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('project-invoiced')[22m
+    [2m  -   locator resolved to <dd data-testid="project-invoiced">$200.00</dd>[22m
+    [2m  -   unexpected value "$200.00"[22m
+    [2m  -   locator resolved to <dd data-testid="project-invoiced">$200.00</dd>[22m
+    [2m  -   unexpected value "$200.00"[22m
+    [2m  -   locator resolved to <dd data-testid="project-invoiced">$200.00</dd>[22m
+    [2m  -   unexpected value "$200.00"[22m
+    [2m  -   locator resolved to <dd data-testid="project-invoiced">$200.00</dd>[22m
+    [2m  -   unexpected value "$200.00"[22m
+    [2m  -   locator resolved to <dd data-testid="project-invoiced">$200.00</dd>[22m
+    [2m  -   unexpected value "$200.00"[22m
+    [2m  -   locator resolved to <dd data-testid="project-invoiced">$200.00</dd>[22m
+    [2m  -   unexpected value "$200.00"[22m
+    [2m  -   locator resolved to <dd data-testid="project-invoiced">$200.00</dd>[22m
+    [2m  -   unexpected value "$200.00"[22m
+    [2m  -   locator resolved to <dd data-testid="project-invoiced">$200.00</dd>[22m
+    [2m  -   unexpected value "$200.00"[22m
+    [2m  -   locator resolved to <dd data-testid="project-invoiced">$200.00</dd>[22m
+    [2m  -   unexpected value "$200.00"[22m
+
+
+      144 |
+      145 |     // Invoiced grows to 200 + 300 = 500 and what is left falls to 1000 − 500 = 500.
+    > 146 |     await expect(page.getByTestId('project-invoiced')).toHaveText(money(500));
+          |                                                        ^
+      147 |     await expect(page.getByTestId('project-remaining')).toHaveText(money(500));
+      148 |
+      149 |     // The other project's 999 never entered the figures.
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/project-budget.spec.ts:146:56
+
+
+[1A[2K[201/258] [chromium] › project-budget.spec.ts:153:7 › Project budget — invoiced against it and what is left › what is left goes negative once invoiced past the budget
+[1A[2K[202/258] [chromium] › project-code.spec.ts:40:7 › Each job carries a unique reference code › every seeded job is shown with its own reference code
+[1A[2K[203/258] [chromium] › project-code.spec.ts:66:7 › Each job carries a unique reference code › adding a job lets me set its reference code, which is shown and held by the server
+[1A[2K[204/258] [chromium] › project-code.spec.ts:94:7 › Each job carries a unique reference code › the code control drives the value — two jobs added with different codes each show their own
+[1A[2K[205/258] [chromium] › project-code.spec.ts:124:7 › Each job carries a unique reference code › a job cannot reuse a code another job already uses — the attempt is rejected and saves nothing
+[1A[2K[206/258] [chromium] › project-code.spec.ts:157:7 › Each job carries a unique reference code › correcting a clashing code to an unused one then saves the job
+[1A[2K  34) [chromium] › project-code.spec.ts:157:7 › Each job carries a unique reference code › correcting a clashing code to an unused one then saves the job 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: locator('[data-testid^="project-row-"]').filter({ has: getByTestId('project-name').getByText('Mobile App', { exact: true }) })
+    Expected: [32m1[39m
+    Received: [31m0[39m
+    Call log:
+      [2m- expect.toHaveCount with timeout 5000ms[22m
+    [2m  - waiting for locator('[data-testid^="project-row-"]').filter({ has: getByTestId('project-name').getByText('Mobile App', { exact: true }) })[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+
+
+      178 |     // Now it saves: the job appears carrying its own code and the error is gone.
+      179 |     const mobile = projectRowNamed(page, 'Mobile App');
+    > 180 |     await expect(mobile).toHaveCount(1);
+          |                          ^
+      181 |     await expect(mobile.getByTestId('project-code')).toHaveText('MOB-02');
+      182 |     await expect(page.getByTestId('project-form-code-error')).toHaveCount(0);
+      183 |     await expect(projectRows(page)).toHaveCount(2);
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/project-code.spec.ts:180:26
+
+
+[1A[2K[207/258] [chromium] › project-combined-filters.spec.ts:131:7 › Filter projects by two things at once (status + label) › both filters are present together and, before either is chosen, every project shows
+[1A[2K[208/258] [chromium] › project-combined-filters.spec.ts:152:7 › Filter projects by two things at once (status + label) › choosing a status AND a label narrows to the INTERSECTION, not to either alone
+[1A[2K[209/258] [chromium] › project-combined-filters.spec.ts:195:7 › Filter projects by two things at once (status + label) › the two filters stay independent: changing or clearing one re-narrows against the other
+[1A[2K[210/258] [chromium] › project-combined-filters.spec.ts:234:7 › Filter projects by two things at once (status + label) › applying the two filters in either order reaches the same combined view
+[1A[2K[211/258] [chromium] › project-combined-filters.spec.ts:255:7 › Filter projects by two things at once (status + label) › both chosen values survive a fresh load, and combining records nothing
+[1A[2K[212/258] [chromium] › project-delete.spec.ts:26:7 › Delete a project › deleting a project removes it from the list, persists, and records it once
+[1A[2K[213/258] [chromium] › project-delete.spec.ts:67:7 › Delete a project › deleting one project leaves the others untouched, and each deletion keeps its own record
+[1A[2K[214/258] [chromium] › project-delete.spec.ts:125:7 › Delete a project › merely viewing the projects list records nothing
+[1A[2K[215/258] [chromium] › project-invoices.spec.ts:29:7 › Project invoices › opening a project from the list lands on its detail page
+[1A[2K[216/258] [chromium] › project-invoices.spec.ts:49:7 › Project invoices › the detail page lists the project invoices with their amounts and what they add up to
+[1A[2K[217/258] [chromium] › project-invoices.spec.ts:86:7 › Project invoices › a project with no invoices shows an empty list that adds up to zero
+[1A[2K[218/258] [chromium] › project-invoices.spec.ts:101:7 › Project invoices › adding a new invoice for an amount shows it and grows the total
+[1A[2K  35) [chromium] › project-invoices.spec.ts:101:7 › Project invoices › adding a new invoice for an amount shows it and grows the total 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: locator('[data-testid^="invoice-row-"]').filter({ has: getByTestId('invoice-amount').getByText('300') })
+    Expected: [32m1[39m
+    Received: [31m0[39m
+    Call log:
+      [2m- expect.toHaveCount with timeout 5000ms[22m
+    [2m  - waiting for locator('[data-testid^="invoice-row-"]').filter({ has: getByTestId('invoice-amount').getByText('300') })[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+
+
+      120 |       has: page.getByTestId('invoice-amount').getByText('300', { exact: false }),
+      121 |     });
+    > 122 |     await expect(addedRow).toHaveCount(1);
+          |                            ^
+      123 |
+      124 |     // Both invoices are now listed, and the total has grown to 100 + 300 = 400.
+      125 |     await expect(invoiceRows(page)).toHaveCount(2);
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/project-invoices.spec.ts:122:28
+
+
+[1A[2K[219/258] [chromium] › project-invoices.spec.ts:139:7 › Project invoices › a new invoice added to an empty project appears and the total reflects it
+[1A[2K[220/258] [chromium] › project-notes.spec.ts:48:7 › Notes on a project, newest first › a project with no notes shows an empty state, not the list
+[1A[2K[221/258] [chromium] › project-notes.spec.ts:80:7 › Notes on a project, newest first › a project shows its own notes newest first, and not notes on something else
+[1A[2K  36) [chromium] › project-notes.spec.ts:80:7 › Notes on a project, newest first › a project shows its own notes newest first, and not notes on something else 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('project-notes-list')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('project-notes-list')[22m
+
+
+      134 |
+      135 |     await gotoProject(page, 1);
+    > 136 |     await expect(page.getByTestId('project-notes-list')).toBeVisible();
+          |                                                          ^
+      137 |     await expect(page.getByTestId('project-notes-empty')).toHaveCount(0);
+      138 |
+      139 |     // Only this project's three notes are shown, each keyed by its id and carrying its text.
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/project-notes.spec.ts:136:58
+
+
+[1A[2K[222/258] [chromium] › project-notes.spec.ts:168:7 › Notes on a project, newest first › writing a note adds it to the top (newest first) and it persists
+[1A[2K  37) [chromium] › project-notes.spec.ts:168:7 › Notes on a project, newest first › writing a note adds it to the top (newest first) and it persists 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveText[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: locator('[data-testid^="note-row-"]').getByTestId('note-text')
+    [32m- Expected  - 4[39m
+    [31m+ Received  + 1[39m
+
+    [32m- Array [[39m
+    [32m-   "Had the kickoff call",[39m
+    [32m-   "Signed the contract",[39m
+    [32m- ][39m
+    [31m+ Array [][39m
+    Call log:
+      [2m- expect.toHaveText with timeout 5000ms[22m
+    [2m  - waiting for locator('[data-testid^="note-row-"]').getByTestId('note-text')[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   locator resolved to 0 elements[22m
+
+
+      192 |
+      193 |     // Starts with the two seeded notes, newest first (the kickoff, then the signing).
+    > 194 |     await expect(noteTexts(page)).toHaveText(['Had the kickoff call', 'Signed the contract']);
+          |                                   ^
+      195 |
+      196 |     // Nothing has been recorded — reset clears the audit file; writing a note must not add to it.
+      197 |     expect(auditLines()).toEqual([]);
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/project-notes.spec.ts:194:35
+
+
+[1A[2K[223/258] [chromium] › project-notes.spec.ts:232:7 › Notes on a project, newest first › a note written onto an empty project replaces the empty state with the list
+[1A[2K[224/258] [chromium] › project-status-filter.spec.ts:96:7 › Filter projects by status › the projects page offers a status filter and lists every project before one is chosen
+[1A[2K[225/258] [chromium] › project-status-filter.spec.ts:116:7 › Filter projects by status › choosing "active" narrows the list to only the active projects
+[1A[2K[226/258] [chromium] › project-status-filter.spec.ts:141:7 › Filter projects by status › the filter is keyed on the chosen stage: each stage narrows to its own projects
+[1A[2K[227/258] [chromium] › project-status-filter.spec.ts:171:7 › Filter projects by status › the chosen stage survives a fresh load, and filtering records nothing
+[1A[2K[228/258] [chromium] › project-status.spec.ts:59:7 › Mark a project with a status › every seeded project is shown with which stage it is at
+[1A[2K[229/258] [chromium] › project-status.spec.ts:86:7 › Mark a project with a status › adding a project lets me pick its stage, which is shown and held by the server
+[1A[2K  38) [chromium] › project-status.spec.ts:86:7 › Mark a project with a status › adding a project lets me pick its stage, which is shown and held by the server 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: locator('[data-testid^="project-row-"]').filter({ has: getByTestId('project-name').getByText('Mobile App', { exact: true }) })
+    Expected: [32m1[39m
+    Received: [31m0[39m
+    Call log:
+      [2m- expect.toHaveCount with timeout 5000ms[22m
+    [2m  - waiting for locator('[data-testid^="project-row-"]').filter({ has: getByTestId('project-name').getByText('Mobile App', { exact: true }) })[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+
+
+      101 |     // The new project appears carrying the stage that was picked for it.
+      102 |     const row = projectRowNamed(page, 'Mobile App');
+    > 103 |     await expect(row).toHaveCount(1);
+          |                       ^
+      104 |     await expect(row.getByTestId('project-status')).toHaveText(ON_HOLD);
+      105 |
+      106 |     // The stage is held by the server, not just the page: it survives a fresh load.
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/project-status.spec.ts:103:23
+
+
+[1A[2K[230/258] [chromium] › project-status.spec.ts:113:7 › Mark a project with a status › the picker drives the stage — two projects added with different stages each show their own
+[1A[2K  39) [chromium] › project-status.spec.ts:113:7 › Mark a project with a status › the picker drives the stage — two projects added with different stages each show their own 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: locator('[data-testid^="project-row-"]').filter({ has: getByTestId('project-name').getByText('Old Site', { exact: true }) })
+    Expected: [32m1[39m
+    Received: [31m0[39m
+    Call log:
+      [2m- expect.toHaveCount with timeout 5000ms[22m
+    [2m  - waiting for locator('[data-testid^="project-row-"]').filter({ has: getByTestId('project-name').getByText('Old Site', { exact: true }) })[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+
+
+      123 |     await chooseStatus(page, FINISHED);
+      124 |     await page.getByTestId('project-form-submit').click();
+    > 125 |     await expect(projectRowNamed(page, 'Old Site')).toHaveCount(1);
+          |                                                     ^
+      126 |
+      127 |     // Second project: on hold. Had the stage been hardwired, this would read the same as the first.
+      128 |     await page.getByTestId('project-form-name').fill('New Site');
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/project-status.spec.ts:125:53
+
+
+[1A[2K[231/258] [chromium] › project-status.spec.ts:143:7 › Mark a project with a status › a project added without touching the picker starts active
+[1A[2K  40) [chromium] › project-status.spec.ts:143:7 › Mark a project with a status › a project added without touching the picker starts active 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: locator('[data-testid^="project-row-"]').filter({ has: getByTestId('project-name').getByText('Fresh Project', { exact: true }) })
+    Expected: [32m1[39m
+    Received: [31m0[39m
+    Call log:
+      [2m- expect.toHaveCount with timeout 5000ms[22m
+    [2m  - waiting for locator('[data-testid^="project-row-"]').filter({ has: getByTestId('project-name').getByText('Fresh Project', { exact: true }) })[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+
+
+      153 |
+      154 |     const row = projectRowNamed(page, 'Fresh Project');
+    > 155 |     await expect(row).toHaveCount(1);
+          |                       ^
+      156 |     await expect(row.getByTestId('project-status')).toHaveText(ACTIVE);
+      157 |   });
+      158 | });
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/project-status.spec.ts:155:23
+
+
+[1A[2K[232/258] [chromium] › project-tag-filter.spec.ts:110:7 › Filter projects by label › the projects page offers a label filter and lists every project before one is chosen
+[1A[2K[233/258] [chromium] › project-tag-filter.spec.ts:131:7 › Filter projects by label › choosing a label narrows the list to only the projects carrying it
+[1A[2K[234/258] [chromium] › project-tag-filter.spec.ts:159:7 › Filter projects by label › the filter is keyed on the chosen label: each label narrows to its own projects
+[1A[2K[235/258] [chromium] › project-tag-filter.spec.ts:191:7 › Filter projects by label › the chosen label survives a fresh load, and filtering records nothing
+[1A[2K[236/258] [chromium] › project-tags.spec.ts:63:7 › A project's labels › a project shows its own labels, and not labels that belong to another project
+[1A[2K  41) [chromium] › project-tags.spec.ts:63:7 › A project's labels › a project shows its own labels, and not labels that belong to another project 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mnot[2m.[22mtoContainText[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: getByTestId('project-tags')
+    Expected string: not [32m"design"[39m
+    Received string: [31m"urgentRemovebackendRemoveAdd a tag…[7mdesign[27mAdd tag"[39m
+    Call log:
+      [2m- expect.not.toContainText with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('project-tags')[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "urgentRemovebackendRemoveAdd a tag…designAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "urgentRemovebackendRemoveAdd a tag…designAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "urgentRemovebackendRemoveAdd a tag…designAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "urgentRemovebackendRemoveAdd a tag…designAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "urgentRemovebackendRemoveAdd a tag…designAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "urgentRemovebackendRemoveAdd a tag…designAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "urgentRemovebackendRemoveAdd a tag…designAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "urgentRemovebackendRemoveAdd a tag…designAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "urgentRemovebackendRemoveAdd a tag…designAdd tag"[22m
+
+
+      93 |     // The other project's label is nowhere on this page.
+      94 |     await expect(page.getByTestId('project-tag-3')).toHaveCount(0);
+    > 95 |     await expect(page.getByTestId('project-tags')).not.toContainText('design');
+         |                                                        ^
+      96 |
+      97 |     // Merely viewing a project's labels records nothing — a record is kept on tag/untag, not on view.
+      98 |     expect(auditLines()).toEqual([]);
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/project-tags.spec.ts:95:56
+
+
+[1A[2K[237/258] [chromium] › project-tags.spec.ts:101:7 › A project's labels › a project with no labels shows an empty label list
+[1A[2K  42) [chromium] › project-tags.spec.ts:101:7 › A project's labels › a project with no labels shows an empty label list 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mnot[2m.[22mtoContainText[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: getByTestId('project-tags')
+    Expected string: not [32m"urgent"[39m
+    Received string: [31m"Add a tag…[7murgent[27mAdd tag"[39m
+    Call log:
+      [2m- expect.not.toContainText with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('project-tags')[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "Add a tag…urgentAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "Add a tag…urgentAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "Add a tag…urgentAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "Add a tag…urgentAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "Add a tag…urgentAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "Add a tag…urgentAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "Add a tag…urgentAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "Add a tag…urgentAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "Add a tag…urgentAdd tag"[22m
+
+
+      112 |     // The region is present but holds no labels.
+      113 |     await expect(tagChips(page)).toHaveCount(0);
+    > 114 |     await expect(page.getByTestId('project-tags')).not.toContainText('urgent');
+          |                                                        ^
+      115 |     expect(auditLines()).toEqual([]);
+      116 |   });
+      117 |
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/project-tags.spec.ts:114:56
+
+
+[1A[2K[238/258] [chromium] › project-tags.spec.ts:118:7 › A project's labels › putting a label on a project shows it, persists, and records it once
+[1A[2K  43) [chromium] › project-tags.spec.ts:118:7 › A project's labels › putting a label on a project shows it, persists, and records it once 
+
+    Error: locator.fill: Error: Element is not an <input>, <textarea> or [contenteditable] element
+    Call log:
+      [2m- waiting for getByTestId('project-tag-add')[22m
+    [2m  -   locator resolved to <select data-testid="project-tag-add">…</select>[22m
+    [2m  -   fill("urgent")[22m
+    [2m  - attempting fill action[22m
+    [2m  -   waiting for element to be visible, enabled and editable[22m
+
+
+      135 |     // Put a label on the project.
+      136 |     await expect(page.getByTestId('project-tag-add')).toBeVisible();
+    > 137 |     await page.getByTestId('project-tag-add').fill('urgent');
+          |                                               ^
+      138 |     await page.getByTestId('project-tag-add-submit').click();
+      139 |
+      140 |     // The label joins the list as its own chip, carrying its text and offering a control to take it
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/project-tags.spec.ts:137:47
+
+
+[1A[2K[239/258] [chromium] › project-tags.spec.ts:162:7 › A project's labels › taking a label off a project drops it, leaves the others, persists, and records it once
+[1A[2K  44) [chromium] › project-tags.spec.ts:162:7 › A project's labels › taking a label off a project drops it, leaves the others, persists, and records it once 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mnot[2m.[22mtoContainText[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: getByTestId('project-tags')
+    Expected string: not [32m"urgent"[39m
+    Received string: [31m"backendRemoveAdd a tag…[7murgent[27mAdd tag"[39m
+    Call log:
+      [2m- expect.not.toContainText with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('project-tags')[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "backendRemoveAdd a tag…urgentAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "backendRemoveAdd a tag…urgentAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "backendRemoveAdd a tag…urgentAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "backendRemoveAdd a tag…urgentAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "backendRemoveAdd a tag…urgentAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "backendRemoveAdd a tag…urgentAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "backendRemoveAdd a tag…urgentAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "backendRemoveAdd a tag…urgentAdd tag"[22m
+    [2m  -   locator resolved to <section data-testid="project-tags">…</section>[22m
+    [2m  -   unexpected value "backendRemoveAdd a tag…urgentAdd tag"[22m
+
+
+      191 |     await expect(tagChips(page)).toHaveCount(1);
+      192 |     await expect(page.getByTestId('project-tag-2')).toContainText('backend');
+    > 193 |     await expect(page.getByTestId('project-tags')).not.toContainText('urgent');
+          |                                                        ^
+      194 |
+      195 |     // Exactly one record was kept for this untagging, identifying the project and the label.
+      196 |     expect(linesMatching(untaggedRe(project, { id: 1, name: 'urgent' }))).toHaveLength(1);
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/project-tags.spec.ts:193:56
+
+
+[1A[2K[240/258] [chromium] › project-tags.spec.ts:209:7 › A project's labels › the same label groups more than one project
+[1A[2K[241/258] [chromium] › project-task-filter.spec.ts:99:7 › See just the open tasks on a project, or just the finished ones › the project page offers a task filter and lists every task before one is chosen
+[1A[2K[242/258] [chromium] › project-task-filter.spec.ts:118:7 › See just the open tasks on a project, or just the finished ones › choosing "open" narrows the list to only the open tasks
+[1A[2K[243/258] [chromium] › project-task-filter.spec.ts:143:7 › See just the open tasks on a project, or just the finished ones › the filter is keyed on the chosen stage: each stage narrows to its own tasks
+[1A[2K[244/258] [chromium] › project-task-filter.spec.ts:173:7 › See just the open tasks on a project, or just the finished ones › the chosen stage survives a fresh load, and filtering records nothing
+[1A[2K[245/258] [chromium] › project-tasks.spec.ts:41:7 › A task list on each project › a project with no tasks shows an empty state, not the table
+[1A[2K[246/258] [chromium] › project-tasks.spec.ts:57:7 › A task list on each project › every task on the project is shown with its title and whether it is done
+[1A[2K[247/258] [chromium] › project-tasks.spec.ts:106:7 › A task list on each project › ticking a task off marks it done, persists, and records it once
+[1A[2K[248/258] [chromium] › project-tasks.spec.ts:142:7 › A task list on each project › a task already done can be unticked, which records its new state
+[1A[2K[249/258] [chromium] › project-tasks.spec.ts:168:7 › A task list on each project › toggling one task leaves the others untouched, and each toggle keeps its own record
+[1A[2K[250/258] [chromium] › projects.spec.ts:24:7 › Projects › a link in the nav opens the projects page
+[1A[2K[251/258] [chromium] › projects.spec.ts:42:7 › Projects › with no projects the list shows an empty state
+[1A[2K[252/258] [chromium] › projects.spec.ts:57:7 › Projects › every seeded project is shown with its name and the name of the client it is for
+[1A[2K[253/258] [chromium] › projects.spec.ts:96:7 › Projects › adding a project and picking its client shows it with that client name
+[1A[2K  45) [chromium] › projects.spec.ts:96:7 › Projects › adding a project and picking its client shows it with that client name 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: locator('[data-testid^="project-row-"]').filter({ has: getByTestId('project-name').getByText('Website Redesign', { exact: true }) })
+    Expected: [32m1[39m
+    Received: [31m0[39m
+    Call log:
+      [2m- expect.toHaveCount with timeout 5000ms[22m
+    [2m  - waiting for locator('[data-testid^="project-row-"]').filter({ has: getByTestId('project-name').getByText('Website Redesign', { exact: true }) })[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+    [2m  -   locator resolved to 0 elements[22m
+    [2m  -   unexpected value "0"[22m
+
+
+      115 |     // assigned by the server, so locate the row by its content rather than a known id.
+      116 |     const newRow = projectRowNamed(page, 'Website Redesign');
+    > 117 |     await expect(newRow).toHaveCount(1);
+          |                          ^
+      118 |     await expect(newRow.getByTestId('project-name')).toHaveText('Website Redesign');
+      119 |     await expect(newRow.getByTestId('project-client')).toHaveText('Globex');
+      120 |
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/projects.spec.ts:117:26
+
+
+[1A[2K[254/258] [chromium] › projects.spec.ts:132:7 › Projects › a project added on top of seeded projects joins the same single list
+[1A[2K  46) [chromium] › projects.spec.ts:132:7 › Projects › a project added on top of seeded projects joins the same single list 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoHaveCount[2m([22m[32mexpected[39m[2m)[22m
+
+    Locator: locator('[data-testid^="project-row-"]')
+    Expected: [32m2[39m
+    Received: [31m1[39m
+    Call log:
+      [2m- expect.toHaveCount with timeout 5000ms[22m
+    [2m  - waiting for locator('[data-testid^="project-row-"]')[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+    [2m  -   locator resolved to 1 element[22m
+    [2m  -   unexpected value "1"[22m
+
+
+      148 |     // Both the pre-existing and the newly added project are shown together in the one list, each
+      149 |     // with its own client's name.
+    > 150 |     await expect(projectRows(page)).toHaveCount(2);
+          |                                     ^
+      151 |     await expect(page.getByTestId('project-row-1').getByTestId('project-name')).toHaveText(
+      152 |       'Website Redesign',
+      153 |     );
+
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/projects.spec.ts:150:37
+
+
+[1A[2K[255/258] [chromium] › statement-group-by-job.spec.ts:107:7 › A client's statement groups invoices by job with a per-job subtotal › the invoices are grouped — one group per job the client has invoiced
+[1A[2K  47) [chromium] › statement-group-by-job.spec.ts:107:7 › A client's statement groups invoices by job with a per-job subtotal › the invoices are grouped — one group per job the client has invoiced 
+
+    Error: expect.toBeVisible: Error: strict mode violation: getByTestId('client-statement-table') resolved to 2 elements:
+        1) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-10').getByTestId('client-statement-table')
+        2) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-20').getByTestId('client-statement-table')
+
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('client-statement-table')[22m
+
+
+      72 |   await opener.click();
+      73 |   await expect(page.getByTestId('client-statement')).toBeVisible();
+    > 74 |   await expect(page.getByTestId('client-statement-table')).toBeVisible();
+         |                                                            ^
+      75 | }
+      76 |
+      77 | // Acme (client 1) with TWO jobs, invoices spread across both, plus a SECOND client (Globex) whose job
+
+        at openStatement (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/statement-group-by-job.spec.ts:74:60)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/statement-group-by-job.spec.ts:109:5
+
+
+[1A[2K[256/258] [chromium] › statement-group-by-job.spec.ts:125:7 › A client's statement groups invoices by job with a per-job subtotal › each job's group holds exactly that job's own invoices
+[1A[2K  48) [chromium] › statement-group-by-job.spec.ts:125:7 › A client's statement groups invoices by job with a per-job subtotal › each job's group holds exactly that job's own invoices 
+
+    Error: expect.toBeVisible: Error: strict mode violation: getByTestId('client-statement-table') resolved to 2 elements:
+        1) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-10').getByTestId('client-statement-table')
+        2) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-20').getByTestId('client-statement-table')
+
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('client-statement-table')[22m
+
+
+      72 |   await opener.click();
+      73 |   await expect(page.getByTestId('client-statement')).toBeVisible();
+    > 74 |   await expect(page.getByTestId('client-statement-table')).toBeVisible();
+         |                                                            ^
+      75 | }
+      76 |
+      77 | // Acme (client 1) with TWO jobs, invoices spread across both, plus a SECOND client (Globex) whose job
+
+        at openStatement (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/statement-group-by-job.spec.ts:74:60)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/statement-group-by-job.spec.ts:127:5
+
+
+[1A[2K[257/258] [chromium] › statement-group-by-job.spec.ts:152:7 › A client's statement groups invoices by job with a per-job subtotal › each job's subtotal is the sum of that job's dues, and they add to the owed total
+[1A[2K  49) [chromium] › statement-group-by-job.spec.ts:152:7 › A client's statement groups invoices by job with a per-job subtotal › each job's subtotal is the sum of that job's dues, and they add to the owed total 
+
+    Error: expect.toBeVisible: Error: strict mode violation: getByTestId('client-statement-table') resolved to 2 elements:
+        1) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-10').getByTestId('client-statement-table')
+        2) <table data-testid="client-statement-table">…</table> aka getByTestId('statement-project-20').getByTestId('client-statement-table')
+
+    Call log:
+      [2m- expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('client-statement-table')[22m
+
+
+      72 |   await opener.click();
+      73 |   await expect(page.getByTestId('client-statement')).toBeVisible();
+    > 74 |   await expect(page.getByTestId('client-statement-table')).toBeVisible();
+         |                                                            ^
+      75 | }
+      76 |
+      77 | // Acme (client 1) with TWO jobs, invoices spread across both, plus a SECOND client (Globex) whose job
+
+        at openStatement (/home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/statement-group-by-job.spec.ts:74:60)
+        at /home/daniel/test-fidelity-long-run/work/202610060034/cp57/e2e/specs/statement-group-by-job.spec.ts:156:5
+
+
+[1A[2K[258/258] [chromium] › statement-group-by-job.spec.ts:181:7 › A client's statement groups invoices by job with a per-job subtotal › a different client's statement groups only that client's own job
+[1A[2K  49 failed
+    [chromium] › client-archive.spec.ts:32:7 › Archive a client › archiving a client drops it from the list, persists, keeps the client, and records it once 
+    [chromium] › client-contacts.spec.ts:159:7 › Client contacts › a contact added on top of seeded contacts joins the same single list 
+    [chromium] › client-split-payment.spec.ts:112:7 › Splitting a client payment across several invoices › the panel lists the client’s owed invoices, each with its current balance and an input 
+    [chromium] › client-split-payment.spec.ts:138:7 › Splitting a client payment across several invoices › splitting a lump sum brings every invoice’s balance down by its own share 
+    [chromium] › client-split-payment.spec.ts:174:7 › Splitting a client payment across several invoices › the split touches only the invoices it is allocated to 
+    [chromium] › client-split-payment.spec.ts:208:7 › Splitting a client payment across several invoices › the panel is scoped to the client — another client’s invoice is not offered 
+    [chromium] › client-statement.spec.ts:132:7 › A client statement puts all their invoices in one place › the statement is revealed by its open control 
+    [chromium] › client-statement.spec.ts:149:7 › A client statement puts all their invoices in one place › lists every invoice of the client, from every project, each with its figures 
+    [chromium] › client-statement.spec.ts:182:7 › A client statement puts all their invoices in one place › another client's invoice is not on this client's statement 
+    [chromium] › client-statement.spec.ts:191:7 › A client statement puts all their invoices in one place › each invoice shows its worked-out status: owing, part paid, or paid 
+    [chromium] › client-statement.spec.ts:200:7 › A client statement puts all their invoices in one place › the statement shows the total the client still owes 
+    [chromium] › client-statement.spec.ts:242:7 › A client statement puts all their invoices in one place › a client with no invoices has an empty statement that owes nothing 
+    [chromium] › discount-in-owed.spec.ts:111:7 › The discount is taken off what a client owes on their statement › each invoice row and the outstanding total net off the discount 
+    [chromium] › invoice-due-amount.spec.ts:54:7 › An invoice shows how much is still left to pay after payments › with payments recorded, the remaining is the amount minus what has been paid 
+    [chromium] › invoice-due-amount.spec.ts:74:7 › An invoice shows how much is still left to pay after payments › with nothing paid yet, the whole amount is still due 
+    [chromium] › invoice-due-amount.spec.ts:88:7 › An invoice shows how much is still left to pay after payments › once payments cover the amount, nothing is left to pay 
+    [chromium] › invoice-due-amount.spec.ts:106:7 › An invoice shows how much is still left to pay after payments › the amount left is scoped to its own invoice 
+    [chromium] › invoice-due-amount.spec.ts:130:7 › An invoice shows how much is still left to pay after payments › recording another payment lowers the amount left, and it survives a fresh load 
+    [chromium] › invoice-lineitem-unit.spec.ts:124:7 › A charge line says how many, in what unit, and shows its amount › the add form takes a unit; the new line shows it with its amount and survives a reload 
+    [chromium] › invoice-lineitems.spec.ts:143:7 › An invoice is a list of things charged for, with the total worked out › adding a line item lists it, works out its amount, and grows the total 
+    [chromium] › invoice-lineitems.spec.ts:272:7 › A line item must describe a real charge › correcting a rejected line item then adds it and grows the total 
+    [chromium] › invoice-paid.spec.ts:80:7 › An invoice’s status is worked out from its payments › with nothing paid yet, the invoice is still owing 
+    [chromium] › invoice-paid.spec.ts:111:7 › An invoice’s status is worked out from its payments › once payments cover the amount, the invoice is paid 
+    [chromium] › invoice-paid.spec.ts:135:7 › An invoice’s status is worked out from its payments › the status is worked out per invoice from its own payments 
+    [chromium] › invoice-paid.spec.ts:156:7 › An invoice’s status is worked out from its payments › recording payments moves the status owing -> part paid -> paid, keeping a record for each 
+    [chromium] › invoice-paid.spec.ts:202:7 › An invoice’s status is worked out from its payments › an invoice is no longer flipped to paid by hand 
+    [chromium] › invoice-sort-due.spec.ts:71:7 › Sort a project's invoices by due date › activating the control re-orders the invoices by their due date 
+    [chromium] › jobs-terminology.spec.ts:121:7 › The feature is called "jobs", not "projects" › the all-invoices table heads the column Job, not Project 
+    [chromium] › jobs-terminology.spec.ts:139:7 › The feature is called "jobs", not "projects" › global search uses "jobs" in its placeholder and its results column 
+    [chromium] › project-archive.spec.ts:33:7 › Archive a project › archiving a project drops it from the list, persists, keeps the project, and records it once 
+    [chromium] › project-budget.spec.ts:48:7 › Project budget — invoiced against it and what is left › the budget panel shows the budget, what has been invoiced, and what is left 
+    [chromium] › project-budget.spec.ts:84:7 › Project budget — invoiced against it and what is left › setting a budget is held by the server and determines what is left 
+    [chromium] › project-budget.spec.ts:117:7 › Project budget — invoiced against it and what is left › invoiced tracks the project invoices — raising a new one reduces what is left 
+    [chromium] › project-code.spec.ts:157:7 › Each job carries a unique reference code › correcting a clashing code to an unused one then saves the job 
+    [chromium] › project-invoices.spec.ts:101:7 › Project invoices › adding a new invoice for an amount shows it and grows the total 
+    [chromium] › project-notes.spec.ts:80:7 › Notes on a project, newest first › a project shows its own notes newest first, and not notes on something else 
+    [chromium] › project-notes.spec.ts:168:7 › Notes on a project, newest first › writing a note adds it to the top (newest first) and it persists 
+    [chromium] › project-status.spec.ts:86:7 › Mark a project with a status › adding a project lets me pick its stage, which is shown and held by the server 
+    [chromium] › project-status.spec.ts:113:7 › Mark a project with a status › the picker drives the stage — two projects added with different stages each show their own 
+    [chromium] › project-status.spec.ts:143:7 › Mark a project with a status › a project added without touching the picker starts active 
+    [chromium] › project-tags.spec.ts:63:7 › A project's labels › a project shows its own labels, and not labels that belong to another project 
+    [chromium] › project-tags.spec.ts:101:7 › A project's labels › a project with no labels shows an empty label list 
+    [chromium] › project-tags.spec.ts:118:7 › A project's labels › putting a label on a project shows it, persists, and records it once 
+    [chromium] › project-tags.spec.ts:162:7 › A project's labels › taking a label off a project drops it, leaves the others, persists, and records it once 
+    [chromium] › projects.spec.ts:96:7 › Projects › adding a project and picking its client shows it with that client name 
+    [chromium] › projects.spec.ts:132:7 › Projects › a project added on top of seeded projects joins the same single list 
+    [chromium] › statement-group-by-job.spec.ts:107:7 › A client's statement groups invoices by job with a per-job subtotal › the invoices are grouped — one group per job the client has invoiced 
+    [chromium] › statement-group-by-job.spec.ts:125:7 › A client's statement groups invoices by job with a per-job subtotal › each job's group holds exactly that job's own invoices 
+    [chromium] › statement-group-by-job.spec.ts:152:7 › A client's statement groups invoices by job with a per-job subtotal › each job's subtotal is the sum of that job's dues, and they add to the owed total 
+  209 passed (4.7m)

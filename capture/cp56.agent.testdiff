@@ -1,0 +1,252 @@
+diff --git a/client-split-payment.spec.ts b/client-split-payment.spec.ts
+new file mode 100644
+index 0000000..c1f9a4f
+--- /dev/null
++++ b/client-split-payment.spec.ts
+@@ -0,0 +1,246 @@
++// Acceptance test for the change request:
++//   "Sometimes a client pays one lump sum for several invoices. Let me split that payment across
++//    them. Each invoice's balance should come out right."
++//
++// A client can now pay ONE lump sum and SPLIT it across several of their invoices in a single step.
++// This is surfaced on the client's own detail page (client-detail-page, the child route
++// /clients/<id>) by a new payment panel (client-payment). The panel gathers the client's owed
++// invoices in one allocations region (payment-allocations): each invoice is its own row
++// (payment-alloc-row-<id>) carrying
++//   - payment-alloc-due    — how much is STILL LEFT TO PAY on that invoice right now (its balance:
++//                            the invoice's amount minus everything already paid against it), and
++//   - payment-alloc-<id>   — an input where the user types how much of the lump sum goes to THAT
++//                            invoice.
++// The lump sum is simply the total the user spreads across those inputs; recording it with the
++// panel's control (client-record-payment) applies each typed figure as a payment against its own
++// invoice, so afterwards EACH invoice's balance has come down by exactly its share.
++//
++// WHY THESE VALUES. The app already rolls up, per client, each invoice's amount, how much has been
++// paid against it and how much is still due, plus the client's outstanding total — on the statement
++// (client-statement.spec: statement-invoice-paid / statement-invoice-due and client-outstanding-
++// total). Splitting a payment is exactly "record a payment of <share> against each chosen invoice",
++// so the only correct result is that every invoice's paid rises by its share and its due falls by
++// its share — no more, no less, and ONLY on the invoices that got a share. This test verifies the
++// outcome through TWO independent surfaces that must agree: the panel's own payment-alloc-due, and
++// the client statement (per-invoice paid/due and the outstanding total). A split that dropped the
++// whole lump on one invoice, spread it evenly, or double-counted it would be wrong on at least one.
++//
++// (We deliberately read balances through the statement and the panel — the per-client roll-ups — not
++// through each invoice's own detail page, so the test binds to what this change surfaces about the
++// client rather than to any one invoice page's layout.)
++//
++// The figures are chosen so each invoice's post-split due is distinct and is none of the plausible
++// wrong readings. Invoices (all SENT, so "what is owed" is unambiguous — see client-statement.spec):
++//   - invoice 1: amount 500, 100 already paid  -> balance 400 ; + 250 share -> paid 350, due 150
++//   - invoice 2: amount 300, nothing paid      -> balance 300 ; + 120 share -> paid 120, due 180
++//   - invoice 3: amount 220, nothing paid      -> balance 220 ; +  90 share -> paid  90, due 130
++// Lump sum = 250 + 120 + 90 = 460. The client owed 400 + 300 + 220 = 920 before and 150 + 180 + 130
++// = 460 after — i.e. the owed total fell by exactly the 460 lump sum.
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed (the app's /__test__
++// endpoint): `clients` honours { id, name, email }, `projects` honours { id, name, clientId },
++// `invoices` honours { id, amount, projectId, status } and `payments` honours
++// { id, invoiceId, amount, date }. The request asks for no record beyond the payments it is based
++// on, which the app already surfaces through the balances above, so there is nothing to assert on
++// the audit channel.
++import { test, expect, type Page, type Locator } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++// Money is shown "properly" everywhere in this app — a dollar sign and two cents digits, e.g.
++// $150.00 (money-format.spec). Each money figure is asserted as CONTAINMENT of that value: the
++// leading "$" keeps a figure from matching inside a larger number ($150.00 cannot match within
++// $1150.00) and tolerates a surrounding label, while still pinning the value. Every figure below
++// stays under a thousand, so thousands grouping never arises.
++const money = (dollars: number): RegExp => new RegExp(`\\$${dollars}\\.00`);
++
++// The allocation rows of the client-payment panel — one per owed invoice.
++const allocRows = (page: Page) => page.locator('[data-testid^="payment-alloc-row-"]');
++const allocRow = (page: Page, id: number): Locator => page.getByTestId(`payment-alloc-row-${id}`);
++// The per-invoice balance shown in the row, read on that row alone so it binds to this invoice.
++const allocDue = (page: Page, id: number): Locator =>
++  allocRow(page, id).getByTestId('payment-alloc-due');
++// The input where the user types this invoice's share of the lump sum. getByTestId matches the test
++// id exactly, so `payment-alloc-1` is distinct from `payment-alloc-row-1` and `payment-alloc-due`.
++const allocInput = (page: Page, id: number): Locator => page.getByTestId(`payment-alloc-${id}`);
++
++// Statement cells (client-statement.spec's surface), reused here to cross-check the split outcome.
++const statementCell = (page: Page, id: number, name: string): Locator =>
++  page.getByTestId(`statement-invoice-row-${id}`).getByTestId(name);
++
++// Open the client's detail page and wait for the lump-sum payment panel to be present. The panel is
++// part of the detail page (a slot contribution), reached by the client's own URL — no separate open
++// control is in this change's contract, so the panel is simply rendered on the page. A fresh
++// navigation here, so what it shows reflects server-held state.
++async function openPaymentPanel(page: Page, clientId: number): Promise<void> {
++  await page.goto(`/clients/${clientId}`);
++  await expect(page.getByTestId('client-detail-page')).toBeVisible();
++  await expect(page.getByTestId('client-payment')).toBeVisible();
++  await expect(page.getByTestId('payment-allocations')).toBeVisible();
++}
++
++// Reveal the client statement on the detail page — the way client-statement.spec does — to read the
++// per-invoice balances the server now holds. Navigating here is itself a fresh load from the server.
++async function openStatement(page: Page, clientId: number): Promise<void> {
++  await page.goto(`/clients/${clientId}`);
++  await expect(page.getByTestId('client-detail-page')).toBeVisible();
++  const opener = page.getByTestId('client-statement-open');
++  await expect(opener).toBeVisible();
++  await opener.click();
++  await expect(page.getByTestId('client-statement')).toBeVisible();
++  await expect(page.getByTestId('client-statement-table')).toBeVisible();
++}
++
++// Acme with invoices spread across TWO of its projects, one already part paid, so the panel must
++// gather invoices from across the client (not one project) and show each one's real balance.
++async function seedAcmeThreeInvoices(): Promise<void> {
++  await resetAndSeed({
++    clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++    projects: [
++      { id: 1, name: 'Website Redesign', clientId: 1 },
++      { id: 2, name: 'Mobile App', clientId: 1 },
++    ],
++    invoices: [
++      { id: 1, amount: 500, projectId: 1, status: 'SENT' }, // 100 paid -> balance 400
++      { id: 2, amount: 300, projectId: 2, status: 'SENT' }, // nothing  -> balance 300
++      { id: 3, amount: 220, projectId: 1, status: 'SENT' }, // nothing  -> balance 220
++    ],
++    payments: [{ id: 1, invoiceId: 1, amount: 100, date: '2021-03-14' }],
++  });
++}
++
++test.describe('Splitting a client payment across several invoices', () => {
++  test('the panel lists the client’s owed invoices, each with its current balance and an input', async ({
++    page,
++  }) => {
++    await seedAcmeThreeInvoices();
++    await openPaymentPanel(page, 1);
++
++    // Exactly the client's three owed invoices are offered for allocation, each as its own row.
++    await expect(allocRows(page)).toHaveCount(3);
++    await expect(allocRow(page, 1)).toBeVisible();
++    await expect(allocRow(page, 2)).toBeVisible();
++    await expect(allocRow(page, 3)).toBeVisible();
++
++    // Each row shows what is still left to pay on that invoice right now (amount minus payments),
++    // so the user can see what each one needs — invoice 1 is 400 (500 - 100 already paid), not 500.
++    await expect(allocDue(page, 1)).toContainText(money(400));
++    await expect(allocDue(page, 2)).toContainText(money(300));
++    await expect(allocDue(page, 3)).toContainText(money(220));
++
++    // And each row offers an input for this invoice's share of the lump sum, plus the one control
++    // that records the split.
++    await expect(allocInput(page, 1)).toBeVisible();
++    await expect(allocInput(page, 2)).toBeVisible();
++    await expect(allocInput(page, 3)).toBeVisible();
++    await expect(page.getByTestId('client-record-payment')).toBeVisible();
++  });
++
++  test('splitting a lump sum brings every invoice’s balance down by its own share', async ({
++    page,
++  }) => {
++    await seedAcmeThreeInvoices();
++    await openPaymentPanel(page, 1);
++
++    // Spread one lump sum of 460 across the three invoices: 250 + 120 + 90.
++    await allocInput(page, 1).fill('250');
++    await allocInput(page, 2).fill('120');
++    await allocInput(page, 3).fill('90');
++    await page.getByTestId('client-record-payment').click();
++
++    // SURFACE 1 — the panel's own balances, after a fresh load from the server. Each invoice's
++    // remaining balance has fallen by exactly its share: 400->150, 300->180, 220->130. These are
++    // held by the server, so they are still right on a reload.
++    await openPaymentPanel(page, 1);
++    await expect(allocDue(page, 1)).toContainText(money(150));
++    await expect(allocDue(page, 2)).toContainText(money(180));
++    await expect(allocDue(page, 3)).toContainText(money(130));
++
++    // SURFACE 2 — the client statement rolls the same figures up: each invoice's paid has risen by
++    // its share and its due has fallen by it, and the total owed has dropped from 920 to 460 — by
++    // exactly the lump sum, no more.
++    await openStatement(page, 1);
++    await expect(statementCell(page, 1, 'statement-invoice-paid')).toContainText(money(350));
++    await expect(statementCell(page, 1, 'statement-invoice-due')).toContainText(money(150));
++    await expect(statementCell(page, 2, 'statement-invoice-paid')).toContainText(money(120));
++    await expect(statementCell(page, 2, 'statement-invoice-due')).toContainText(money(180));
++    await expect(statementCell(page, 3, 'statement-invoice-paid')).toContainText(money(90));
++    await expect(statementCell(page, 3, 'statement-invoice-due')).toContainText(money(130));
++
++    const total = page.getByTestId('client-outstanding-total');
++    await expect(total).toContainText(money(460));
++    await expect(total).not.toContainText(money(920)); // the whole lump sum really came off
++  });
++
++  test('the split touches only the invoices it is allocated to', async ({ page }) => {
++    // Two owed invoices; the lump sum is spread onto just one of them. The other must be left exactly
++    // as it was — the split does not leak onto invoices with no share.
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [
++        { id: 1, amount: 500, projectId: 1, status: 'SENT' }, // untouched -> stays due 500
++        { id: 2, amount: 300, projectId: 1, status: 'SENT' }, // + 120     -> due 180
++      ],
++      payments: [],
++    });
++
++    await openPaymentPanel(page, 1);
++
++    // Allocate only to invoice 2; leave invoice 1's input empty (it gets no share).
++    await allocInput(page, 2).fill('120');
++    await page.getByTestId('client-record-payment').click();
++
++    // Invoice 2's balance fell by its 120 share; invoice 1 is untouched, still owing its full 500.
++    await openPaymentPanel(page, 1);
++    await expect(allocDue(page, 1)).toContainText(money(500));
++    await expect(allocDue(page, 2)).toContainText(money(180));
++
++    // The statement confirms it: invoice 1 received no payment, invoice 2 received exactly 120, and
++    // the owed total fell from 800 to 680 — only the 120 that was actually allocated.
++    await openStatement(page, 1);
++    await expect(statementCell(page, 1, 'statement-invoice-paid')).toContainText(money(0));
++    await expect(statementCell(page, 1, 'statement-invoice-due')).toContainText(money(500));
++    await expect(statementCell(page, 2, 'statement-invoice-paid')).toContainText(money(120));
++    await expect(statementCell(page, 2, 'statement-invoice-due')).toContainText(money(180));
++    await expect(page.getByTestId('client-outstanding-total')).toContainText(money(680));
++  });
++
++  test('the panel is scoped to the client — another client’s invoice is not offered', async ({
++    page,
++  }) => {
++    // Acme (client 1) with two owed invoices, and a SECOND client, Globex, with its own owed invoice.
++    // Globex's invoice must never appear in Acme's allocation panel, figure and all.
++    await resetAndSeed({
++      clients: [
++        { id: 1, name: 'Acme Corp', email: 'hello@acme.test' },
++        { id: 2, name: 'Globex', email: 'contact@globex.test' },
++      ],
++      projects: [
++        { id: 1, name: 'Website Redesign', clientId: 1 },
++        { id: 2, name: 'Billing System', clientId: 2 },
++      ],
++      invoices: [
++        { id: 1, amount: 500, projectId: 1, status: 'SENT' }, // Acme
++        { id: 2, amount: 300, projectId: 1, status: 'SENT' }, // Acme
++        { id: 3, amount: 999, projectId: 2, status: 'SENT' }, // Globex — must not leak into Acme's
++      ],
++      payments: [],
++    });
++
++    await openPaymentPanel(page, 1);
++
++    // Exactly Acme's two invoices are offered; Globex's (id 3, amount 999) is nowhere in the panel.
++    await expect(allocRows(page)).toHaveCount(2);
++    await expect(allocRow(page, 1)).toBeVisible();
++    await expect(allocRow(page, 2)).toBeVisible();
++    await expect(allocRow(page, 3)).toHaveCount(0);
++    await expect(page.getByTestId('client-payment')).not.toContainText('999');
++
++    // And Globex's own panel offers only Globex's invoice, not Acme's.
++    await openPaymentPanel(page, 2);
++    await expect(allocRows(page)).toHaveCount(1);
++    await expect(allocRow(page, 3)).toBeVisible();
++    await expect(allocRow(page, 1)).toHaveCount(0);
++    await expect(allocRow(page, 2)).toHaveCount(0);
++  });
++});

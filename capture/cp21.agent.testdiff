@@ -1,0 +1,308 @@
+diff --git a/invoice-lineitems.spec.ts b/invoice-lineitems.spec.ts
+new file mode 100644
+index 0000000..bf227c3
+--- /dev/null
++++ b/invoice-lineitems.spec.ts
+@@ -0,0 +1,302 @@
++// Acceptance test for the change request:
++//   "I do not want to type one figure for an invoice. Let me list the things I am charging for.
++//    For each one give a description, how many, and the price each. Work out the total for me."
++//
++// An invoice is no longer a single figure: it is a LIST of the things being charged for. Opening an
++// invoice (invoice-open-<id>, from the project's invoice list) is a navigation to that invoice's own
++// detail page (invoice-detail-page) — a child route, not a flag. The detail page shows the invoice's
++// line items in a table (invoice-lineitems-table); each row (lineitem-row-<id>) gives a DESCRIPTION
++// (lineitem-description), HOW MANY (lineitem-qty), the PRICE EACH (lineitem-unitprice) and the line's
++// own AMOUNT (lineitem-amount), which is "how many" × "price each". The invoice's total is WORKED OUT
++// for the user (invoice-amount) as the sum of its line amounts — never typed.
++//
++// A new line item is added with the line-item form (lineitem-form): a description, a quantity and a
++// unit price (lineitem-form-description / -qty / -unitprice, submitted with lineitem-form-submit).
++// A line item must describe a real charge — a missing description, or a quantity or price that is not
++// more than zero, is rejected with a visible error (lineitem-form-error) and nothing is added. A
++// valid line item joins the list, its amount is worked out, the total grows to match, and it all
++// survives a fresh load from the server.
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed (the app's /__test__
++// endpoint): `clients` honours { id, name, email }, `projects` honours { id, name, clientId } and an
++// invoice honours { id, projectId, status, lineItems } where each line item is
++// { description, qty, unitPrice }. This change surfaces no audit records, so there is nothing to
++// assert on the audit channel.
++import { test, expect, type Page, type Locator } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++const lineItemRows = (page: Page) => page.locator('[data-testid^="lineitem-row-"]');
++
++// Locate a line item row by the DESCRIPTION it carries, rather than by a server-assigned id (line
++// item ids are not seed-controlled). Descriptions in each test are chosen distinct — none a substring
++// of another — so this is unambiguous. Mirrors how project-invoices.spec.ts finds a freshly added row
++// by the value it shows.
++const rowByDescription = (page: Page, description: string): Locator =>
++  lineItemRows(page).filter({
++    has: page.getByTestId('lineitem-description').getByText(description, { exact: true }),
++  });
++
++// The invoice's worked-out total lives on its detail page. Scope to the detail page so the match is
++// the invoice total and not something else named the same elsewhere.
++const invoiceTotal = (page: Page): Locator =>
++  page.getByTestId('invoice-detail-page').getByTestId('invoice-amount');
++
++// A quantity is a bare count; a price, a line amount or the total may be rendered as money ($300.00)
++// or bare (300). Assert the figure it carries is PRESENT, so the test binds to the value and not to
++// one presentation. Figures in each test are chosen so no value is a substring of another.
++async function expectValue(cell: Locator, n: number): Promise<void> {
++  await expect(cell).toContainText(String(n));
++}
++
++async function gotoInvoice(page: Page, id: number): Promise<void> {
++  await page.goto(`/invoices/${id}`);
++  await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++}
++
++test.describe('An invoice is a list of things charged for, with the total worked out', () => {
++  test('opening an invoice from its project lands on the invoice detail page', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [
++        {
++          id: 1,
++          projectId: 1,
++          status: 'DRAFT',
++          lineItems: [{ description: 'Initial consulting', qty: 2, unitPrice: 100 }],
++        },
++      ],
++    });
++
++    await page.goto('/projects/1');
++    await expect(page.getByTestId('project-detail-page')).toBeVisible();
++    await expect(page.getByTestId('invoice-row-1')).toBeVisible();
++
++    // Opening an invoice is a navigation to its own detail page, not a flag on the list.
++    const open = page.getByTestId('invoice-open-1');
++    await expect(open).toBeVisible();
++    await open.click();
++
++    await expect(page).toHaveURL(/\/invoices\/1$/);
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++    await expect(page.getByTestId('invoice-lineitems-table')).toBeVisible();
++  });
++
++  test('the detail page lists each line item with its description, quantity, price and amount', async ({
++    page,
++  }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [
++        {
++          id: 1,
++          projectId: 1,
++          status: 'DRAFT',
++          lineItems: [
++            { description: 'Design work', qty: 2, unitPrice: 150 },
++            { description: 'Hosting setup', qty: 3, unitPrice: 80 },
++          ],
++        },
++      ],
++    });
++
++    await gotoInvoice(page, 1);
++    await expect(page.getByTestId('invoice-lineitems-table')).toBeVisible();
++    await expect(lineItemRows(page)).toHaveCount(2);
++
++    // Each line gives a description, how many, the price each, and its own amount (how many × price).
++    const design = rowByDescription(page, 'Design work');
++    await expect(design).toHaveCount(1);
++    await expectValue(design.getByTestId('lineitem-qty'), 2);
++    await expectValue(design.getByTestId('lineitem-unitprice'), 150);
++    await expectValue(design.getByTestId('lineitem-amount'), 300); // 2 × 150
++
++    const hosting = rowByDescription(page, 'Hosting setup');
++    await expect(hosting).toHaveCount(1);
++    await expectValue(hosting.getByTestId('lineitem-qty'), 3);
++    await expectValue(hosting.getByTestId('lineitem-unitprice'), 80);
++    await expectValue(hosting.getByTestId('lineitem-amount'), 240); // 3 × 80
++
++    // The total is worked out for the user: 300 + 240 = 540.
++    await expectValue(invoiceTotal(page), 540);
++  });
++
++  test('an invoice with no line items shows an empty table and a total of zero', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [{ id: 1, projectId: 1, status: 'DRAFT', lineItems: [] }],
++    });
++
++    await gotoInvoice(page, 1);
++    await expect(page.getByTestId('invoice-lineitems-table')).toBeVisible();
++    await expect(lineItemRows(page)).toHaveCount(0);
++    // Nothing charged for yet, so the worked-out total is zero.
++    await expectValue(invoiceTotal(page), 0);
++  });
++
++  test('adding a line item lists it, works out its amount, and grows the total', async ({ page }) => {
++    await resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [
++        {
++          id: 1,
++          projectId: 1,
++          status: 'DRAFT',
++          lineItems: [{ description: 'Initial consulting', qty: 2, unitPrice: 100 }],
++        },
++      ],
++    });
++
++    await gotoInvoice(page, 1);
++    await expect(lineItemRows(page)).toHaveCount(1);
++    await expectValue(invoiceTotal(page), 200); // 2 × 100
++
++    // List another thing being charged for: a description, how many, and the price each.
++    await expect(page.getByTestId('lineitem-form')).toBeVisible();
++    await page.getByTestId('lineitem-form-description').fill('Extra pages');
++    await page.getByTestId('lineitem-form-qty').fill('4');
++    await page.getByTestId('lineitem-form-unitprice').fill('90');
++    await page.getByTestId('lineitem-form-submit').click();
++
++    // It joins the list with its amount worked out: 4 × 90 = 360.
++    const added = rowByDescription(page, 'Extra pages');
++    await expect(added).toHaveCount(1);
++    await expectValue(added.getByTestId('lineitem-qty'), 4);
++    await expectValue(added.getByTestId('lineitem-unitprice'), 90);
++    await expectValue(added.getByTestId('lineitem-amount'), 360);
++
++    await expect(lineItemRows(page)).toHaveCount(2);
++    // The total is worked out again over both lines: 200 + 360 = 560.
++    await expectValue(invoiceTotal(page), 560);
++
++    // It all survives a fresh load from the server.
++    await page.reload();
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++    await expect(lineItemRows(page)).toHaveCount(2);
++    await expect(rowByDescription(page, 'Initial consulting')).toHaveCount(1);
++    await expect(rowByDescription(page, 'Extra pages')).toHaveCount(1);
++    await expectValue(invoiceTotal(page), 560);
++  });
++});
++
++test.describe('A line item must describe a real charge', () => {
++  const seedOneLineItem = () =>
++    resetAndSeed({
++      clients: [{ id: 1, name: 'Acme Corp', email: 'hello@acme.test' }],
++      projects: [{ id: 1, name: 'Website Redesign', clientId: 1 }],
++      invoices: [
++        {
++          id: 1,
++          projectId: 1,
++          status: 'DRAFT',
++          lineItems: [{ description: 'Base item', qty: 1, unitPrice: 100 }],
++        },
++      ],
++    });
++
++  test('an empty submission is rejected and adds nothing', async ({ page }) => {
++    await seedOneLineItem();
++
++    await gotoInvoice(page, 1);
++    await expect(lineItemRows(page)).toHaveCount(1);
++    await expectValue(invoiceTotal(page), 100);
++
++    // No description, no quantity, no price — there is nothing to charge for.
++    await page.getByTestId('lineitem-form-description').fill('');
++    await page.getByTestId('lineitem-form-qty').fill('');
++    await page.getByTestId('lineitem-form-unitprice').fill('');
++    await page.getByTestId('lineitem-form-submit').click();
++
++    await expect(page.getByTestId('lineitem-form-error')).toBeVisible();
++
++    // Nothing was added: the list and the total are unchanged, even after a fresh load.
++    await expect(lineItemRows(page)).toHaveCount(1);
++    await expectValue(invoiceTotal(page), 100);
++
++    await page.reload();
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++    await expect(lineItemRows(page)).toHaveCount(1);
++    await expectValue(invoiceTotal(page), 100);
++  });
++
++  test('a quantity or price that is not more than zero is rejected and adds nothing', async ({
++    page,
++  }) => {
++    await seedOneLineItem();
++
++    await gotoInvoice(page, 1);
++    await expect(lineItemRows(page)).toHaveCount(1);
++
++    // A quantity of zero — there is no "how many" to charge for.
++    await page.getByTestId('lineitem-form-description').fill('Zero quantity');
++    await page.getByTestId('lineitem-form-qty').fill('0');
++    await page.getByTestId('lineitem-form-unitprice').fill('50');
++    await page.getByTestId('lineitem-form-submit').click();
++    await expect(page.getByTestId('lineitem-form-error')).toBeVisible();
++    await expect(rowByDescription(page, 'Zero quantity')).toHaveCount(0);
++
++    // A price each of zero — nothing is being charged.
++    await page.getByTestId('lineitem-form-description').fill('Zero price');
++    await page.getByTestId('lineitem-form-qty').fill('2');
++    await page.getByTestId('lineitem-form-unitprice').fill('0');
++    await page.getByTestId('lineitem-form-submit').click();
++    await expect(page.getByTestId('lineitem-form-error')).toBeVisible();
++    await expect(rowByDescription(page, 'Zero price')).toHaveCount(0);
++
++    // A negative quantity is no better.
++    await page.getByTestId('lineitem-form-description').fill('Negative quantity');
++    await page.getByTestId('lineitem-form-qty').fill('-3');
++    await page.getByTestId('lineitem-form-unitprice').fill('50');
++    await page.getByTestId('lineitem-form-submit').click();
++    await expect(page.getByTestId('lineitem-form-error')).toBeVisible();
++    await expect(rowByDescription(page, 'Negative quantity')).toHaveCount(0);
++
++    // None of the rejected attempts changed anything — only the seeded line remains, before and after
++    // a fresh load, and the total is untouched.
++    await expect(lineItemRows(page)).toHaveCount(1);
++    await page.reload();
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++    await expect(lineItemRows(page)).toHaveCount(1);
++    await expectValue(invoiceTotal(page), 100);
++  });
++
++  test('correcting a rejected line item then adds it and grows the total', async ({ page }) => {
++    await seedOneLineItem();
++
++    await gotoInvoice(page, 1);
++    await expect(lineItemRows(page)).toHaveCount(1);
++    await expectValue(invoiceTotal(page), 100);
++
++    // A rejected attempt first — a quantity of zero.
++    await page.getByTestId('lineitem-form-description').fill('Consulting');
++    await page.getByTestId('lineitem-form-qty').fill('0');
++    await page.getByTestId('lineitem-form-unitprice').fill('40');
++    await page.getByTestId('lineitem-form-submit').click();
++    await expect(page.getByTestId('lineitem-form-error')).toBeVisible();
++    await expect(lineItemRows(page)).toHaveCount(1);
++
++    // Correct it to real figures and submit again.
++    await page.getByTestId('lineitem-form-description').fill('Consulting');
++    await page.getByTestId('lineitem-form-qty').fill('3');
++    await page.getByTestId('lineitem-form-unitprice').fill('40');
++    await page.getByTestId('lineitem-form-submit').click();
++
++    // Now it saves: the line appears with its amount worked out (3 × 40 = 120), the error is gone,
++    // and the total grows to 100 + 120 = 220.
++    const added = rowByDescription(page, 'Consulting');
++    await expect(added).toHaveCount(1);
++    await expectValue(added.getByTestId('lineitem-amount'), 120);
++    await expect(lineItemRows(page)).toHaveCount(2);
++    await expect(page.getByTestId('lineitem-form-error')).toHaveCount(0);
++    await expectValue(invoiceTotal(page), 220);
++
++    // And it survives a fresh load from the server.
++    await page.reload();
++    await expect(page.getByTestId('invoice-detail-page')).toBeVisible();
++    await expect(lineItemRows(page)).toHaveCount(2);
++    await expectValue(invoiceTotal(page), 220);
++  });
++});

@@ -1,0 +1,175 @@
+{
+  "run_id": "202610060034",
+  "mode": "agent",
+  "code_view": "previous",
+  "started": "2026-10-07 00:00:37",
+  "reference": {
+    "repo": "officehq-tanstack-officefloor",
+    "origin": "git@github.com:officefloor/officehq-tanstack-officefloor.git",
+    "branch": "evolve/202610020135/just-solve/chain2"
+  },
+  "checkpoints": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60
+  ],
+  "config": {
+    "chains": 2,
+    "mode": "replay",
+    "model": "claude-opus-4-8",
+    "agent_timeout": 3600,
+    "code_view": "previous",
+    "erosion_harness": "/home/daniel/ui-long-degradation-test",
+    "checkpoints_file": "/home/daniel/ui-long-degradation-test/checkpoints.yaml",
+    "reference": {
+      "dir": "reference",
+      "repo": "officehq-tanstack-officefloor",
+      "origin": "git@github.com:officefloor/officehq-tanstack-officefloor.git",
+      "branch": "evolve/202610020135/just-solve/chain2",
+      "no_code_change": [
+        40,
+        50
+      ],
+      "app": {
+        "build_cmd": "bin/build",
+        "start_cmd": "bin/start",
+        "stop_cmd": "bin/stop",
+        "port": 0,
+        "health_url": null
+      }
+    },
+    "build": {
+      "timeout": 1800,
+      "start_timeout": 300,
+      "ready_timeout": 180
+    },
+    "contracts": {
+      "dir": "contracts",
+      "include_in_prompt": [
+        "new_testids",
+        "new_audit_records",
+        "available_testids",
+        "available_audit_records",
+        "seed_accepts"
+      ]
+    },
+    "generated_suite": {
+      "dest_subpath": "e2e/specs",
+      "support_subpath": "e2e/support",
+      "run_cmd": "bin/e2e"
+    },
+    "grading": {
+      "green": {
+        "repeats": 2,
+        "suite_size": "non_decreasing"
+      },
+      "mutation": {
+        "catalogue": "mutations/",
+        "require_calibrated": true,
+        "one_at_a_time": true,
+        "zero": "previous_checkpoint",
+        "zero_inverted_on_no_code": true
+      },
+      "maintenance": {
+        "track_deletions": true
+      }
+    },
+    "limits": {
+      "max_attempts": 500,
+      "max_transient_attempts": 20,
+      "retry_backoff_max": 900,
+      "poll_seconds": 1800
+    },
+    "isolation": {
+      "agent_confinement": {
+        "enabled": true,
+        "extra_ro_binds": [],
+        "extra_rw_binds": []
+      }
+    },
+    "blind": {
+      "strict": true,
+      "known_leaks": [
+        {
+          "file": "pom.xml",
+          "contains": "Found via the cp01 dry run"
+        },
+        {
+          "file": "src/main/java/net/officefloor/hq/app/Audit.java",
+          "contains": "Checkpoints assert the exact line(s)"
+        },
+        {
+          "file": "src/main/java/net/officefloor/hq/app/Application.java",
+          "contains": "checkpoints add migrations"
+        },
+        {
+          "file": "src/main/frontend/vite.config.ts",
+          "contains": "must never appear in a checkpoint's diff"
+        }
+      ],
+      "deny": [
+        "/home/daniel/ui-long-degradation-test/acceptance/specs",
+        "/home/daniel/ui-long-degradation-test/checkpoints.yaml",
+        "mutations/",
+        "reference/"
+      ]
+    }
+  }
+}

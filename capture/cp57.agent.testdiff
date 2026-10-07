@@ -1,0 +1,208 @@
+diff --git a/statement-group-by-job.spec.ts b/statement-group-by-job.spec.ts
+new file mode 100644
+index 0000000..1b9aefd
+--- /dev/null
++++ b/statement-group-by-job.spec.ts
+@@ -0,0 +1,202 @@
++// Acceptance test for the change request:
++//   "On a client's statement group the invoices by job. Show a subtotal for each job."
++//
++// A client's statement (client-statement, revealed on the client detail page by client-statement-open
++// — see client-statement.spec) no longer lists its invoices as one flat run. The invoices are now
++// GROUPED BY JOB (the app calls a project a "job"): every invoice sits under the job it was raised
++// against, and each job shows a SUBTOTAL of its own.
++//
++// Introduced by this change (3 anchors):
++//   - statement-project-<projectId> — one GROUP per job, wrapping that job's name, its invoice rows,
++//     and its subtotal. The <projectId> is the seeded project's id.
++//   - statement-project-name        — the job's name, read inside its own group.
++//   - statement-project-subtotal    — the job's subtotal, read inside its own group.
++//
++// WHAT THE SUBTOTAL IS. The statement is about what the client STILL OWES: each invoice row carries a
++// `due` (amount minus what has been paid, netted of discount/tax — see client-statement.spec and
++// invoice-due-amount.spec) and the statement's one headline figure, the outstanding total
++// (client-outstanding-total), is the SUM OF THOSE DUES across all the client's invoices. Grouping by
++// job breaks that single total into per-job pieces: a job's subtotal is the sum of the DUES of the
++// invoices in that job, and the per-job subtotals add back up to the client's outstanding total. It is
++// therefore NOT the gross of the job's invoice amounts (payments must have been netted off), nor the
++// client-wide total (it is one job's slice of it).
++//
++// The seeded figures are chosen so each job's subtotal can only come from summing that job's per-invoice
++// dues, and so the two jobs, their amount-grosses and the grand total are all distinct values:
++//   Website Redesign (job 10): inv 1 amount 500 / paid 200 / due 300 (part),
++//                              inv 2 amount 300 / paid   0 / due 300 (owing)
++//                              -> subtotal of dues 600  (amount gross would be 800)
++//   Mobile App       (job 20): inv 3 amount 400 / paid 400 / due   0 (paid),
++//                              inv 4 amount 250 / paid 100 / due 150 (part)
++//                              -> subtotal of dues 150  (amount gross would be 650)
++//   client outstanding total = 600 + 150 = 750.
++// A SECOND client (Globex) owns job 30 with its own invoice (999) — neither the job nor its invoice
++// may appear on Acme's statement.
++//
++// Asserts ONLY through the UI (data-testid). Data is arranged via resetAndSeed (the app's /__test__
++// endpoint): `clients` honours { id, name, email }, `projects` honours { id, name, clientId },
++// `invoices` honours { id, amount, projectId, status } and `payments` honours
++// { id, invoiceId, amount, date }. This change surfaces no audit records, so there is nothing to
++// assert on the audit channel.
++import { test, expect, type Page, type Locator } from '@playwright/test';
++import { resetAndSeed } from '../support/seed';
++
++// Money is shown "properly" everywhere in this app — a dollar sign and two cents digits, e.g. $600.00
++// (money-format.spec). Each figure is asserted as CONTAINMENT: the leading "$" keeps a figure from
++// matching inside a larger number ($150.00 cannot match within $1500.00) and tolerates a surrounding
++// label, while still pinning the value. Every figure below stays under a thousand, so thousands
++// grouping never arises.
++const money = (dollars: number): RegExp => new RegExp(`\\$${dollars}\\.00`);
++
++// A statement grouped by job. A GROUP is `statement-project-<projectId>`; the name/subtotal anchors are
++// read INSIDE their own group, which is what binds each to its job (there are several on the page). The
++// group-id regex matches only the numeric group containers, not statement-project-name/-subtotal.
++const groups = (page: Page): Locator => page.getByTestId(/^statement-project-\d+$/);
++const group = (page: Page, projectId: number): Locator =>
++  page.getByTestId(`statement-project-${projectId}`);
++const groupName = (page: Page, projectId: number): Locator =>
++  group(page, projectId).getByTestId('statement-project-name');
++const groupSubtotal = (page: Page, projectId: number): Locator =>
++  group(page, projectId).getByTestId('statement-project-subtotal');
++const rowsIn = (page: Page, projectId: number): Locator =>
++  group(page, projectId).locator('[data-testid^="statement-invoice-row-"]');
++const allRows = (page: Page): Locator => page.locator('[data-testid^="statement-invoice-row-"]');
++
++// Reach a client's statement the way a user would (as client-statement.spec does): open the client's
++// detail page, then open the statement with its own control.
++async function openStatement(page: Page, clientId: number): Promise<void> {
++  await page.goto(`/clients/${clientId}`);
++  await expect(page.getByTestId('client-detail-page')).toBeVisible();
++  const opener = page.getByTestId('client-statement-open');
++  await expect(opener).toBeVisible();
++  await opener.click();
++  await expect(page.getByTestId('client-statement')).toBeVisible();
++  await expect(page.getByTestId('client-statement-table')).toBeVisible();
++}
++
++// Acme (client 1) with TWO jobs, invoices spread across both, plus a SECOND client (Globex) whose job
++// and invoice must never leak into Acme's statement.
++async function seedTwoClients(): Promise<void> {
++  await resetAndSeed({
++    clients: [
++      { id: 1, name: 'Acme Corp', email: 'hello@acme.test' },
++      { id: 2, name: 'Globex', email: 'contact@globex.test' },
++    ],
++    projects: [
++      { id: 10, name: 'Website Redesign', clientId: 1 },
++      { id: 20, name: 'Mobile App', clientId: 1 },
++      { id: 30, name: 'Billing System', clientId: 2 }, // Globex's — must not appear on Acme's
++    ],
++    invoices: [
++      { id: 1, amount: 500, projectId: 10, status: 'SENT' }, // 200 paid -> due 300
++      { id: 2, amount: 300, projectId: 10, status: 'SENT' }, // nothing  -> due 300
++      { id: 3, amount: 400, projectId: 20, status: 'SENT' }, // 400 paid -> due 0
++      { id: 4, amount: 250, projectId: 20, status: 'SENT' }, // 100 paid -> due 150
++      { id: 5, amount: 999, projectId: 30, status: 'SENT' }, // Globex's own
++    ],
++    payments: [
++      { id: 1, invoiceId: 1, amount: 200, date: '2021-03-14' },
++      { id: 2, invoiceId: 3, amount: 400, date: '2022-08-19' },
++      { id: 3, invoiceId: 4, amount: 100, date: '2023-05-27' },
++      { id: 4, invoiceId: 5, amount: 50, date: '2024-01-09' }, // Globex's — excluded figure and all
++    ],
++  });
++}
++
++test.describe("A client's statement groups invoices by job with a per-job subtotal", () => {
++  test('the invoices are grouped — one group per job the client has invoiced', async ({ page }) => {
++    await seedTwoClients();
++    await openStatement(page, 1);
++
++    // Acme has invoiced two jobs, so exactly two job groups appear, each named for its job.
++    await expect(groups(page)).toHaveCount(2);
++
++    await expect(group(page, 10)).toBeVisible();
++    await expect(groupName(page, 10)).toContainText('Website Redesign');
++
++    await expect(group(page, 20)).toBeVisible();
++    await expect(groupName(page, 20)).toContainText('Mobile App');
++
++    // Globex's job (30) is not Acme's — neither the group nor its name is here.
++    await expect(group(page, 30)).toHaveCount(0);
++    await expect(page.getByTestId('client-statement')).not.toContainText('Billing System');
++  });
++
++  test("each job's group holds exactly that job's own invoices", async ({ page }) => {
++    await seedTwoClients();
++    await openStatement(page, 1);
++
++    // All four of Acme's invoices are still present across the statement — grouping reorganises, it
++    // does not drop any.
++    await expect(allRows(page)).toHaveCount(4);
++
++    // Website Redesign (job 10) holds invoices 1 and 2, and only those.
++    await expect(rowsIn(page, 10)).toHaveCount(2);
++    await expect(group(page, 10).getByTestId('statement-invoice-row-1')).toBeVisible();
++    await expect(group(page, 10).getByTestId('statement-invoice-row-2')).toBeVisible();
++    await expect(group(page, 10).getByTestId('statement-invoice-row-3')).toHaveCount(0);
++    await expect(group(page, 10).getByTestId('statement-invoice-row-4')).toHaveCount(0);
++
++    // Mobile App (job 20) holds invoices 3 and 4, and only those.
++    await expect(rowsIn(page, 20)).toHaveCount(2);
++    await expect(group(page, 20).getByTestId('statement-invoice-row-3')).toBeVisible();
++    await expect(group(page, 20).getByTestId('statement-invoice-row-4')).toBeVisible();
++    await expect(group(page, 20).getByTestId('statement-invoice-row-1')).toHaveCount(0);
++    await expect(group(page, 20).getByTestId('statement-invoice-row-2')).toHaveCount(0);
++
++    // Globex's invoice (id 5, amount 999) is nowhere on Acme's statement.
++    await expect(page.getByTestId('statement-invoice-row-5')).toHaveCount(0);
++    await expect(page.getByTestId('client-statement')).not.toContainText('999');
++  });
++
++  test("each job's subtotal is the sum of that job's dues, and they add to the owed total", async ({
++    page,
++  }) => {
++    await seedTwoClients();
++    await openStatement(page, 1);
++
++    // Website Redesign: dues 300 + 300 = 600. Not the amount gross (800), not the other job's subtotal
++    // (150), not the client-wide total (750).
++    const sub10 = groupSubtotal(page, 10);
++    await expect(sub10).toBeVisible();
++    await expect(sub10).toContainText(money(600));
++    await expect(sub10).not.toContainText(money(800));
++    await expect(sub10).not.toContainText(money(150));
++    await expect(sub10).not.toContainText(money(750));
++
++    // Mobile App: dues 0 + 150 = 150 (the fully-paid invoice adds nothing). Not the amount gross (650),
++    // not the other job's subtotal (600), not the client-wide total (750).
++    const sub20 = groupSubtotal(page, 20);
++    await expect(sub20).toBeVisible();
++    await expect(sub20).toContainText(money(150));
++    await expect(sub20).not.toContainText(money(650));
++    await expect(sub20).not.toContainText(money(600));
++    await expect(sub20).not.toContainText(money(750));
++
++    // The per-job subtotals reconcile to the client's outstanding total: 600 + 150 = 750.
++    const total = page.getByTestId('client-outstanding-total');
++    await expect(total).toContainText(money(750));
++  });
++
++  test("a different client's statement groups only that client's own job", async ({ page }) => {
++    await seedTwoClients();
++    await openStatement(page, 2);
++
++    // Globex has invoiced exactly one job (30) — Acme's two are not here.
++    await expect(groups(page)).toHaveCount(1);
++    await expect(group(page, 30)).toBeVisible();
++    await expect(groupName(page, 30)).toContainText('Billing System');
++    await expect(group(page, 10)).toHaveCount(0);
++    await expect(group(page, 20)).toHaveCount(0);
++
++    // Its invoice (id 5, amount 999, 50 paid) sits in that job, whose subtotal is its lone due of 949.
++    await expect(rowsIn(page, 30)).toHaveCount(1);
++    await expect(group(page, 30).getByTestId('statement-invoice-row-5')).toBeVisible();
++    await expect(groupSubtotal(page, 30)).toContainText(money(949));
++
++    // Acme's figures (its subtotals and owed total) are nowhere on Globex's statement.
++    const statement = page.getByTestId('client-statement');
++    await expect(statement).not.toContainText(money(600));
++    await expect(statement).not.toContainText(money(750));
++  });
++});
