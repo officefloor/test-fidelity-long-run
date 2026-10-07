@@ -1,0 +1,190 @@
+// Acceptance test for the change request:
+//   "Let me filter projects by active, on hold or finished."
+//
+// The projects list page (projects-page, /projects), which lists every project, gains a control
+// (data-testid="project-status-filter") that narrows the one list down to the projects at a SINGLE
+// chosen stage. A project carries a STATUS — one of active, on hold, or finished (the same three
+// stages the project-status cell already shows) — so choosing a stage leaves only the projects at
+// that stage. Before a stage is chosen the list is unfiltered (every project shows). Choosing a
+// DIFFERENT stage narrows to THAT stage's projects, and returning to "all statuses" brings every
+// project back — so the filter is genuinely keyed on the chosen stage and not hardwired to one.
+// Because a filter outlives a click (CLAUDE.md rule 4) the chosen stage lives in the URL and
+// survives a fresh load. Filtering is a pure view concern: it records nothing.
+//
+// The contract for the control mirrors its toolbar siblings (invoice-status-filter / task-filter /
+// project-tag-filter): it is a <select> in the projects toolbar with one option per stage (its label
+// NAMING the stage — active / on hold / finished) plus a default "all statuses" option carrying an
+// empty value (no stage => unfiltered). The test chooses a stage by finding the option whose label
+// NAMES that stage (case-insensitively) and selecting it by that option's OWN value, so it binds to
+// the stage's MEANING — not the exact value or capitalisation the control uses internally, the same
+// way the sibling specs match the status cell by the stage word.
+//
+// Asserts ONLY through the two public channels: the UI (data-testid) and the audit file
+// (auditLines()). Data is arranged via resetAndSeed (the app's /__test__ endpoint): `clients`
+// honours { id, name, email } and `projects` honours { id, name, clientId, status }.
+import { test, expect, type Page, type Locator } from '@playwright/test';
+import { resetAndSeed } from '../support/seed';
+import { auditLines } from '../support/audit';
+
+// The three stages, each pinned by the word that names it (case-insensitive). Word boundaries keep
+// them distinct; "on hold" tolerates any single separator (space / hyphen / underscore) so "On hold",
+// "on-hold" and "ON_HOLD" all count. None of these words is a substring of another, nor of the
+// default "all statuses" option label.
+const ACTIVE = /\bactive\b/i;
+const ON_HOLD = /\bon[\s_-]?hold\b/i;
+const FINISHED = /\bfinished\b/i;
+
+const projectRows = (page: Page) => page.locator('[data-testid^="project-row-"]');
+const statusOf = (page: Page, id: number): Locator =>
+  page.getByTestId(`project-row-${id}`).getByTestId('project-status');
+const nameOf = (page: Page, id: number): Locator =>
+  page.getByTestId(`project-row-${id}`).getByTestId('project-name');
+
+// Two projects at EACH stage, so narrowing to one stage must drop the other four rows — a filter that
+// merely hid a single row, or one hardwired to one stage, could not reproduce these results. All
+// projects are left un-archived so the sibling show-archived toggle plays no part here. Project names
+// are chosen so none contains a stage word (keeping the two concerns independent).
+const SEED = {
+  clients: [
+    { id: 1, name: 'Acme Corp', email: 'hello@acme.test' },
+    { id: 2, name: 'Globex', email: 'contact@globex.test' },
+  ],
+  projects: [
+    { id: 1, name: 'Website Redesign', clientId: 1, status: 'ACTIVE' },
+    { id: 2, name: 'Mobile App', clientId: 2, status: 'ON_HOLD' },
+    { id: 3, name: 'Billing System', clientId: 1, status: 'FINISHED' },
+    { id: 4, name: 'Internal Portal', clientId: 2, status: 'ACTIVE' },
+    { id: 5, name: 'Marketing Hub', clientId: 1, status: 'ON_HOLD' },
+    { id: 6, name: 'Data Warehouse', clientId: 2, status: 'FINISHED' },
+  ],
+};
+
+const ACTIVE_IDS = [1, 4];
+const ON_HOLD_IDS = [2, 5];
+const FINISHED_IDS = [3, 6];
+const ALL_IDS = [1, 2, 3, 4, 5, 6];
+
+// The ids of the currently-rendered project rows, ascending (order is not what this feature is about).
+async function visibleIds(page: Page): Promise<number[]> {
+  return projectRows(page).evaluateAll((els) =>
+    els
+      .map((el) => Number(el.getAttribute('data-testid')!.replace('project-row-', '')))
+      .sort((a, b) => a - b),
+  );
+}
+
+// Choose a stage in the filter. The option is found by the stage WORD in its label and selected by
+// that option's own value, so the stage is pinned by meaning, not by an exact value/capitalisation.
+async function chooseStage(page: Page, word: RegExp): Promise<void> {
+  const filter = page.getByTestId('project-status-filter');
+  await expect(filter).toBeVisible();
+  const value = await filter
+    .locator('option')
+    .filter({ hasText: word })
+    .first()
+    .evaluate((el: HTMLOptionElement) => el.value);
+  await filter.selectOption(value);
+}
+
+// Return the filter to "all statuses": the default option carries no stage, so it has an empty value
+// (an empty value clears the URL key, leaving the list unfiltered) — same mechanism as the siblings.
+async function chooseAllStatuses(page: Page): Promise<void> {
+  await page.getByTestId('project-status-filter').selectOption('');
+}
+
+test.describe('Filter projects by status', () => {
+  test('the projects page offers a status filter and lists every project before one is chosen', async ({
+    page,
+  }) => {
+    await resetAndSeed(SEED);
+
+    await page.goto('/projects');
+    await expect(page.getByTestId('projects-page')).toBeVisible();
+
+    // The new filter control is present on the page.
+    await expect(page.getByTestId('project-status-filter')).toBeVisible();
+
+    // Before any stage is chosen the list is unfiltered: every seeded project is shown.
+    await expect(page.getByTestId('projects-table')).toBeVisible();
+    await expect(projectRows(page)).toHaveCount(ALL_IDS.length);
+    expect(await visibleIds(page)).toEqual(ALL_IDS);
+
+    // Reading the list records nothing.
+    expect(auditLines()).toEqual([]);
+  });
+
+  test('choosing "active" narrows the list to only the active projects', async ({ page }) => {
+    await resetAndSeed(SEED);
+
+    await page.goto('/projects');
+    // Precondition: everything is listed, so the narrowing below is a real effect of the filter.
+    await expect(projectRows(page)).toHaveCount(ALL_IDS.length);
+
+    await chooseStage(page, ACTIVE);
+
+    // Only the two active projects remain; every on-hold and finished project has dropped out.
+    await expect(projectRows(page)).toHaveCount(ACTIVE_IDS.length);
+    expect(await visibleIds(page)).toEqual(ACTIVE_IDS);
+    for (const id of ACTIVE_IDS) {
+      await expect(page.getByTestId(`project-row-${id}`)).toBeVisible();
+      await expect(statusOf(page, id)).toHaveText(ACTIVE);
+    }
+    for (const id of [...ON_HOLD_IDS, ...FINISHED_IDS]) {
+      await expect(page.getByTestId(`project-row-${id}`)).toHaveCount(0);
+    }
+
+    // The surviving rows still carry their real data — narrowing filters the list, it does not blank it.
+    await expect(nameOf(page, 1)).toHaveText('Website Redesign');
+    await expect(nameOf(page, 4)).toHaveText('Internal Portal');
+  });
+
+  test('the filter is keyed on the chosen stage: each stage narrows to its own projects', async ({
+    page,
+  }) => {
+    await resetAndSeed(SEED);
+
+    await page.goto('/projects');
+
+    // On-hold projects only.
+    await chooseStage(page, ON_HOLD);
+    await expect(projectRows(page)).toHaveCount(ON_HOLD_IDS.length);
+    expect(await visibleIds(page)).toEqual(ON_HOLD_IDS);
+    for (const id of ON_HOLD_IDS) {
+      await expect(statusOf(page, id)).toHaveText(ON_HOLD);
+    }
+
+    // Switching to "finished" narrows to a DIFFERENT set — proof the filter follows the chosen stage
+    // and is not hardwired to one (the on-hold projects are gone, the finished ones are now shown).
+    await chooseStage(page, FINISHED);
+    await expect(projectRows(page)).toHaveCount(FINISHED_IDS.length);
+    expect(await visibleIds(page)).toEqual(FINISHED_IDS);
+    for (const id of FINISHED_IDS) {
+      await expect(statusOf(page, id)).toHaveText(FINISHED);
+    }
+
+    // Returning to "all statuses" brings every project back.
+    await chooseAllStatuses(page);
+    await expect(projectRows(page)).toHaveCount(ALL_IDS.length);
+    expect(await visibleIds(page)).toEqual(ALL_IDS);
+  });
+
+  test('the chosen stage survives a fresh load, and filtering records nothing', async ({ page }) => {
+    await resetAndSeed(SEED);
+
+    await page.goto('/projects');
+    await chooseStage(page, FINISHED);
+    await expect(projectRows(page)).toHaveCount(FINISHED_IDS.length);
+    expect(await visibleIds(page)).toEqual(FINISHED_IDS);
+
+    // Reloading re-reads the page; the chosen stage is still in effect and the same rows come back
+    // (the filter lives in the URL, not in throwaway component state).
+    await page.reload();
+    await expect(page.getByTestId('projects-page')).toBeVisible();
+    await expect(projectRows(page)).toHaveCount(FINISHED_IDS.length);
+    expect(await visibleIds(page)).toEqual(FINISHED_IDS);
+
+    // Filtering is a pure view concern: narrowing the list (and reloading) is not a change to any
+    // project, so nothing is appended to the audit file.
+    expect(auditLines()).toEqual([]);
+  });
+});
