@@ -48,6 +48,73 @@ code_view: previous
 # harness refuses one it cannot actually carry out rather than producing a mislabelled branch.
 condition: blind
 
+# BASE SUITE (DESIGN.md §4.6) — what the round's priors are, which is what decides WHICH QUESTION
+# the run answers. Orthogonal to `condition`: any arm can be run under either base.
+#
+#   accumulated  the agent's own suite from cp01..N-1, warts carried forward. THE DEFAULT, and the
+#                only setting that can answer §1 — whether small inaccuracies and missing coverage
+#                COMPOUND. Mutation scope is every in-force set cp01..N (see `retention`).
+#   reference    tools/suite.py installs the known-good suite at cp(N-1) instead. Priors are
+#                calibrated, so nothing the round fails to hold was inherited: this measures
+#                INDIVIDUAL test correctness, and its mutation scope is cpN's set plus the sets of
+#                the checkpoints cpN revises. It also makes the checkpoints near-independent, so
+#                analysis may resample checkpoints rather than chains (§8.1).
+#
+# The two are a PAIR, not a choice: cumulative - individual at matched checkpoints is the cost of
+# the agent's own history, which is the only thing that separates "worse as the suite grows" from
+# "tripping over its own earlier mistakes".
+base_suite: accumulated
+
+# THE REPAIR TURN (DESIGN.md §4.7). The author cannot see cpN, so a test that is right about the
+# REQUEST may still not run green against the implementation that was built. In the pipeline that
+# is not a failure — writing the code to the tests also adjusts the tests, and no pull request is
+# merged with a red suite. Without this step one bad prior at cp07 leaves fifty later checkpoints
+# non-green for a reason that is not about them, which is the instrument breaking, not compounding.
+#
+# TWO COMMITS per checkpoint, graded at both. `cpNN author` holds exactly what was written blind
+# and takes the full mutation scope — it IS the fidelity score. `cpNN repair` holds the same suite
+# with its failures fixed against cpN's working code, and is what carries forward.
+#
+# The author commit is what protects the measurement, NOT a restriction on repair: it is committed
+# and graded before the implementation is ever shown, so nothing repair does can improve it. Repair
+# is therefore allowed to be realistic, and `kill_rate_author - kill_rate_repair` becomes its own
+# metric — coverage destroyed by relaxing an assertion until it passed.
+repair:
+  enabled: true
+  # NO NEW TESTS, and this is about strategy rather than score: a test written with cpN visible is
+  # `prototype-first`, and one added here would quietly turn a blind run into a hybrid, which is
+  # the one thing §4.4 asks the arms not to be. Enforced structurally, per §4.5 — the title set at
+  # `repair` must be a subset of the set at `author`; an attempt is reverted and kept as a DIFF,
+  # using the same snapshot-and-restore that already enforces a critique-only brief.
+  scope: fix_only
+  # A deletion is not a repair either. `revised` vs `dropped` is already classified, and `repair`
+  # may not hold fewer tests than `author`.
+  forbid_deletions: true
+  attempts: 2                 # bounded, like `limits`. Still red after this records
+                              #   `repair_failed` and carries forward: halting the chain would
+                              #   spend the remaining checkpoints to learn nothing.
+  commit: separate            # `cpNN author`, then `cpNN repair`. Two suite shas per checkpoint,
+                              #   which is also what splits §8 churn into chosen vs forced.
+
+# RETENTION (DESIGN.md §6.1) — re-running EARLIER checkpoints' mutation sets against the suite as
+# it stands now, which is the only direct read on whether coverage won at cp12 is still held at
+# cp40. Meaningful under `base_suite: accumulated` only; a reference base has no inherited damage.
+#
+# Supersession comes from the fixture, not from judgement: checkpoint K's set is in force at N
+# unless some J in (K, N] declares K in its `mutates`, in which case J's set carries that
+# behaviour instead. A mutation whose `find` text no longer exists is NON-APPLYING and excluded —
+# the substitution format raises rather than silently no-opping, so staleness reports itself.
+# Both exclusion lists are printed by name beside the kill rate: `mutates` is a declaration and
+# this fixture has already been caught under-declaring one (tools/reference_chain.py), so a silent
+# filter could let that suppress a real coverage loss.
+retention:
+  # Milestones, not every checkpoint: at ~2.2N in-force mutations per round, every checkpoint is
+  # ~4,000 suite runs against today's 133 (~30x, not viable) where six milestones are ~470 (~3.5x).
+  # The question is a CURVE, and six complete sets read it better than sixty sampled ones.
+  at: [10, 20, 30, 40, 50, 60]
+  sample_per_round: 0         # off. A sampled kill rate over a small set mostly reports its own
+                              #   sampling, and the milestones already carry the curve.
+
 # The 60 plain-English change requests, with their `type` and `mutates`. Read from the erosion
 # harness rather than copied, so a repair to the checkpoint metadata lands in one place — and it
 # needs repairing (DESIGN.md §10, REFERENCE_CHAIN.md).

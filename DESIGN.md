@@ -375,7 +375,141 @@ ambiguous, worth reading whatever the score.
 a recorded condition parameter; an unbounded oracle approaches full disclosure and stops modelling
 any real interaction. The budget spent is itself measured.
 
+## §4.6 Two experiments, and the mutation scope that separates them
+
+"Can the agent write the tests" has been one question carrying two, and they need different
+instruments. **Getting an individual test right** is one measurement. **The accumulation of small
+inaccuracies and missing coverage** is another, and a score that fuses them can only ever say that
+something went wrong somewhere.
+
+What splits them is not really the base suite — the base suite is the enabling mechanism. It is the
+**mutation scope**: which features a round is required to still hold.
+
+| | **individual correctness** | **cumulative damage** |
+| --- | --- | --- |
+| base suite | the reference suite substituted for every prior | the agent's own accumulated suite |
+| the question | did it write a right test for *this* change, and correctly revise the ones this change alters | do small inaccuracies and coverage gaps compound |
+| mutation scope | cpN's set **+ the sets of the checkpoints cpN revises** | **every in-force set, cp01..N** (§6.1) |
+| prior tests | known-good and calibrated: a survival is damage this round did | the agent's own, warts carried forward |
+| repair turn (§4.7) | yes — its own new tests may still not pass | yes, and the commit pair is where accumulation becomes visible |
+
+**Why a reference base isolates individual correctness.** Every prior is known green at N-1 and
+known to kill N-1's whole set — that is exactly what replay establishes (§4.3). So nothing the
+suite fails to hold at cpN can have been inherited: the round's score is the round's work. It also
+makes the 60 checkpoints near-independent, which lifts the restraint of §8.1 — cpN's starting state
+is no longer cp(N-1)'s outcome, so checkpoints may be resampled and **one chain can report an
+interval**.
+
+**And why it cannot answer the other question.** It wipes the gap every round. §1's thesis is that
+a wrong test *compounds* across 300–500 changes, and the loss that predicts — coverage won at cp12
+that is quietly gone by cp40 — is invisible to an arm that reinstalls correct priors each time.
+Measuring it is the accumulated arm's whole purpose, which is why the default stays accumulated
+(§10.1).
+
+**The revision oracle has two layers, and the second is the real one.** The individual arm hands
+the author priors whose required movement is known:
+
+- **textual** — `tools/suite.py`'s basename resolution already names which prior specs checkpoint N
+  had to rewrite (§4.3). Compare against which the author touched: precision and recall on
+  *which tests it knew to revise*. Cheap, and only a proxy for correctness.
+- **behavioural** — re-run the revised checkpoints' mutation sets. The base killed them by
+  calibration, so a survival after the author's revision is unambiguous: **the revision removed
+  coverage the known-good suite had.** This is "did it mutate the existing tests correctly" scored
+  as behaviour rather than as a diff, and it is the measurement that matters.
+
+**The pair is the result**, in the shape of §4.4.1: *cumulative − individual* at matched
+checkpoints is **the cost of the agent's own history**, and it is what decomposes a fall-off at
+cp40 into "worse as the suite grows" versus "tripping over its own earlier mistakes". Neither arm
+gives that alone.
+
+**Base and repair are orthogonal to `condition`.** They do not add arms to §4.4's six; they are two
+further dimensions any of them can be run under:
+
+| | repair off | repair on |
+| --- | --- | --- |
+| `base_suite: accumulated` | the harness as it stands — kept so earlier runs stay comparable | **the cumulative arm** |
+| `base_suite: reference` | **the individual arm** | diagnostic: separates *revised unprompted* from *revised only once shown the red* |
+
+Three cells carry the first runs. The fourth is a real question that confounds with the individual
+arm's own task — there, performing the required revision *is* the work — so it is designed here and
+left unrun, as §4.4.3 leaves self-implementation.
+
+**Cost sorts the cadence**, and the two arms must not be budgeted alike (§6.1): the individual arm
+adds roughly half again to the mutation bill and can run every checkpoint; the cumulative arm's
+full scope is some thirty times it, and runs its retention pass at milestones.
+
+## §4.7 The repair turn: what the agent wrote, then what ships
+
+The author cannot see cpN (§4.2), so a new test that is *right about the request* may still not run
+green against the implementation that was built — a different testid reached for, a value formatted
+another way, a wait the app does not need. In the pipeline that is not a failure at all: writing the
+code to the tests also adjusts the tests, and **no pull request is merged with a red suite.** The
+harness as specified has no such step, so a small inaccuracy enters the accumulated suite and stays
+red at cp(N+1), cp(N+2) — one bad prior at cp07 makes fifty later checkpoints non-green for a reason
+that is not about them. That is not the compounding §1 is after; it is the instrument breaking.
+
+So a checkpoint produces **two commits**, and is graded at both:
+
+| commit | holds | graded with |
+| --- | --- | --- |
+| `cpNN author` | exactly what the author wrote without seeing cpN | green ×2, mutation zero, and the round's full mutation scope (§4.6) — **this is the fidelity score** |
+| `cpNN repair` | the same suite with its failures fixed against cpN's working code | green ×2, and the scope re-run as a check on what repair cost |
+
+The next checkpoint starts from `repair`, so what carries forward is a suite that would have been
+merged rather than one with a known-red test in it.
+
+**What protects the measurement is the author commit, not a restriction on repair.** The first
+instinct is to freeze the round's new tests so repair cannot touch them — and it is wrong twice
+over: those are precisely the tests most likely to be red, and forbidding their repair models a
+pipeline nobody runs. Because `author` is committed and graded before the implementation is ever
+shown, its score cannot be improved by anything repair does. Repair is then free to be realistic,
+and the *delta* becomes a measurement in its own right.
+
+**One rule, and it is about strategy, not score: no new tests.** A test written with cpN visible is
+`prototype-first` (§4.4), and a repair turn that adds one quietly converts a blind run into a
+hybrid — the arms stop being comparable, which is the only thing §4.4 asks of them. Following
+§4.5's principle that a discipline enforced by instruction is a single point of failure, this is
+structural: the repair turn is briefed to fix only, the test-title set at `repair` must be a subset
+of the set at `author`, and an attempt to add one is reverted and **recorded as a diff** — the same
+snapshot-and-restore already used for a turn briefed to critique rather than write (§11). A
+deletion is likewise not repair: `revised` versus `dropped` is already classified (§11), and
+`repair` may not hold fewer tests than `author`.
+
+**What the delta measures.** Repair is also how a wrong test becomes a green one that pins nothing,
+so it is graded rather than merely permitted:
+
+- `kill_rate_author − kill_rate_repair` on the round's scope is **coverage destroyed by repair** —
+  an assertion relaxed until it passed. This is the laundering number, and nothing else in the
+  harness would show it.
+- `priors_repaired` versus `priors_dropped_in_repair` is the maintenance discipline of §5 step 3
+  observed at the moment of maximum temptation: *make it green*. Until now it could only see
+  deletions an author volunteered while writing.
+- §8's churn splits in two along the pair: `repair(N-1) → author(N)` is churn the author **chose**
+  while writing, `author(N) → repair(N)` is churn **forced** by its own earlier inaccuracy. Those
+  were one number, and the second is the erosion signal.
+
+**A new rung on the ladder**, and the one every real pipeline already has: blind author <
+blind author + repair < prototype-first. The middle term costs nothing in practice — the
+test-fixing pass happens anyway — so `(author + repair) − author` is a directly useful number
+rather than only a diagnostic.
+
+**Disclosure.** Repair reads cpN through its own failure output, which is a ground-truth channel and
+belongs in §4.5's audit: the failure text the turn was shown and the diff it made are recorded per
+round, beside the proxy exchanges. It is a weaker channel than prototype-first — failures describe
+where a test disagreed with the implementation, not what the request wanted — which is why the rung
+sits below it.
+
+**When repair cannot reach green**, attempts are bounded (`repair.attempts`, mirroring `limits`)
+and the round records `repair_failed` and carries forward regardless. Halting the chain would spend
+the remaining checkpoints to learn nothing; a labelled bad round costs one.
+
 ## §5 Grading: fidelity testing
+
+Steps 1–3 are one grading pass. With the repair turn enabled (§4.7) the pass runs **twice** per
+checkpoint — at the `author` commit, which is the fidelity score, and at `repair`, which is the
+state that carries forward and the state a pull request would face. Where a metric exists on both
+sides it is recorded on both, because the gap between them is itself a result. The mutation scope
+the pass uses is the round's arm, not a constant (§4.6).
 
 **Step 1 — green, and not shrinking.** Run the whole accumulated suite against checkpoint N's
 code **twice** (`grading.green.repeats`, default 2). Every test must pass every time: a failure
@@ -388,6 +522,11 @@ mean new tests, and the suite must never shrink.
 Equal is allowed, and deliberately so: a **mutative** checkpoint may be served by rewriting tests
 rather than adding any, and a §2 no-code checkpoint may already be covered by the suite. What is
 never allowed is a smaller suite — that is a test deleted to make a round go green (step 3).
+
+"At N-1" names a different baseline per arm, and the config comment has to say which: the previous
+checkpoint's **`repair`** commit under `base_suite: accumulated`, and the **reference base as
+installed** under `base_suite: reference` (§4.6). Within a checkpoint the rule also binds the pair —
+`repair` may not hold fewer tests than `author` (§4.7).
 
 A test whose result flips between identical runs is **flaky**, and is reported separately from a
 hard failure so the two are distinguishable when diagnosing. In an unattended pipeline a flake is
@@ -437,9 +576,17 @@ failing test is the cheap way out, and it is exactly what must not happen across
 | `feature_absent_killed` | 2 (zero) | this round's tests fail at N-1 (inverted where `no_code_change`) |
 | `priors_deleted` | 3 | prior tests removed rather than updated |
 | `suite_runtime_s`, `test_churn_lines` | 1, §8 | cost and churn as the suite grows |
+| `kill_rate_author`, `kill_rate_repair` | 2, §4.7 | the round's scope before and after repair; the gap is coverage repair destroyed |
+| `repair_needed`, `repair_attempts`, `repair_failed` | §4.7 | whether the suite was red at `author`, what it took, and whether it ever went green |
+| `priors_repaired`, `priors_dropped_in_repair` | 3, §4.7 | revised versus deleted under the "make it green" pressure |
+| `repair_added_tests` | §4.7 | tests the repair turn tried to add — strategy drift, kept as a diff |
+| `revision_precision`, `revision_recall` | §4.6 | priors revised versus the priors the reference had to revise |
+| `retention` | §6.1 | in-force earlier sets still killed, with the superseded and non-applying exclusions named |
 
 The headline is the share of checkpoints that are green ∧ not-shrinking ∧ mutation-zero-correct, with
-mean kill rate beside it. The run-level question is whether fidelity **degrades with suite size** —
+mean kill rate beside it. With the pair, that headline is read at `repair` — it is a claim about
+what would have merged — while mean kill rate is read at `author`, where it is a claim about what
+the agent actually knew to assert. The run-level question is whether fidelity **degrades with suite size** —
 the same slope-with-CI treatment the erosion harness applies over checkpoint index.
 
 ## §6 The mutation catalogue
@@ -487,6 +634,62 @@ usable for grading an agent until resolved. Grading refuses an uncalibrated set.
 
 There is no separate calibration tool: calibration is replay mode restricted to step 2.
 
+### §6.1 In force at depth N: one function, two scopes
+
+A mutation is authored against **its own** checkpoint's application and calibrated there. Running
+an earlier checkpoint's set at a later depth — which the cumulative arm requires, since confirming
+coverage is retained means re-breaking features the suite won rounds ago — needs a rule for what a
+mutation from cp12 still means at cp40. Both arms of §4.6 then ask one function for their work:
+
+```
+in_force(at=N, scope)   ->   the mutation sets this round must still kill
+  individual arm:  scope = {N} ∪ mutates(N)        the new feature, plus the ones it revises
+  cumulative arm:  scope = 1..N                    every feature the suite is supposed to hold
+```
+
+**Supersession comes from the fixture, not from judgement.** `checkpoints.yaml` already declares
+`mutates: [4, 8]` on every mutative checkpoint, already read at `run.py:194` and already recorded
+in each capture:
+
+> checkpoint K's set is in force at N **unless** some J in (K, N] declares K in `mutates(J)` — in
+> which case J's set carries that behaviour forward instead, and is itself in the catalogue.
+
+That is the "awareness of changes in functionality by later changes" the cumulative arm needs, and
+it costs no new authoring: the revising checkpoint's own mutations are the up-to-date statement of
+the revised behaviour.
+
+**Three states, and each is a result.** At depth N an earlier mutation is:
+
+- **live** — it applies, its clause is still in force, and it must still die. A survival here *is*
+  the cumulative damage: coverage the suite demonstrably held at cp12 and has since lost.
+- **superseded** — a later checkpoint revised its clause. Excluded from retention, by the rule
+  above.
+- **non-applying** — the text it matches is gone. §6's choice of exact substitution over unified
+  diff pays off exactly here: it **raises rather than silently no-opping**, so "the code this
+  addressed no longer exists" reports itself. Excluded, and never counted either way.
+
+**Exclusions are printed, never silent.** `mutates` is a *declaration*, and this fixture has
+already been caught under-declaring one — `tools/reference_chain.py` diagnoses exactly that, and
+distinguishes a prior a checkpoint legitimately replaced from a prior it broke without saying so.
+So retention reports its superseded and non-applying lists by name alongside the kill rate. A
+missing `mutates` edge would otherwise let a declaration quietly suppress a real coverage loss,
+which is the one finding this arm exists to produce.
+
+**The cadence follows the arithmetic.** With 133 mutations over 60 checkpoints, the in-force set at
+N averages about 2.2N:
+
+| pass | mutation runs over a 60-checkpoint chain | against today's 133 |
+| --- | --- | --- |
+| round scope only (individual arm) | ≈ 200 — cpN's set, plus 1–2 revised sets at mutative checkpoints | ≈ 1.5× |
+| retention at every checkpoint | ≈ 4,000 | ≈ 30× — not viable |
+| retention at cp10, 20, 30, 40, 50, 60 | ≈ 470 | ≈ 3.5× |
+
+Each run is a whole suite run, so the full-depth pass is not affordable and does not need to be:
+the question is a **curve** — does retention decay with depth — and six milestones with complete
+sets read it better than sixty with sampled ones. `retention.at` holds the milestones; a per-round
+sample is available and off by default, since a sampled kill rate on a small set mostly reports its
+own sampling.
+
 ## §7 Blindness
 
 §4.1 lists the area's contents and what must be unreachable. The erosion harness's Landlock
@@ -522,6 +725,19 @@ cp29's plus one — so resampling them would report an interval far narrower tha
 supports. With two or more chains it resamples **chains**, which is the same reason the erosion
 harness aggregates to chain level before testing anything. This is also why `chains` defaults
 to 2.
+
+That restraint is a property of the **accumulated** base, and `base_suite: reference` lifts it
+(§4.6): there cp30's starting suite is the reference at cp29, not cp29's outcome, so the
+checkpoints are near-independent and resampling *them* is legitimate — one chain reports an
+interval. Analysis therefore chooses its resampling unit from the run's `base_suite` rather than
+from `chains` alone, and says which it used. The slope still means different things in the two
+arms: over the accumulated base it is fidelity against a growing suite the agent built, over the
+reference base it is fidelity against a growing *feature set* with the suite held correct.
+
+Churn gains a second reading from the commit pair of §4.7. `metrics.reedit_line_stats` is given
+`repair(N-1) → author(N)` for the rewriting the author **chose**, and `author(N) → repair(N)` for
+the rewriting its own earlier inaccuracy **forced**. The second is the one that decides whether
+300–500 changes is realistic, and it is invisible while the two are one commit.
 
 
 The secondary question, and the one that decides whether 300–500 changes is realistic: does the
@@ -645,6 +861,25 @@ and restore, and an attempt is recorded rather than silently reverted.
 What remains unbuilt is the **forward-replay over-specification check** of §4.4.2 — installing a
 prototype-first suite against cp(N+1..60) to count the legitimate changes it breaks — and the
 self-implementation arm of §4.4.3, which is deliberately deferred.
+
+**§4.6, §4.7 and §6.1 are designed and not built.** They are two dimensions orthogonal to the six
+conditions, and `config.yaml` carries their keys (`base_suite`, `repair`, `retention`) so a run can
+be labelled with them before the driver honours them — the pattern §4.4's unimplemented arms
+already use. Four pieces of work, in dependency order:
+
+1. **`in_force(at, scope)`** in `fidelity/mutations.py` — the supersession rule over `mutates`, and
+   the three states. Needs no run: it is a pure function over the catalogue and the checkpoint
+   metadata, and is testable against the catalogue alone, the way `tools/mutate.py validate` is.
+2. **The revision oracle** — `tools/suite.py` already resolves which priors a checkpoint rewrites,
+   so the textual layer is a set comparison against the captured test movement. It can be computed
+   post-hoc in `analyse.py` over runs that already exist.
+3. **The repair turn** — a second turn and a second commit per checkpoint, reusing the multi-turn
+   recording of the §4.4 conditions and the snapshot-and-restore that already enforces a
+   non-writing brief. `capture` records two suite shas per checkpoint instead of one; `analyse`'s
+   churn walk takes the pair.
+4. **`base_suite: reference`** — `tools/suite.py install --checkpoint N-1` into the confined area
+   instead of the agent's accumulated clone. The thinnest of the four, and worth last: it is the
+   arm, but the three above are what make either arm readable.
 
 Two things the arms do not decide. §4.4 gates **write-twice on variance**, and the signal is the
 chain-level bootstrap of §8.1 — a property of finished runs, so the arm reports the gate and

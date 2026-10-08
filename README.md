@@ -20,13 +20,20 @@ changes that is the failure that compounds.
    `data-testid` anchors, the audit-record formats, and the seed fields `/__test__/seed` honours —
    and the instruction that it writes **tests only**: new tests for new functionality, updates to
    its own existing tests where the request revises behaviour they assert.
-3. The test code is copied back and committed on the run's branch, capturing that checkpoint's
-   test changes.
+3. The test code is copied back and committed on the run's branch as `cpNN author` — exactly what
+   was written without seeing cpN.
 4. **Fidelity testing.** First the whole suite must be green against checkpoint N's application,
    and hold at least as many tests as at N-1 (equal is fine — a revising checkpoint may rewrite
    rather than add — but it must never shrink). Then the application is **mutated one mutation at
    a time**, and each must make a test fail: a new failure is the success signal, saying the
    agent's tests covered that aspect of the functionality.
+5. **The repair turn.** The author never saw cpN, so a test that is right about the *request* can
+   still disagree with the implementation that was built. It is now given the working code and
+   asked to **fix the failures only — no new tests** — and that lands as a second commit,
+   `cpNN repair`, which is what the next checkpoint starts from. No pull request merges with a red
+   suite, and without this step one bad prior leaves every later checkpoint non-green for a reason
+   that is not about it. Both commits are graded; `author` is the fidelity score, and the gap
+   between them is what repair cost in coverage (DESIGN.md §4.7).
 
 Mutation zero is free — the application at N-1 *is* the feature removed, one patch back along the
 chain — and it catches the dominant failure mode of writing tests against existing code: tests that
@@ -88,6 +95,33 @@ whatever the score.
 
 Agent mode refuses an arm whose code_view contradicts it: only `prototype-first` may see cpN, and
 it must.
+
+## Two experiments, not one
+
+"Can the agent write the tests" carries two questions, and the **mutation scope** is what separates
+them — `base_suite` is only the mechanism that makes each measurable (DESIGN.md §4.6, §6.1).
+
+| | **individual correctness** | **cumulative damage** |
+| --- | --- | --- |
+| `base_suite` | `reference` — the known-good suite substituted for every prior | `accumulated` (default) — the agent's own, warts carried forward |
+| asks | did it write a right test for *this* change, and correctly revise the ones it alters | do small inaccuracies and coverage gaps compound |
+| mutation scope | cpN's set, plus the sets of the checkpoints cpN revises | every **in-force** set cp01..N, at milestones |
+
+The reference base is calibrated, so nothing a round fails to hold was inherited and a survival is
+damage that round did — and because cpN's priors no longer depend on cp(N-1)'s outcome, the
+checkpoints become near-independent and one chain can report an interval. It also cannot answer the
+other question: it wipes the gap every round, and coverage won at cp12 and quietly lost by cp40 is
+exactly what the accumulated arm exists to find.
+
+An earlier mutation at depth N is **live** (must still die — a survival is the lost coverage),
+**superseded** (a later checkpoint revised its clause, per `mutates`), or **non-applying** (its
+`find` text is gone — the substitution format raises rather than no-opping, so staleness reports
+itself). Both exclusion lists are printed by name: `mutates` is a declaration, and this fixture has
+been caught under-declaring one.
+
+The two arms are a **pair**. Cumulative − individual at matched checkpoints is the cost of the
+agent's own history, which is the only thing that separates "worse as the suite grows" from
+"tripping over its own earlier mistakes".
 
 See **[DESIGN.md](./DESIGN.md)** for the method, **[REFERENCE_CHAIN.md](./REFERENCE_CHAIN.md)** for
 which chain is the fixture and what must be repaired first.
@@ -266,6 +300,16 @@ harness does not live at `~/ui-long-degradation-test`.
 **Not built**: nothing in the replay path. What remains before agent mode is the re-run that
 marks the last 11 mutation sets calibrated — `grading.mutation.require_calibrated` refuses to
 grade an agent at a checkpoint whose set is not.
+
+**Designed, not built**: the two experiments above. `config.yaml` carries `base_suite`, `repair`
+and `retention` so a run can be labelled before the driver honours them, the way §4.4's
+unimplemented arms already are. In dependency order: `in_force(at, scope)` over the catalogue and
+`mutates` (a pure function, testable without a run); the revision oracle, which `tools/suite.py`
+already has the inputs for and `analyse` can compute post-hoc; the repair turn and its second
+commit, reusing the multi-turn recording and the snapshot-and-restore that already enforces a
+non-writing brief; and `base_suite: reference`, which is `tools/suite.py install` into the confined
+area and the thinnest of the four — it is the arm, but the other three are what make either arm
+readable.
 
 **Order of work**: replay mode first — it needs no agent and is the only way to tell a harness bug
 from a fixture defect from a bad test. Done. Then fix the reference chain until replay is green at
